@@ -1,6 +1,6 @@
 # Décisions d'architecture (ADR)
 
-Chaque décision d'architecture qui compte est consignée ici, avec son contexte, les options écartées et ses conséquences. Un ADR accepté ne se réécrit pas : une décision qui change fait l'objet d'un nouvel ADR, qui remplace l'ancien.
+Chaque décision d'architecture qui compte est consignée ici, avec son contexte, les options écartées et ses conséquences. Un ADR accepté ne se réécrit pas : une décision qui change fait l'objet d'un nouvel ADR, qui remplace l'ancien en tout ou en partie. Les points qu'un ADR laisse ouverts se règlent eux aussi par un nouvel ADR.
 
 | N° | Titre | Statut | Date |
 | --- | --- | --- | --- |

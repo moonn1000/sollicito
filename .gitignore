@@ -7,18 +7,21 @@
 *.pem
 *.key
 *.snk
+*.publishsettings
 secrets.json
 appsettings.*.local.json
 appsettings.Local.json
+DataProtection-Keys/
 
 # --- Données de l'utilisateur et bases locales ---
+# Les données vivent hors du dépôt (%LOCALAPPDATA%\Sollicito), développement compris : ADR-0001, D10.
 *.db
-*.db-shm
-*.db-wal
+*.db-*
 *.sqlite
+*.sqlite-*
 *.sqlite3
-*.sqlite-shm
-*.sqlite-wal
+*.sqlite3-*
+*.bak
 /data/
 /backups/
 /exports/
@@ -35,6 +38,9 @@ TestResults/
 coverage/
 *.coverage
 *.coveragexml
+*.binlog
+MSBuild_Logs/
+*.dmp
 artifacts/
 publish/
 
@@ -57,6 +63,7 @@ logs/
 # --- Outils locaux ---
 .idea/
 .claude/settings.local.json
+.claude/worktrees/
 graphify-out/
 
 # --- Système ---
