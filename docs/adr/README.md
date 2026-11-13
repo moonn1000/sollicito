@@ -4,7 +4,8 @@ Chaque décision d'architecture qui compte est consignée ici, avec son contexte
 
 | N° | Titre | Statut | Date |
 | --- | --- | --- | --- |
-| [0001](0001-cadrage-architecture-v1.md) | Cadrage de l'architecture de la V1 | Acceptée | 2026-11-13 |
+| [0001](0001-cadrage-architecture-v1.md) | Cadrage de l'architecture de la V1 | Acceptée ; D13 remplacée en partie par 0002 | 2026-11-13 |
+| [0002](0002-budget-nul.md) | Budget nul | Acceptée | 2026-11-13 |
 
 ## Format
 

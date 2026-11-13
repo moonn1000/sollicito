@@ -1,6 +1,6 @@
 # ADR-0001 : cadrage de l'architecture de la V1
 
-- **Statut** : acceptée
+- **Statut** : acceptée ; D13 remplacée en partie par l'[ADR-0002](0002-budget-nul.md) (signature de code)
 - **Date** : 2026-11-13
 
 ## Contexte
