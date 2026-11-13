@@ -3,7 +3,7 @@
 - **Statut** : acceptée
 - **Date** : 2026-11-13
 - **Remplace en partie** : [ADR-0001](0001-cadrage-architecture-v1.md), D2 (Photino.NET) ; [ADR-0002](0002-budget-nul.md), la mention de Photino.NET parmi les briques gratuites
-- **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D9 (jeton et en-tête `Origin` pour les fichiers de l'interface, voir « Règles d'accès »)
+- **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D9 (jeton et en-tête `Origin` : fichiers de l'interface servis sans jeton, lectures de l'API admises sans `Origin` ; voir « Règles d'accès »)
 
 ## Contexte
 
@@ -28,7 +28,7 @@ La D9 de l'ADR-0001 exige le jeton sur toute route et refuse toute requête dont
 
 - **Fichiers de l'interface** (`index.html`, scripts, styles) : servis sans jeton, puisque la page les charge avant de le recevoir. Ils sont publics et ne portent aucune donnée. Seul l'en-tête `Host` y est contrôlé.
 - **Routes de l'API**, documentation OpenAPI comprise : le jeton est exigé, dans son en-tête dédié.
-- **En-tête `Origin`** : le navigateur ne l'envoie pas sur une lecture de même origine. Il est donc exigé, et doit valoir l'origine de l'interface, sur toute requête qui modifie un état (`POST`, `PUT`, `PATCH`, `DELETE`). Sur une lecture, s'il est présent, il doit aussi valoir cette origine.
+- **En-tête `Origin`, sur les routes de l'API seulement** : le navigateur ne l'envoie pas sur une lecture de même origine. Il est donc exigé, et doit valoir l'origine de l'interface, sur toute requête qui modifie un état (`POST`, `PUT`, `PATCH`, `DELETE`). Sur une lecture, s'il est présent, il doit aussi valoir cette origine. Les fichiers de l'interface n'y sont pas soumis.
 
 ### Durcissement de la fenêtre
 
