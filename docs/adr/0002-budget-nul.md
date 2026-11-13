@@ -30,7 +30,7 @@ D'après la comparaison publiée par Microsoft[^signature] :
 
 ## Conséquences
 
-- **SmartScreen** : sans signature, Microsoft annonce un blocage fort par SmartScreen, et une entreprise peut interdire l'installeur entièrement. Seule une identité de signature constante permet de cumuler une réputation d'une version à l'autre[^signature]. Le guide d'installation expliquera comment passer l'avertissement.
+- **SmartScreen** : sans signature, Microsoft annonce un blocage fort par SmartScreen, et une entreprise peut interdire l'installeur entièrement. Signer chaque version avec la même identité permet de cumuler une réputation d'une version à l'autre[^signature], ce qu'un installeur non signé ne peut pas faire. Le guide d'installation expliquera comment passer l'avertissement.
 - **Smart App Control** : là où il est actif, il bloque une application non signée que le service de Microsoft ne peut pas juger sûre. L'utilisateur peut le désactiver dans la Sécurité Windows, et les mises à jour récentes permettent de le réactiver sans réinstaller Windows[^sac]. Le guide d'installation le dira.
 - **IA** : les fournisseurs en ligne ne sont testés que sur des réponses synthétiques, jamais sur leur API réelle, par les tests du projet.
 
@@ -38,7 +38,7 @@ D'après la comparaison publiée par Microsoft[^signature] :
 
 Voies de signature gratuites, relevées le 2026-11-13 :
 
-- **SignPath Foundation** : signature gratuite pour les projets open source[^signpath]. Le certificat est délivré à la fondation. Ses conditions[^signpath-conditions] demandent notamment une licence approuvée par l'OSI sans double licence commerciale, un projet déjà publié sous la forme à signer, une politique de signature sur la page du projet, la double authentification des membres et l'approbation manuelle de chaque version. La toute première version ne pourra donc pas être signée par cette voie : à évaluer après elle.
+- **SignPath Foundation** : signature gratuite pour les projets open source[^signpath]. Le certificat est délivré à la fondation[^signpath-conditions], dont les conditions demandent notamment une licence approuvée par l'OSI sans double licence commerciale, un projet déjà publié sous la forme à signer, une politique de signature sur la page du projet, la double authentification des membres et l'approbation manuelle de chaque version. La toute première version ne pourra donc pas être signée par cette voie : à évaluer après elle.
 - **Microsoft Store** : compte de développeur individuel sans frais d'inscription, avec vérification d'identité (pièce d'identité et photo)[^store-compte]. Le Store signe gratuitement les paquets MSIX, mais pas un installeur EXE ou MSI, qui doit déjà être signé par une autorité reconnue et s'installer sans interface[^signature][^store-msi]. Cette voie supposerait donc un paquet MSIX distribué par le Store, ce qui réviserait l'ADR-0001.
 
 ## Sources
