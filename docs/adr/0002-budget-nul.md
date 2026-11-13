@@ -1,6 +1,6 @@
 # ADR-0002 : budget nul
 
-- **Statut** : acceptée
+- **Statut** : acceptée ; la mention de Photino.NET remplacée par l'[ADR-0003](0003-hote-interface-webview2.md) (hôte de l'interface)
 - **Date** : 2026-11-13
 - **Remplace en partie** : [ADR-0001](0001-cadrage-architecture-v1.md), D13 (signature de code)
 
