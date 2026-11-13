@@ -32,7 +32,7 @@ Sollicito ne fera jamais :
 ## Architecture en bref
 
 - Application de bureau Windows, mono-utilisateur.
-- Web API ASP.NET Core (C#) qui n'écoute que sur la machine (127.0.0.1), interface React affichée dans une fenêtre Photino.NET.
+- Web API ASP.NET Core (C#) qui n'écoute que sur la machine (127.0.0.1), interface React affichée par WebView2 dans une fenêtre WinForms.
 - Base SQLite, accédée par Entity Framework Core.
 - Monolithe modulaire en Clean Architecture : Candidatures, Offres et connecteurs, Relances, Profil, IA.
 - Des connecteurs d'offres branchés derrière une interface unique (ports et adaptateurs) : ajouter une source ne touche pas au cœur de l'application.
