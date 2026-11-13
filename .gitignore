@@ -1,0 +1,65 @@
+# --- Secrets : ne jamais versionner ---
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+*.snk
+secrets.json
+appsettings.*.local.json
+appsettings.Local.json
+
+# --- Données de l'utilisateur et bases locales ---
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-shm
+*.sqlite-wal
+/data/
+/backups/
+/exports/
+
+# --- .NET ---
+bin/
+obj/
+*.user
+*.suo
+*.rsuser
+.vs/
+TestResults/
+*.trx
+coverage/
+*.coverage
+*.coveragexml
+artifacts/
+publish/
+
+# --- Node / front ---
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+pnpm-debug.log*
+
+# --- Installeurs produits ---
+/installer/output/
+*.msix
+*.msixbundle
+
+# --- Journaux ---
+*.log
+logs/
+
+# --- Outils locaux ---
+.idea/
+.claude/settings.local.json
+graphify-out/
+
+# --- Système ---
+Thumbs.db
+desktop.ini
+.DS_Store
