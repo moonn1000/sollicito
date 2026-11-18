@@ -1,6 +1,6 @@
 # ADR-0001 : cadrage de l'architecture de la V1
 
-- **Statut** : acceptée ; D13 remplacée en partie par l'[ADR-0002](0002-budget-nul.md) (signature de code) ; D2 remplacée en partie, et D9 précisée, par l'[ADR-0003](0003-hote-interface-webview2.md) (hôte de l'interface, règles d'accès)
+- **Statut** : acceptée ; D13 remplacée en partie par l'[ADR-0002](0002-budget-nul.md) (signature de code) ; D2 remplacée en partie, et D9 précisée, par l'[ADR-0003](0003-hote-interface-webview2.md) (hôte de l'interface, règles d'accès) ; D5, D6, D7, D13 et D15 remplacées en partie par l'[ADR-0004](0004-v1-resserree-paliers.md) (V1 resserrée, livrée en paliers)
 - **Date** : 2026-11-13
 
 ## Contexte
