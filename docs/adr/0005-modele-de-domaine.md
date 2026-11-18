@@ -36,7 +36,7 @@ Une entreprise se reconnaît à une clé tirée de son nom : accents retirés, m
 ### Dédoublonner les offres
 
 1. **Identifiant sûr** : le couple (source, identifiant externe) de la D5 reste la règle d'une source qui en fournit un. Aucune ne le fait en V1 ; le Forem le fera en V2.
-2. **Offre sans identifiant**, le second cas de la D5 : le couple (source, empreinte) la reconnaît. L'empreinte est le SHA-256 de son texte normalisé (Unicode NFKC, minuscules, blancs réduits). Recoller le même texte retrouve l'offre enregistrée. Une ligne de CSV se traite de même : chaque champ se normalise à part, puis les champs se joignent par un séparateur qui n'est pas un blanc (U+001F).
+2. **Offre sans identifiant**, le second cas de la D5 : le couple (source, empreinte) la reconnaît. L'empreinte est le SHA-256 de son texte normalisé (Unicode NFKC, minuscules, blancs réduits). Recoller le même texte retrouve l'offre enregistrée. Une ligne de CSV se traite de même : chaque champ, privé de ses caractères de contrôle, se normalise à part, puis les champs se joignent par U+001F, un séparateur qui n'est pas un blanc.
 3. **Même offre vue sur deux sources**, le premier cas : jamais de fusion automatique. Une offre qui a la même entreprise et le même poste normalisé qu'une offre enregistrée, quelle que soit sa source, est signalée comme doublon possible ; l'utilisateur garde les deux, ou renonce à la nouvelle.
 
 ### Corriger un statut
@@ -60,7 +60,7 @@ L'exemple chiffré est dans le modèle de domaine, « Dates et heures ».
 - **Une entité « annonce »**, une offre et ses parutions, une par source : c'est le bon modèle quand des sources automatiques publieront les mêmes offres. En V1, où chaque offre arrive à la main, elle ajouterait une neuvième entité et ses écrans pour un cas rare.
 - **L'adresse de l'offre comme identifiant** : une même offre a une adresse par site, et une adresse change avec ses paramètres de suivi.
 - **Aucun dédoublonnage des offres collées** : coller deux fois la même offre en créerait deux.
-- **Rouvrir une candidature close par un passage de plus**, vers son statut d'avant : la trace resterait, mais une erreur sur un passage qui fait avancer (Envoyée vers Entretien) ne se corrigerait pas, et neuf flèches de retour rendraient le diagramme d'états illisible.
+- **Rouvrir une candidature close par un passage de plus**, vers son statut d'avant : la trace resterait, mais une erreur sur un passage qui fait avancer (Envoyée vers Entretien) ne se corrigerait pas, et dix flèches de retour, une par passage vers un statut clos, rendraient le diagramme d'états illisible.
 - **Des passages en arrière entre statuts en cours** : autant de flèches et de boutons de plus, pour des erreurs rares.
 - **L'heure locale, sans fuseau** : l'heure qui existe deux fois à l'automne resterait ambiguë, et les heures changeraient de sens si le fuseau du poste changeait.
 - **`DateTimeOffset`** : avec SQLite, EF Core ne traduit ni ses comparaisons ni ses tris en SQL, qu'il faudrait faire dans l'application ; sa documentation recommande un `DateTime` converti en UTC[^ef-sqlite].
