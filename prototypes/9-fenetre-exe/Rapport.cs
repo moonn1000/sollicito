@@ -161,12 +161,29 @@ static class Execution
             framework = RuntimeInformation.FrameworkDescription,
             rid = RuntimeInformation.RuntimeIdentifier,
             exe = Rapport.Masquer(Environment.ProcessPath),
-            emplacementCoreLib,
+            emplacementCoreLib = Rapport.Masquer(emplacementCoreLib),
             assembliesLuesSurLeDisque = luesSurLeDisque,
             modulesDepuisInstallationDotnet = depuisInstallationDotnet.Select(Rapport.Masquer).ToList(),
             modulesHorsWindows = modules.Where(m => !m.StartsWith(windows, StringComparison.OrdinalIgnoreCase)).Select(Rapport.Masquer).ToList(),
+            extraction = emplacementCoreLib.Length == 0 ? DecrireExtraction(modules) : null,
         };
         var autonome = emplacementCoreLib.Length == 0 && luesSurLeDisque.Count == 0 && depuisInstallationDotnet.Count == 0;
         return (description, autonome);
+    }
+
+    // En fichier unique, .NET extrait les bibliothèques natives dans un même dossier : celui d'où e_sqlite3.dll est chargée.
+    static object? DecrireExtraction(List<string> modules)
+    {
+        var sqlite = modules.FirstOrDefault(m => Path.GetFileName(m).Equals("e_sqlite3.dll", StringComparison.OrdinalIgnoreCase));
+        var dossier = sqlite is null ? null : Path.GetDirectoryName(sqlite);
+        if (dossier is null || !Directory.Exists(dossier))
+        {
+            return null;
+        }
+        var fichiers = Directory.EnumerateFiles(dossier, "*", SearchOption.AllDirectories)
+            .Select(f => new { nom = Path.GetRelativePath(dossier, f), octets = new FileInfo(f).Length })
+            .OrderBy(f => f.nom, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return new { dossier = Rapport.Masquer(dossier), fichiers, octets = fichiers.Sum(f => f.octets) };
     }
 }

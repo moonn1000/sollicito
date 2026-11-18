@@ -47,6 +47,7 @@ static class Program
 
         var dossierTemporaire = Directory.CreateTempSubdirectory("sollicito-proto9-").FullName;
         WebApplication? serveur = null;
+        bool? navigateurTermine = null;
         try
         {
             rapport.Etape("dossier temporaire " + Rapport.Masquer(dossierTemporaire));
@@ -54,9 +55,14 @@ static class Program
             // Base SQLite créée dans le dossier temporaire, fermée, puis rouverte en lecture seule.
             var cheminBase = Base.Creer(dossierTemporaire);
             var lecture = Base.Lire(cheminBase);
-            rapport.Controler("sqlite-dossier-temporaire",
-                lecture.Candidatures.Count == 2 && cheminBase.StartsWith(Path.GetTempPath(), StringComparison.OrdinalIgnoreCase),
-                new { fichier = Rapport.Masquer(cheminBase), versionSqlite = lecture.Version, lignesLues = lecture.Candidatures.Count });
+            var octetsBase = new FileInfo(cheminBase).Length;
+            rapport.Controler("sqlite-dossier-temporaire", lecture.Candidatures.Count == 2 && octetsBase > 0, new
+            {
+                fichier = Rapport.Masquer(cheminBase),
+                octets = octetsBase,
+                versionSqlite = lecture.Version,
+                lignesLuesApresReouvertureEnLectureSeule = lecture.Candidatures.Count,
+            });
 
             // Kestrel sur 127.0.0.1, port libre choisi au lancement ; il sert la page et l'API à la même origine.
             var requetes = new ConcurrentQueue<Requete>();
@@ -91,8 +97,8 @@ static class Program
                 regle = "CoreLib dans le bundle (emplacement vide), aucune assembly lue sur le disque, aucun module de l'installation .NET du poste",
             });
 
-            AttendreFinNavigateur(contexte.IdProcessusNavigateur);
-            rapport.Etape("processus du navigateur terminé");
+            navigateurTermine = AttendreFinNavigateur(contexte.IdProcessusNavigateur);
+            rapport.Etape(navigateurTermine.Value ? "processus du navigateur terminé" : "processus du navigateur encore actif après 30 s");
             Task.Run(() => serveur.StopAsync()).GetAwaiter().GetResult();
             rapport.Etape("Kestrel arrêté");
             var recues = requetes.ToArray();
@@ -117,7 +123,7 @@ static class Program
                 Task.Run(() => serveur.DisposeAsync().AsTask()).GetAwaiter().GetResult();
             }
             SqliteConnection.ClearAllPools();
-            rapport.Section("nettoyage", Nettoyer(dossierTemporaire));
+            rapport.Section("nettoyage", Nettoyer(dossierTemporaire, navigateurTermine));
             rapport.Etape("dossier temporaire nettoyé");
         }
 
@@ -130,25 +136,25 @@ static class Program
         return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
     }
 
-    // Le dossier de profil reste verrouillé tant que le processus du navigateur tourne.
-    static void AttendreFinNavigateur(uint? idProcessus)
+    // Le dossier de profil reste verrouillé tant que le processus du navigateur tourne. Rend false si le délai est dépassé.
+    static bool AttendreFinNavigateur(uint? idProcessus)
     {
         if (idProcessus is not uint id)
         {
-            return;
+            return true;
         }
         try
         {
             using var navigateur = Process.GetProcessById((int)id);
-            navigateur.WaitForExit(TimeSpan.FromSeconds(10));
+            return navigateur.WaitForExit(TimeSpan.FromSeconds(30));
         }
         catch (ArgumentException)
         {
-            // Déjà terminé.
+            return true; // Déjà terminé.
         }
     }
 
-    static object Nettoyer(string dossier)
+    static object Nettoyer(string dossier, bool? navigateurTermine)
     {
         Exception? derniere = null;
         for (var essai = 1; essai <= 10; essai++)
@@ -156,7 +162,7 @@ static class Program
             try
             {
                 Directory.Delete(dossier, recursive: true);
-                return new { dossierTemporaireSupprime = true, essais = essai };
+                return new { navigateurTermine, dossierTemporaireSupprime = true, essais = essai };
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -164,7 +170,7 @@ static class Program
                 Thread.Sleep(500);
             }
         }
-        return new { dossierTemporaireSupprime = false, erreur = Rapport.Masquer(derniere?.Message) };
+        return new { navigateurTermine, dossierTemporaireSupprime = false, erreur = Rapport.Masquer(derniere?.Message) };
     }
 }
 

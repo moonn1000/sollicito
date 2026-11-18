@@ -5,9 +5,10 @@
       "nom": "sqlite-dossier-temporaire",
       "ok": true,
       "detail": {
-        "fichier": "%TEMP%\\sollicito-proto9-xlqxqdrc.mgb\\prototype.sqlite3",
+        "fichier": "%TEMP%\\sollicito-proto9-lkvidmsf.wwh\\prototype.sqlite3",
+        "octets": 8192,
         "versionSqlite": "3.53.3",
-        "lignesLues": 2
+        "lignesLuesApresReouvertureEnLectureSeule": 2
       }
     },
     {
@@ -15,7 +16,7 @@
       "ok": true,
       "detail": {
         "type": "prete",
-        "source": "http://127.0.0.1:54338/"
+        "source": "http://127.0.0.1:56991/"
       }
     },
     {
@@ -40,8 +41,8 @@
       "nom": "page-locale",
       "ok": true,
       "detail": {
-        "page": "http://127.0.0.1:54338/",
-        "origineAttendue": "http://127.0.0.1:54338"
+        "page": "http://127.0.0.1:56991/",
+        "origineAttendue": "http://127.0.0.1:56991"
       }
     },
     {
@@ -51,19 +52,19 @@
         "cible": "https://autre-origine.invalid/",
         "navigationStartingAnnulee": true,
         "navigationCompleted": "OperationCanceled",
-        "pageAvant": "http://127.0.0.1:54338/",
-        "pageApres": "http://127.0.0.1:54338/"
+        "pageAvant": "http://127.0.0.1:56991/",
+        "pageApres": "http://127.0.0.1:56991/"
       }
     },
     {
       "nom": "navigation-meme-serveur-autre-origine-annulee",
       "ok": true,
       "detail": {
-        "cible": "http://localhost:54338/",
+        "cible": "http://localhost:56991/",
         "navigationStartingAnnulee": true,
         "navigationCompleted": "OperationCanceled",
-        "pageAvant": "http://127.0.0.1:54338/",
-        "pageApres": "http://127.0.0.1:54338/"
+        "pageAvant": "http://127.0.0.1:56991/",
+        "pageApres": "http://127.0.0.1:56991/"
       }
     },
     {
@@ -81,7 +82,10 @@
       "ok": true,
       "detail": {
         "fichier": "capture-1.png",
-        "octets": 33550
+        "octets": 33485,
+        "largeur": 900,
+        "hauteur": 620,
+        "partDePixelsNonBlancs": 0.0418
       }
     },
     {
@@ -104,45 +108,67 @@
     "webview2": {
       "versionRuntime": "157.0.4341.60",
       "versionSdk": "1.0.4314.35",
-      "dossierProfil": "%TEMP%\\sollicito-proto9-xlqxqdrc.mgb\\WebView2"
+      "dossierProfil": "%TEMP%\\sollicito-proto9-lkvidmsf.wwh\\WebView2"
     },
     "durees": {
-      "msDepuisMainJusquaPagePrete": 727,
-      "msDepuisDemarrageProcessusJusquaPagePrete": 808
+      "msDepuisMainJusquaPagePrete": 628,
+      "msDepuisDemarrageProcessusJusquaPagePrete": 774
     },
     "execution": {
       "framework": ".NET 10.0.15",
       "rid": "win-x64",
-      "exe": "%TEMP%\\sollicito-proto9-essai-e32451b9\\Prototype9.exe",
+      "exe": "%TEMP%\\sollicito-proto9-essai-1bddf11d\\lancement\\Prototype9.exe",
       "emplacementCoreLib": "",
       "assembliesLuesSurLeDisque": [],
       "modulesDepuisInstallationDotnet": [],
       "modulesHorsWindows": [
-        "%TEMP%\\sollicito-proto9-essai-e32451b9\\Prototype9.exe",
-        "%TEMP%\\.net\\Prototype9\\Qkqxp-wP2l6N\\e_sqlite3.DLL",
-        "%TEMP%\\.net\\Prototype9\\Qkqxp-wP2l6N\\WebView2Loader.dll",
+        "%TEMP%\\sollicito-proto9-essai-1bddf11d\\lancement\\Prototype9.exe",
+        "%TEMP%\\.net\\Prototype9\\f7gAOuIljmgQ\\e_sqlite3.DLL",
+        "%TEMP%\\.net\\Prototype9\\f7gAOuIljmgQ\\WebView2Loader.dll",
         "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\157.0.4341.60\\EBWebView\\x64\\EmbeddedBrowserWebView.dll"
-      ]
+      ],
+      "extraction": {
+        "dossier": "%TEMP%\\.net\\Prototype9\\f7gAOuIljmgQ",
+        "fichiers": [
+          {
+            "nom": "aspnetcorev2_inprocess.dll",
+            "octets": 392488
+          },
+          {
+            "nom": "e_sqlite3.dll",
+            "octets": 1978880
+          },
+          {
+            "nom": "runtimes\\win-x64\\native\\WebView2Loader.dll",
+            "octets": 194912
+          },
+          {
+            "nom": "WebView2Loader.dll",
+            "octets": 194912
+          }
+        ],
+        "octets": 2761192
+      }
     },
     "requetesRecuesParKestrel": [
       {
         "methode": "GET",
-        "hote": "127.0.0.1:54338",
+        "hote": "127.0.0.1:56991",
         "chemin": "/"
       },
       {
         "methode": "GET",
-        "hote": "127.0.0.1:54338",
+        "hote": "127.0.0.1:56991",
         "chemin": "/api/candidatures"
       },
       {
         "methode": "GET",
-        "hote": "127.0.0.1:54338",
+        "hote": "127.0.0.1:56991",
         "chemin": "/favicon.ico"
       },
       {
         "methode": "GET",
-        "hote": "localhost:54338",
+        "hote": "localhost:56991",
         "chemin": "/"
       }
     ],
@@ -150,72 +176,73 @@
       "requetesRecuesSousUnAutreHote": [
         {
           "methode": "GET",
-          "hote": "localhost:54338",
+          "hote": "localhost:56991",
           "chemin": "/"
         }
       ],
       "lecture": "une requête listée ici est partie malgré l'annulation ; le serveur doit refuser lui-même un en-tête Host inattendu (ADR-0001, D9)"
     },
     "nettoyage": {
+      "navigateurTermine": true,
       "dossierTemporaireSupprime": true,
       "essais": 1
     }
   },
   "etapes": [
     {
-      "ms": 36,
-      "texte": "dossier temporaire %TEMP%\\sollicito-proto9-xlqxqdrc.mgb"
+      "ms": 25,
+      "texte": "dossier temporaire %TEMP%\\sollicito-proto9-lkvidmsf.wwh"
     },
     {
-      "ms": 184,
-      "texte": "Kestrel écoute sur http://127.0.0.1:54338/"
+      "ms": 167,
+      "texte": "Kestrel écoute sur http://127.0.0.1:56991/"
     },
     {
-      "ms": 273,
+      "ms": 251,
       "texte": "création de l'environnement WebView2"
     },
     {
-      "ms": 598,
-      "texte": "navigation vers http://127.0.0.1:54338/"
+      "ms": 509,
+      "texte": "navigation vers http://127.0.0.1:56991/"
     },
     {
-      "ms": 613,
-      "texte": "NavigationStarting http://127.0.0.1:54338/ : permise"
+      "ms": 521,
+      "texte": "NavigationStarting http://127.0.0.1:56991/ : permise"
     },
     {
-      "ms": 705,
+      "ms": 610,
       "texte": "NavigationCompleted n° 2 : réussie"
     },
     {
-      "ms": 751,
+      "ms": 650,
       "texte": "NavigationStarting https://autre-origine.invalid/ : annulée"
     },
     {
-      "ms": 780,
+      "ms": 676,
       "texte": "NavigationCompleted n° 3 : OperationCanceled"
     },
     {
-      "ms": 793,
-      "texte": "NavigationStarting http://localhost:54338/ : annulée"
+      "ms": 690,
+      "texte": "NavigationStarting http://localhost:56991/ : annulée"
     },
     {
-      "ms": 798,
+      "ms": 695,
       "texte": "NavigationCompleted n° 4 : OperationCanceled"
     },
     {
-      "ms": 1187,
+      "ms": 1127,
       "texte": "fenêtre fermée"
     },
     {
-      "ms": 1428,
+      "ms": 1372,
       "texte": "processus du navigateur terminé"
     },
     {
-      "ms": 1434,
+      "ms": 1378,
       "texte": "Kestrel arrêté"
     },
     {
-      "ms": 1476,
+      "ms": 1410,
       "texte": "dossier temporaire nettoyé"
     }
   ]

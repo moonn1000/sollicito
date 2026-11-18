@@ -9,7 +9,8 @@ namespace Prototype9;
 /// <summary>Fenêtre hôte de l'ADR-0003 : WebView2 dans une fenêtre WinForms, limitée à l'origine locale.</summary>
 sealed class FenetreHote : Form
 {
-    // Domaine réservé (RFC 2606) : il ne se résout jamais, donc aucune sortie réseau, même si l'annulation échouait.
+    // Domaine réservé (RFC 2606) : il ne se résout jamais. Au pire, une requête DNS part vers le résolveur du poste,
+    // mais aucun serveur n'est joint, même si la requête de navigation partait malgré l'annulation.
     const string AutreSite = "https://autre-origine.invalid/";
     const string TitrePage = "Prototype #9";
 
@@ -208,7 +209,36 @@ sealed class FenetreHote : Form
             await core.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, fichier);
         }
         var octets = new FileInfo(contexte.CheminCapture).Length;
-        contexte.Rapport.Controler("capture", octets > 0, new { fichier = Path.GetFileName(contexte.CheminCapture), octets });
+        var (largeur, hauteur, partEncree) = Analyser(contexte.CheminCapture);
+        // Une fenêtre blanche (ou noire) donne une part de pixels non blancs nulle (ou proche de 1).
+        contexte.Rapport.Controler("capture", octets > 0 && partEncree is > 0.005 and < 0.95, new
+        {
+            fichier = Path.GetFileName(contexte.CheminCapture),
+            octets,
+            largeur,
+            hauteur,
+            partDePixelsNonBlancs = Math.Round(partEncree, 4),
+        });
+    }
+
+    // Part des pixels qui ne sont pas blancs, sur un pixel sur quatre.
+    static (int Largeur, int Hauteur, double PartEncree) Analyser(string chemin)
+    {
+        using var image = new Bitmap(chemin);
+        long encres = 0, total = 0;
+        for (var y = 0; y < image.Height; y += 2)
+        {
+            for (var x = 0; x < image.Width; x += 2)
+            {
+                var couleur = image.GetPixel(x, y);
+                total++;
+                if (couleur.R < 200 || couleur.G < 200 || couleur.B < 200)
+                {
+                    encres++;
+                }
+            }
+        }
+        return (image.Width, image.Height, total == 0 ? 0 : (double)encres / total);
     }
 
     void Envoyer(object message) => vue.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(message));

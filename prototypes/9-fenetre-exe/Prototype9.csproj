@@ -22,7 +22,8 @@
     <PublishSingleFile>true</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishTrimmed>false</PublishTrimmed>
-    <DebugType>embedded</DebugType>
+    <!-- Pas de symboles : ils emporteraient le chemin du dossier de compilation, donc le nom du compte Windows. -->
+    <DebugType>none</DebugType>
     <!-- Sans ce réglage, la documentation XML du paquet WebView2 sort à côté de l'exe. -->
     <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
   </PropertyGroup>

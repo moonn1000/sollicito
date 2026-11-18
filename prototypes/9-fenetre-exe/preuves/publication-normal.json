@@ -3,23 +3,29 @@
     "variante":  "normal",
     "fichiersPublies":  1,
     "exe":  "Prototype9.exe",
-    "octets":  147411293,
+    "octets":  147403101,
     "lancements":  [
                        {
                            "lancement":  1,
                            "codeSortie":  0,
-                           "dureeTotaleMs":  1751,
-                           "msAvantDemarrageProcessus":  144,
-                           "msDuDemarrageJusquaPagePrete":  808,
-                           "verdict":  "réussi"
+                           "verdict":  "réussi",
+                           "dureeTotaleMs":  7363,
+                           "msAvantDemarrageProcessus":  131,
+                           "msDuDemarrageJusquaPagePrete":  695,
+                           "extractionNeuve":  true,
+                           "dossierExtractionResteApresFermeture":  true,
+                           "octetsExtraits":  2761192
                        },
                        {
                            "lancement":  2,
                            "codeSortie":  0,
-                           "dureeTotaleMs":  7354,
-                           "msAvantDemarrageProcessus":  3,
-                           "msDuDemarrageJusquaPagePrete":  771,
-                           "verdict":  "réussi"
+                           "verdict":  "réussi",
+                           "dureeTotaleMs":  7234,
+                           "msAvantDemarrageProcessus":  2,
+                           "msDuDemarrageJusquaPagePrete":  643,
+                           "extractionNeuve":  false,
+                           "dossierExtractionResteApresFermeture":  true,
+                           "octetsExtraits":  2761192
                        }
                    ]
 }
