@@ -39,6 +39,15 @@ Sollicito ne fera jamais :
 
 Les décisions et leurs raisons : [docs/adr](docs/adr/README.md).
 
+## Construire et tester
+
+Il faut le SDK .NET 10.0.404 et pnpm 11.22.0. pnpm installe lui-même, dans le projet, la version de Node.js qu'attend l'interface.
+
+- Solution .NET : `dotnet test --solution Sollicito.slnx` construit et teste.
+- Interface : `pnpm --dir interface run check` installe les dépendances, construit et teste.
+
+L'intégration continue lance ces deux commandes à chaque pull request vers `main`, puis après chaque fusion.
+
 ## Sécurité
 
 Les protections prévues dès la conception, détaillées dans l'[ADR-0001](docs/adr/0001-cadrage-architecture-v1.md) (D9 et D10) :
