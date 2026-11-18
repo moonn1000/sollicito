@@ -46,7 +46,7 @@ Il faut le SDK .NET 10.0.404 et pnpm 11.22.0. pnpm installe lui-même, dans le p
 - Solution .NET : `dotnet test --solution Sollicito.slnx` construit et teste.
 - Interface : `pnpm --dir interface run check` installe les dépendances, construit et teste.
 
-L'intégration continue lance ces deux commandes à chaque pull request vers `main`, puis après chaque fusion.
+L'intégration continue construit et teste ces deux parties de la même façon, à chaque pull request vers `main`, puis après chaque fusion.
 
 ## Sécurité
 
