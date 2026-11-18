@@ -29,7 +29,7 @@ Chaque requête passe ces contrôles dans cet ordre (`src/Sollicito.Api/ApiLocal
 3. **Jeton** (401), sur tout le reste : routes de l'API, documentation OpenAPI, adresses inconnues.
 4. **En-tête `Origin`** (403), sur ce même reste.
 
-Le routage ne vient qu'ensuite : une requête refusée n'est jamais routée.
+Le routage ne vient qu'ensuite : une requête refusée n'est jamais routée (`tests/Sollicito.Api.Tests/OrdreDesControlesTests.cs`).
 
 ### Écoute sur 127.0.0.1
 
@@ -85,15 +85,15 @@ Un journal dit ce qui s'est passé, jamais ce qu'une requête contenait. Il n'é
 Ce que l'API en applique dès maintenant (`src/Sollicito.Api/Journaux/ReglesDesJournaux.cs`) :
 
 - **La console seule.** Par défaut, ASP.NET Core écrit aussi vers Debug, EventSource et le journal d'événements de Windows[^fournisseurs]. Ce dernier garde ses entrées sur le disque, dans le journal Application, que tout compte connecté au poste peut lire : sa liste d'accès donne la lecture et l'écriture aux utilisateurs interactifs[^journal-application]. Les trois sont retirés.
-- **Deux catégories muettes**, quels que soient les réglages, joker ou réglage propre à un fournisseur compris : la fabrique des journaux leur donne un journal qui n'écrit rien.
+- **Trois catégories muettes**, quels que soient les réglages, joker ou réglage propre à un fournisseur compris : la fabrique des journaux leur donne un journal qui n'écrit rien.
   - `Microsoft.AspNetCore.Hosting.Diagnostics` écrit l'adresse complète de chaque requête, chaîne de requête comprise (« Request starting », « Request finished »), et attache le chemin de la requête à chaque entrée écrite pendant celle-ci.
   - `Microsoft.AspNetCore.Server.Kestrel.BadRequests` recopie la ligne brute d'une requête mal formée, en-têtes compris.
-- **Pas de routage avant les refus.** Le routage écrit le chemin des requêtes dans ses journaux de mise au point ; une requête refusée n'y arrive pas.
+  - `Microsoft.AspNetCore.Routing.Matching.DfaMatcher` écrit le chemin de chaque requête routée, dans ses journaux de mise au point.
 - **Des refus sans valeurs.** L'API note chaque refus par son motif seul, sans la valeur reçue ni l'adresse de la requête.
 
-Pour les stories suivantes : le chemin d'une requête acceptée, lui, peut paraître dans les journaux de mise au point du routage ; une route ne porte donc qu'un identifiant, jamais une donnée. Un message d'exception ne reprend pas le contenu qui l'a provoquée. La journalisation des données sensibles d'Entity Framework Core reste coupée.
+Pour les stories suivantes : une route ne porte qu'un identifiant, jamais une donnée. Une nouvelle route, ou un nouveau composant d'ASP.NET Core, peut amener une catégorie qui recopie la requête : elle rejoint alors les catégories muettes, et le test des journaux essaie la nouvelle route. Un message d'exception ne reprend pas le contenu qui l'a provoquée. La journalisation des données sensibles d'Entity Framework Core reste coupée.
 
-*Tests* : `tests/Sollicito.Api.Tests/ReglesDesJournauxTests.cs`. Les journaux ne vont qu'à la console. L'API est lancée avec chaque catégorie au niveau Trace, y compris par un joker qui vise les catégories muettes et par un réglage propre au fournisseur de test, qui garde tout ce qu'un journal pourrait écrire : message, valeurs, exception, portées. Elle reçoit le jeton dans son en-tête, dans la chaîne de requête, dans le chemin, dans un cookie et dans `Authorization`, et une donnée fictive dans la chaîne de requête, le chemin, un en-tête, un cookie, le corps, `Host` et `Origin`. Elle reçoit aussi trois requêtes mal formées qui portent l'un et l'autre : ligne de requête, ligne d'en-tête, `Host`. Aucune entrée ne contient ni le jeton ni la donnée. Le test échoue dès qu'on rend la parole à l'une des deux catégories muettes, ou qu'on remet le routage avant les refus.
+*Tests* : `tests/Sollicito.Api.Tests/ReglesDesJournauxTests.cs`. Les journaux ne vont qu'à la console. L'API est lancée avec chaque catégorie au niveau Trace, y compris par un joker qui vise les catégories muettes et par un réglage propre au fournisseur de test, qui garde tout ce qu'un journal pourrait écrire : message, valeurs, exception, portées. Elle reçoit le jeton dans son en-tête, dans la chaîne de requête, dans le chemin, dans un cookie et dans `Authorization`, et une donnée fictive dans la chaîne de requête, le chemin, un en-tête, un cookie, le corps, `Host` et `Origin`, sur des requêtes acceptées comme refusées. Elle reçoit aussi trois requêtes mal formées qui portent l'un et l'autre : ligne de requête, ligne d'en-tête, `Host`. Aucune entrée ne contient ni le jeton ni la donnée. Le test échoue dès qu'on rend la parole à l'une des trois catégories muettes.
 
 ## Limites
 

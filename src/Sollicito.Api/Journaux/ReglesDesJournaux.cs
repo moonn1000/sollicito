@@ -19,13 +19,15 @@ internal static class ReglesDesJournaux
     /// <item><c>Microsoft.AspNetCore.Hosting.Diagnostics</c> écrit l'adresse complète de chaque requête, chaîne de
     /// requête comprise (« Request starting », « Request finished »), et attache son chemin à chaque entrée écrite
     /// pendant la requête (portée <c>RequestPath</c>) ;</item>
-    /// <item><c>Microsoft.AspNetCore.Server.Kestrel.BadRequests</c> recopie la ligne brute d'une requête mal formée.</item>
+    /// <item><c>Microsoft.AspNetCore.Server.Kestrel.BadRequests</c> recopie la ligne brute d'une requête mal formée ;</item>
+    /// <item><c>Microsoft.AspNetCore.Routing.Matching.DfaMatcher</c> écrit le chemin de chaque requête routée.</item>
     /// </list>
     /// </summary>
     internal static readonly IReadOnlySet<string> CategoriesMuettes = new HashSet<string>(StringComparer.Ordinal)
     {
         "Microsoft.AspNetCore.Hosting.Diagnostics",
         "Microsoft.AspNetCore.Server.Kestrel.BadRequests",
+        "Microsoft.AspNetCore.Routing.Matching.DfaMatcher",
     };
 
     public static void Appliquer(ILoggingBuilder journaux)

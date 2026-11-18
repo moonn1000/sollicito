@@ -39,7 +39,7 @@ public static class ApiLocale
         // Les fichiers de l'interface (#13) se placeront ici : servis sans jeton, seul leur Host contrôlé (ADR-0003).
         app.UseMiddleware<ControleDuJeton>();
         app.UseMiddleware<ControleDeLOrigine>();
-        // Le routage ne vient qu'après les contrôles : une requête refusée n'est jamais routée.
+        // Le routage ne vient qu'après les contrôles : une requête refusée n'est jamais routée (OrdreDesControlesTests).
         app.UseRouting();
 
         app.MapOpenApi("/api/openapi/{documentName}.json");

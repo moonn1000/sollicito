@@ -64,6 +64,11 @@ public sealed class ReglesDesJournauxTests
                 }),
                 await StatutAsync(api, HttpMethod.Get, "/api/openapi/v1.json", jeton: true),
 
+                // Acceptées, mais la donnée ou le jeton dans le chemin : une route inconnue, un document OpenAPI inconnu.
+                await StatutAsync(api, HttpMethod.Get, $"/api/{Donnee}", jeton: true),
+                await StatutAsync(api, HttpMethod.Get, $"/api/x/{jeton}", jeton: true),
+                await StatutAsync(api, HttpMethod.Get, $"/api/openapi/{Donnee}.json", jeton: true),
+
                 // Refusées : le jeton hors de son en-tête, la donnée en guise de jeton, de chemin, de Host ou d'Origin.
                 await StatutAsync(api, HttpMethod.Get, $"/api/etat?{JetonDeLancement.EnTete}={jeton}&nom={Donnee}", jeton: false),
                 await StatutAsync(api, HttpMethod.Get, $"/api/{jeton}/etat", jeton: false),
@@ -87,6 +92,7 @@ public sealed class ReglesDesJournauxTests
             Assert.Equal(
                 [
                     HttpStatusCode.OK, HttpStatusCode.MethodNotAllowed, HttpStatusCode.OK,
+                    HttpStatusCode.NotFound, HttpStatusCode.NotFound, HttpStatusCode.NotFound,
                     HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
                     HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
                     HttpStatusCode.BadRequest, HttpStatusCode.Forbidden,
