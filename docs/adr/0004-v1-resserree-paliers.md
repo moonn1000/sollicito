@@ -2,7 +2,7 @@
 
 - **Statut** : acceptée
 - **Date** : 2026-11-18
-- **Remplace en partie** : [ADR-0001](0001-cadrage-architecture-v1.md), D5 (entités en base), D6 (sources d'offres), D7 (fournisseurs d'IA), D13 (distribution) et D15 (méthode)
+- **Remplace en partie** : [ADR-0001](0001-cadrage-architecture-v1.md), D4 (modules livrés), D5 (entités en base), D6 (sources d'offres), D7 (fournisseurs d'IA), D10 (rechargement d'un export et désinstallation), D13 (distribution) et D15 (méthode) ; [ADR-0003](0003-hote-interface-webview2.md), l'installeur de « Runtime et tests » et de « Conséquences », repoussé en V2
 - **Tranche** : [ADR-0003](0003-hote-interface-webview2.md), deux points de sa section « À vérifier » : le mode de publication, et la télémétrie et les mises à jour du runtime
 
 ## Contexte
@@ -32,25 +32,29 @@ Cinq de ces fonctions peuvent encore passer en V2, selon la règle de coupe ci-d
 
 ### Ce qui change dans l'ADR-0001
 
+- **D4** : la V1 livre les modules Candidatures, Offres et connecteurs, Relances et IA. Le module Profil attend la V2, comme l'ingestion des offres en tâche de fond, qui n'a pas de source sans le Forem.
 - **D5** : le modèle garde ses huit entités, documentées en UML. Six entrent en base en V1 : Entreprise, Contact, Offre, Candidature, Événement de candidature, Relance. Profil et Document restent modélisés seulement, et entrent en base en V2. La V1 tient ainsi l'exigence d'au moins cinq entités en base.
-- **D6** : en V1, les offres arrivent par leur texte collé ou par un fichier CSV, les deux premiers adaptateurs du connecteur commun. Le jeu de données du Forem et l'import d'une offre par son adresse passent en V2, chacun après son ADR (licence des données, collecte), comme l'API du VDAB. La règle des sources autorisées ne change pas.
+- **D6** : en V1, les offres arrivent par leur texte collé ou par un fichier CSV, les deux premiers adaptateurs du connecteur commun. Le jeu de données du Forem et l'import d'une offre par son adresse passent en V2, chacun après son ADR (licence des données, collecte) ; l'API du VDAB y était déjà. La règle des sources autorisées ne change pas.
 - **D7** : en V1, les fournisseurs d'IA sont Claude et OpenAI, par la clé de l'utilisateur, et Ollama, en local. Les autres, dont Mistral, attendent la V2.
+- **D10** : le dossier de données, les sauvegardes, la restauration et l'export valent pour la V1. Le rechargement d'un export attend la V2, comme la désinstallation, qui arrive avec l'installeur : en V1, supprimer l'exe laisse les données en place.
 - **D13** : la V1 se publie en exe autonome d'un seul fichier, sur GitHub Releases, construit par l'intégration continue avec son empreinte SHA-256 et son attestation de provenance. release-please numérote les versions. Pas de mise à jour automatique : l'utilisateur télécharge la nouvelle version depuis la page des versions. L'exe est publié sans signature (ADR-0002). L'installeur Inno Setup passe en V2 ; en V1, un guide « Démarrer » remplace le guide d'installation.
-- **D15** : Scrum en enchaînement continu, sans sprints. Le backlog est ordonné dans le projet GitHub ; une story part dès qu'une autre est fusionnée, deux au plus en cours. La V1 se livre en cinq paliers, des jalons GitHub, chacun clos par une revue et une rétrospective écrites dans son issue. Ce que l'ADR-0001 renvoyait « au premier sprint » se règle au palier 1.
+- **D15** : Scrum en enchaînement continu, par paliers. Le backlog est ordonné dans le projet GitHub ; une story part dès qu'une autre est fusionnée, deux au plus en cours. Chaque palier, un jalon GitHub, a son objectif, et se clôt par une revue et une rétrospective écrites dans son issue. Ce que l'ADR-0001 renvoyait « au premier sprint » se règle au palier 1.
 
 ### Mode de publication
 
-L'exe est autonome : il embarque les runtimes .NET. Le poste n'a besoin que du runtime WebView2 Evergreen, livré avec Windows 11 et installé par Microsoft sur les Windows 10 éligibles[^evergreen]. Ce choix écarte la publication dépendante du framework, et le zip à décompresser que la spec de la V1 gardait en repli.
+L'exe est autonome : il embarque les runtimes .NET. Le poste n'a besoin que du runtime WebView2 Evergreen, livré avec Windows 11[^evergreen] et déjà installé sur la plupart des Windows 10[^distribution]. Ce choix écarte la publication dépendante du framework, et le zip à décompresser que la spec de la V1 gardait en repli.
+
+Sans installeur en V1, la vérification du runtime par l'installeur (ADR-0003, « Runtime et tests ») et le sort du dossier de profil à la désinstallation (ADR-0003, « Conséquences ») attendent la V2.
 
 ### Ce qui quitte la machine
 
-Sollicito n'a pas de serveur distant. En V1, sans le Forem, ne quittent la machine que :
+Sollicito n'a pas de serveur distant. En V1, qui n'a ni le Forem ni l'import par adresse, les échanges prévus qui quittent la machine sont :
 
-- les échanges avec l'IA en ligne, Claude ou OpenAI, si l'utilisateur en configure une ;
-- les données de diagnostic que le runtime WebView2 envoie à Microsoft : les facultatives selon le réglage « Données de diagnostic » de Windows, les obligatoires quel que soit ce réglage, et par défaut un rapport à chaque plantage[^donnees] ;
+- ce que l'utilisateur confie à l'IA en ligne, Claude ou OpenAI, s'il en configure une ; un modèle Ollama qui tourne sur le poste ne fait rien sortir ;
+- les données de diagnostic que le runtime WebView2 envoie à Microsoft : les facultatives selon le réglage « Données de diagnostic » de Windows, les obligatoires quel que soit ce réglage, et par défaut un rapport à chaque plantage de l'un de ses processus[^donnees] ;
 - les mises à jour du runtime, qu'il télécharge seul[^distribution].
 
-Les deux derniers échanges viennent du runtime, un composant de Windows, et non du code de Sollicito, qui ne les contrôle pas, hormis les rapports de plantage (voir « À vérifier »). La vérification de réputation des navigations, qui ferait appel à SmartScreen, reste coupée (ADR-0003). Le README le dit, dans sa section « Ce qui quitte votre machine ».
+Les deux derniers échanges viennent du runtime, un composant de Windows, et non du code de Sollicito, qui ne les contrôle pas, hormis les rapports de plantage (voir « À vérifier »). La vérification de réputation des navigations, qui ferait appel à SmartScreen, reste coupée (ADR-0003). Une navigation annulée peut quand même envoyer sa requête (ADR-0003, « À vérifier ») : contre une fuite vers un site extérieur, restent l'échappement du contenu et la CSP. Le README décrit ces échanges, dans sa section « Ce qui quitte votre machine ».
 
 ### Paliers
 
@@ -72,11 +76,13 @@ Un palier en retard de plus d'un jour fait passer en V2 la première fonction de
 
 Entre parenthèses, la décision qui le prévoyait :
 
-- le jeu de données du Forem et son ingestion en tâche de fond (D4, D6), l'API du VDAB, et l'import d'une offre par son adresse, avec ses règles de récupération (D6, D9) ;
+- le jeu de données du Forem et son ingestion en tâche de fond (D4, D6), l'API du VDAB, et l'import d'une offre par son adresse (D6) ;
 - le module Profil (D4), avec le score de correspondance, l'aide aux CV et aux lettres (D7) et les documents joints (D5) ;
+- les autres fournisseurs d'IA, dont Mistral (D7) ;
 - la recherche et les filtres, la notification Windows d'une relance échue, le rechargement d'un export (D10), la passerelle depuis career-ops ;
-- l'installeur (D1, D13), qui vérifiera la présence du runtime WebView2 (ADR-0003) et gardera les données à la désinstallation (D10) ;
-- le chiffrement des sauvegardes (D10), le durcissement avancé de la fenêtre (ADR-0003, « À vérifier »), le détail des réglages de Windows qui limitent ce qui quitte la machine, et les guides complets.
+- l'installeur (D13), qui vérifiera la présence du runtime WebView2 (ADR-0003) et gardera les données à la désinstallation (D10) ;
+- l'étude du chiffrement des sauvegardes (D10), le durcissement avancé de la fenêtre (ADR-0003, « À vérifier »), le détail des réglages de Windows qui limitent ce qui quitte la machine, et les guides complets ;
+- le dépôt des brouillons de relance dans Gmail ou Outlook, après son propre ADR (D8).
 
 ## Alternatives écartées
 
@@ -115,5 +121,5 @@ Points relevés le 2026-11-18, à régler par un nouvel ADR si besoin :
 Consultées le 2026-11-18 :
 
 [^evergreen]: Microsoft Learn, runtime Evergreen ou version fixe (appareils Windows 11 et Windows 10) : <https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/evergreen-vs-fixed-version>
-[^distribution]: Microsoft Learn, distribution d'une application et du runtime WebView2 (mises à jour du runtime Evergreen) : <https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution>
+[^distribution]: Microsoft Learn, distribution d'une application et du runtime WebView2 (Windows 10, mises à jour du runtime Evergreen) : <https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution>
 [^donnees]: Microsoft Learn, données et confidentialité dans WebView2 : <https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/data-privacy>

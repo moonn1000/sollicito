@@ -1,6 +1,6 @@
 # ADR-0003 : hôte de l'interface, WebView2 dans une fenêtre WinForms
 
-- **Statut** : acceptée
+- **Statut** : acceptée ; l'installeur de « Runtime et tests » et de « Conséquences » repoussé en V2, et deux points de « À vérifier » tranchés, par l'[ADR-0004](0004-v1-resserree-paliers.md) (V1 resserrée, livrée en paliers)
 - **Date** : 2026-11-13
 - **Remplace en partie** : [ADR-0001](0001-cadrage-architecture-v1.md), D2 (Photino.NET) ; [ADR-0002](0002-budget-nul.md), la mention de Photino.NET parmi les briques gratuites
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D9 (jeton et en-tête `Origin` : fichiers de l'interface servis sans jeton, lectures de l'API admises sans `Origin` ; voir « Règles d'accès »)
