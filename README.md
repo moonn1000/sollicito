@@ -1,6 +1,6 @@
 # Sollicito
 
-> **État (novembre 2026) : en construction.** Le socle est en place : la solution .NET 10, l'interface React et l'intégration continue. La V1 se construit en cinq paliers jusqu'au 1er décembre 2026 ; aucune version n'est encore publiée. Ce qui suit décrit la V1 telle qu'elle sera livrée, et l'avancement se suit dans les [jalons](https://github.com/moonn1000/sollicito/milestones).
+> **État (novembre 2026) : en construction.** La solution .NET 10, l'interface React, l'intégration continue et l'API locale sont en place. La V1 se construit en cinq paliers jusqu'au 1er décembre 2026 ; aucune version n'est encore publiée. Ce qui suit décrit la V1 telle qu'elle sera livrée, et l'avancement se suit dans les [jalons](https://github.com/moonn1000/sollicito/milestones).
 
 Sollicito est une application de bureau libre pour mener une recherche d'emploi en Belgique : suivre ses candidatures, ne plus oublier une relance, importer des offres, avec une IA en option. Les données sont stockées sur l'ordinateur de l'utilisateur, et Sollicito n'a aucun serveur distant.
 
@@ -73,13 +73,13 @@ L'intégration continue construit et teste ces deux parties de la même façon, 
 
 Les protections prévues dès la conception, détaillées dans l'[ADR-0001](docs/adr/0001-cadrage-architecture-v1.md) (D9 et D10) :
 
-- l'API locale refusera les appels venus d'autres pages web ou d'autres comptes du PC : écoute sur 127.0.0.1, jeton aléatoire à chaque lancement transmis par un en-tête, refus par le serveur des origines et des en-têtes `Host` inattendus ;
+- l'API locale refuse les appels venus d'autres pages web, d'autres appareils ou d'autres comptes du PC : écoute sur 127.0.0.1 seulement, jeton aléatoire à chaque lancement transmis par un en-tête, refus par le serveur des origines et des en-têtes `Host` inattendus ; ses journaux ne contiennent ni le jeton ni vos données ;
 - la fenêtre n'affichera que l'interface de Sollicito, sous une politique de sécurité du contenu stricte ; les liens externes s'ouvriront dans votre navigateur ;
 - les clés d'API d'IA seront chiffrées par l'API Data Protection d'ASP.NET Core, protégée par DPAPI et liée à votre compte Windows ; jamais stockées en clair, jamais dans les sauvegardes ni les exports ;
 - le contenu des offres sera traité comme non fiable : affichage échappé, et une IA qui ne peut rien déclencher d'elle-même ;
 - aucun secret dans ce dépôt.
 
-Pour signaler une vulnérabilité : [SECURITY.md](SECURITY.md).
+Le [modèle de menaces](docs/modele-de-menaces.md) détaille les protections en place et leurs limites. Pour signaler une vulnérabilité : [SECURITY.md](SECURITY.md).
 
 ## Méthode
 
