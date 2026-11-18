@@ -59,6 +59,7 @@ classDiagram
     class ChangementDeStatut["Changement de statut"] {
         Ancien : StatutDeCandidature
         Nouveau : StatutDeCandidature
+        Corrige : ChangementDeStatut [0..1]
     }
     class Etape["Étape"] {
         Type : TypeDEtape
@@ -114,6 +115,7 @@ Pour lire le diagramme :
 | Candidature – Relance | 1 – 0..* | ses relances, dont une seule à faire à la fois |
 | Contact – Relance | 0..1 – 0..* | le destinataire : à la planification, un contact de l'entreprise de la candidature, ou personne |
 | Clôture de relance – Relance | 0..1 – 1 | une relance faite ou abandonnée entre dans l'historique |
+| Changement de statut – Changement de statut (`Corrige`) | 0..1 – 0..1 | une correction désigne le changement qu'elle corrige ; un changement n'est corrigé qu'une fois |
 | Candidature – Document | 0..* – 0..* | V2 : un même document sert à plusieurs candidatures (#42) |
 | Profil – Document | 1 – 0..* | V2 : les documents de la personne |
 
@@ -123,7 +125,7 @@ La candidature est la racine de son agrégat : ses événements et ses relances 
 
 | Sorte | Ce qu'elle garde | Datée par |
 | --- | --- | --- |
-| Changement de statut | l'ancien et le nouveau statut | l'horloge, au moment du passage |
+| Changement de statut | l'ancien et le nouveau statut ; pour une correction, le changement qu'elle corrige (`Corrige`) | l'horloge, au moment du passage ou de la correction |
 | Étape | un type et une note facultative ; elle ne change pas le statut (#41, absorbée par #12) | l'utilisateur, passée ou à venir |
 | Clôture de relance | la relance faite ou abandonnée | l'horloge, au moment où on la marque |
 
@@ -185,9 +187,12 @@ Cette table fait foi, et le diagramme la dessine. L'API refuse tout autre passag
 - **Départ** : une candidature commence toujours à Envoyée, avec sa date et son heure d'envoi, qui ne peuvent pas être dans le futur. Ce qui n'est pas encore envoyé reste une offre (#38).
 - **En cours ou close** : Envoyée, Entretien et Proposition sont en cours ; les quatre autres statuts closent la candidature.
 - **Chaque passage** ajoute un changement de statut à l'historique, daté par l'horloge. Une candidature saisie après coup prend donc ses statuts à la date de la saisie ; la vraie date d'un entretien passé se garde dans une étape, que l'utilisateur date lui-même.
-- **Annuler le dernier changement** : c'est la seule autre façon de changer de statut. L'annulation retire de l'historique le dernier changement de statut et rend à la candidature le statut d'avant ; répétée, elle remonte jusqu'à Envoyée. Elle corrige une erreur de clic, et reprend une candidature close, par exemple quand une réponse arrive après « Sans réponse ». Ce n'est pas un passage : le diagramme ne la montre pas. Une relance abandonnée à la clôture reste abandonnée.
+- **Corriger le dernier changement** : c'est la seule autre façon de changer de statut, et l'historique ne perd rien. La correction ajoute un changement de statut, daté par l'horloge, qui ramène la candidature au statut d'avant, et qui désigne par `Corrige` le changement corrigé. Celui-ci reste dans l'historique, marqué comme corrigé.
+  - La correction porte sur le dernier changement qui n'est ni corrigé ni lui-même une correction. Répétée, elle remonte donc jusqu'à Envoyée. Une correction ne se corrige pas : pour revenir au statut corrigé, on refait le passage.
+  - Elle répare une erreur de clic, et reprend une candidature close, par exemple quand une réponse arrive après « Sans réponse ».
+  - Ce n'est pas un passage : le diagramme ne la montre pas. Une relance abandonnée à la clôture reste abandonnée.
 - **Le statut n'est pas un champ** : modifier une candidature (#25) ne le touche pas.
-- **Règle de cohérence** : le statut d'une candidature est le nouveau statut de son dernier changement, ou Envoyée si elle n'en a aucun.
+- **Règle de cohérence** : le statut d'une candidature est le nouveau statut de son dernier changement, correction comprise, ou Envoyée si elle n'en a aucun.
 
 ## Relances
 
@@ -314,7 +319,7 @@ Ces valeurs ont été relevées le 2026-11-18 par une sonde en .NET 10 (`TimeZon
 | Story | Ce qu'elle reprend du modèle |
 | --- | --- |
 | #11 | l'entreprise et sa clé ; la candidature : poste, date d'envoi jamais future, départ à Envoyée ; les instants en UTC et leur convertisseur ; la conversion des heures saisies |
-| #12 | les passages permis, l'annulation du dernier changement, les trois sortes d'événement et l'ordre de l'historique |
+| #12 | les passages permis, la correction du dernier changement, les trois sortes d'événement et l'ordre de l'historique |
 | #14 | le contact minimal ; les règles des relances : candidature en cours, une seule à faire, échéance sur la date, délai par défaut en réglage, relance échue ou de la semaine, choix du destinataire, clôture dans l'historique, abandon quand la candidature se clôt |
 | #25 | les champs modifiables : poste, entreprise (reconnue de nouveau) et date d'envoi, mais pas le statut ; la suppression d'une candidature emporte ses événements et ses relances, et laisse son offre et son entreprise |
 | #36 | la règle 2, sur le texte collé ; la règle 3 ; le texte gardé tel quel |

@@ -41,7 +41,7 @@ Une entreprise se reconnaît à une clé tirée de son nom : accents retirés, m
 
 ### Corriger un statut
 
-Une candidature ne change de statut que par les passages du diagramme d'états, ou en annulant son dernier changement de statut. Ce changement disparaît alors de l'historique, et la candidature reprend le statut d'avant. L'annulation corrige une erreur de clic, et reprend une candidature close, par exemple quand une réponse arrive après « Sans réponse ».
+Une candidature ne change de statut que par les passages du diagramme d'états, ou en corrigeant son dernier changement de statut. L'historique se fait par ajouts seulement : la correction ajoute un changement de statut daté, qui ramène la candidature au statut d'avant et désigne le changement corrigé. Celui-ci reste dans l'historique, marqué comme corrigé. Répétée, la correction remonte jusqu'à Envoyée ; une correction ne se corrige pas. Elle répare une erreur de clic, et reprend une candidature close, par exemple quand une réponse arrive après « Sans réponse ». Elle se range dans la même table que les autres événements : la V1 garde ses six entités en base.
 
 ### Garder les dates et les heures
 
@@ -62,6 +62,7 @@ L'exemple chiffré est dans le modèle de domaine, « Dates et heures ».
 - **Aucun dédoublonnage des offres collées** : coller deux fois la même offre en créerait deux.
 - **Rouvrir une candidature close par un passage de plus**, vers son statut d'avant : la trace resterait, mais une erreur sur un passage qui fait avancer (Envoyée vers Entretien) ne se corrigerait pas, et dix flèches de retour, une par passage vers un statut clos, rendraient le diagramme d'états illisible.
 - **Des passages en arrière entre statuts en cours** : autant de flèches et de boutons de plus, pour des erreurs rares.
+- **Effacer le changement corrigé** : plus simple, mais l'historique perdrait une étape de la démarche, alors qu'il se fait par ajouts seulement.
 - **L'heure locale, sans fuseau** : l'heure qui existe deux fois à l'automne resterait ambiguë, et les heures changeraient de sens si le fuseau du poste changeait.
 - **`DateTimeOffset`** : avec SQLite, EF Core ne traduit ni ses comparaisons ni ses tris en SQL, qu'il faudrait faire dans l'application ; sa documentation recommande un `DateTime` converti en UTC[^ef-sqlite].
 - **Une échéance en instant**, l'envoi plus 7 × 24 heures : elle tombe un jour trop tard quand le passage à l'heure d'été se place entre les deux.
@@ -74,7 +75,7 @@ L'exemple chiffré est dans le modèle de domaine, « Dates et heures ».
   - deux noms différents d'une même entreprise font deux entreprises (« Lumière Verte » et « Lumière Verte Belgique », « NV Lumière Verte SA » et « Lumière Verte ») : l'écran de saisie doit proposer les entreprises déjà enregistrées (#11) ;
   - un doublon possible se tranche à la main, et deux postes de même intitulé dans une même entreprise seront signalés à tort ;
   - une offre recollée depuis un autre site, au texte différent, n'est pas reconnue : seule la règle 3 la signale ;
-  - annuler un changement de statut efface sa trace de l'historique ;
+  - une erreur de clic corrigée laisse deux lignes dans l'historique : le changement, marqué comme corrigé, et sa correction ;
   - une candidature saisie après coup prend ses statuts à la date de la saisie : la vraie date d'un entretien passé se garde dans une étape ;
   - une heure saisie dans le trou du passage à l'heure d'été est refusée, et l'utilisateur doit la corriger ;
   - le texte d'une offre ne change plus après l'import, sans quoi son empreinte ne vaudrait plus.
