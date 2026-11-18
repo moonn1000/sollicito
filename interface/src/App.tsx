@@ -1,7 +1,7 @@
 export function App() {
   return (
     <main>
-      <h1>Sollicito</h1>
+      <h1>Autre titre</h1>
     </main>
   );
 }
