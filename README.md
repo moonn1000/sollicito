@@ -2,7 +2,7 @@
 
 > **État (novembre 2026) : en construction.** Le socle est en place : la solution .NET 10, l'interface React et l'intégration continue. La V1 se construit en cinq paliers jusqu'au 1er décembre 2026 ; aucune version n'est encore publiée. Ce qui suit décrit la V1 telle qu'elle sera livrée, et l'avancement se suit dans les [jalons](https://github.com/moonn1000/sollicito/milestones).
 
-Sollicito est une application de bureau libre pour mener une recherche d'emploi en Belgique : suivre ses candidatures, ne plus oublier une relance, importer des offres, avec une IA en option. Les données sont stockées sur l'ordinateur de l'utilisateur, et Sollicito n'a aucun serveur.
+Sollicito est une application de bureau libre pour mener une recherche d'emploi en Belgique : suivre ses candidatures, ne plus oublier une relance, importer des offres, avec une IA en option. Les données sont stockées sur l'ordinateur de l'utilisateur, et Sollicito n'a aucun serveur distant.
 
 En Belgique, « solliciter » veut dire postuler. D'où le nom.
 

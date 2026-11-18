@@ -2,7 +2,7 @@
 
 - **Statut** : acceptée
 - **Date** : 2026-11-18
-- **Remplace en partie** : [ADR-0001](0001-cadrage-architecture-v1.md), D4 (modules livrés), D5 (entités en base), D6 (sources d'offres), D7 (fournisseurs d'IA), D10 (rechargement d'un export et désinstallation), D13 (distribution) et D15 (méthode) ; [ADR-0003](0003-hote-interface-webview2.md), l'installeur de « Runtime et tests » et de « Conséquences », repoussé en V2
+- **Remplace en partie** : [ADR-0001](0001-cadrage-architecture-v1.md), D4 (modules livrés), D5 (entités en base), D6 (sources d'offres), D7 (fournisseurs d'IA), D10 (rechargement d'un export et désinstallation), D13 (distribution) et D15 (méthode) ; [ADR-0002](0002-budget-nul.md), pour la V1, ses mentions de l'installeur, d'Inno Setup, du Forem et du guide d'installation ; [ADR-0003](0003-hote-interface-webview2.md), l'installeur de « Runtime et tests » et de « Conséquences », repoussé en V2
 - **Tranche** : [ADR-0003](0003-hote-interface-webview2.md), deux points de sa section « À vérifier » : le mode de publication, et la télémétrie et les mises à jour du runtime
 
 ## Contexte
@@ -40,11 +40,14 @@ Cinq de ces fonctions peuvent encore passer en V2, selon la règle de coupe ci-d
 - **D13** : la V1 se publie en exe autonome d'un seul fichier, sur GitHub Releases, construit par l'intégration continue avec son empreinte SHA-256 et son attestation de provenance. release-please numérote les versions. Pas de mise à jour automatique : l'utilisateur télécharge la nouvelle version depuis la page des versions. L'exe est publié sans signature (ADR-0002). L'installeur Inno Setup passe en V2 ; en V1, un guide « Démarrer » remplace le guide d'installation.
 - **D15** : Scrum en enchaînement continu, par paliers. Le backlog est ordonné dans le projet GitHub ; une story part dès qu'une autre est fusionnée, deux au plus en cours. Chaque palier, un jalon GitHub, a son objectif, et se clôt par une revue et une rétrospective écrites dans son issue. Ce que l'ADR-0001 renvoyait « au premier sprint » se règle au palier 1.
 
+### Ce qui change dans les ADR-0002 et 0003
+
+- **ADR-0002** : en V1, la publication sans signature vise l'exe. Inno Setup et les données du Forem ne servent qu'en V2, et le guide « Démarrer » remplace le guide d'installation.
+- **ADR-0003** : sans installeur en V1, la vérification du runtime par l'installeur (« Runtime et tests ») et le sort du dossier de profil à la désinstallation (« Conséquences ») attendent la V2.
+
 ### Mode de publication
 
 L'exe est autonome : il embarque les runtimes .NET. Le poste n'a besoin que du runtime WebView2 Evergreen, livré avec Windows 11[^evergreen] et déjà installé sur la plupart des Windows 10[^distribution]. Ce choix écarte la publication dépendante du framework, et le zip à décompresser que la spec de la V1 gardait en repli.
-
-Sans installeur en V1, la vérification du runtime par l'installeur (ADR-0003, « Runtime et tests ») et le sort du dossier de profil à la désinstallation (ADR-0003, « Conséquences ») attendent la V2.
 
 ### Ce qui quitte la machine
 
