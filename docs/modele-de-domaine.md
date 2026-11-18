@@ -184,7 +184,7 @@ Cette table fait foi, et le diagramme la dessine. L'API refuse tout autre passag
 
 - **Départ** : une candidature commence toujours à Envoyée, avec sa date et son heure d'envoi, qui ne peuvent pas être dans le futur. Ce qui n'est pas encore envoyé reste une offre (#38).
 - **En cours ou close** : Envoyée, Entretien et Proposition sont en cours ; les quatre autres statuts closent la candidature.
-- **Chaque passage** ajoute un changement de statut à l'historique, daté par l'horloge.
+- **Chaque passage** ajoute un changement de statut à l'historique, daté par l'horloge. Une candidature saisie après coup prend donc ses statuts à la date de la saisie ; la vraie date d'un entretien passé se garde dans une étape, que l'utilisateur date lui-même.
 - **Annuler le dernier changement** : c'est la seule autre façon de changer de statut. L'annulation retire de l'historique le dernier changement de statut et rend à la candidature le statut d'avant ; répétée, elle remonte jusqu'à Envoyée. Elle corrige une erreur de clic, et reprend une candidature close, par exemple quand une réponse arrive après « Sans réponse ». Ce n'est pas un passage : le diagramme ne la montre pas. Une relance abandonnée à la clôture reste abandonnée.
 - **Le statut n'est pas un champ** : modifier une candidature (#25) ne le touche pas.
 - **Règle de cohérence** : le statut d'une candidature est le nouveau statut de son dernier changement, ou Envoyée si elle n'en a aucun.
@@ -206,8 +206,8 @@ stateDiagram-v2
 
 - **Planifier** : sur une candidature en cours seulement, et une relance à faire au plus par candidature.
 - **Échéance** : la date locale de l'envoi, plus un délai en jours (voir « Dates et heures »). Le délai par défaut est un réglage de l'application, hors des entités du domaine : #14 fixe sa valeur et le range avec les autres réglages. On peut le changer pour une relance. L'échéance est enregistrée telle quelle : corriger ensuite la date d'envoi (#25) ne la déplace pas.
-- **Échue** : une relance à faire dont l'échéance tombe aujourd'hui ou avant, en date locale.
-- **Destinataire** : l'utilisateur le choisit parmi les contacts de l'entreprise de la candidature. Si l'entreprise n'en a qu'un, il est proposé d'office ; si elle n'en a aucun, la relance reste sans destinataire, et son brouillon s'ouvre sans (#14). Rattacher la candidature à une autre entreprise (#25) retire le destinataire de sa relance à faire.
+- **Échue** : une relance à faire dont l'échéance tombe aujourd'hui ou avant, en date locale. **De la semaine** : une relance à faire dont l'échéance tombe dans les sept jours qui suivent aujourd'hui.
+- **Destinataire** : l'utilisateur le choisit parmi les contacts de l'entreprise de la candidature. Si l'entreprise n'en a qu'un, il est proposé d'office ; si elle n'en a aucun, la relance reste sans destinataire, et son brouillon s'ouvre sans (#14). Rattacher la candidature à une autre entreprise (#25) retire le destinataire de sa relance à faire ; les relances closes gardent le leur.
 - **Faite ou abandonnée** : c'est définitif, et une clôture de relance entre dans l'historique de la candidature.
 - **Clore la candidature** abandonne sa relance à faire.
 
@@ -229,12 +229,12 @@ Une entreprise se reconnaît à sa clé, tirée de son nom. Deux noms qui donnen
 
 La clé se calcule dans cet ordre :
 
-1. décomposer les caractères (Unicode NFKD) et retirer les accents : « Société » devient « Societe » ;
+1. décomposer les caractères (Unicode NFKD), retirer les accents, et écrire « œ » et « æ » en deux lettres : « Société » devient « Societe », « Cœur » devient « Coeur » ;
 2. passer en minuscules, sans dépendre de la langue du poste (culture invariante) ;
 3. retirer les points, et remplacer par une espace tout autre caractère qui n'est ni une lettre ni un chiffre : « S.A. » devient « sa », « L’Atelier » devient « l atelier » ;
 4. réduire les suites d'espaces à une seule, et retirer celles du début et de la fin ;
 5. retirer la forme juridique qui termine le nom, tant qu'il y en a une : `sa`, `nv`, `srl`, `bv`, `sprl`, `bvba`, `sc`, `cv`, `scrl`, `cvba`, `snc`, `vof`, `scomm`, `commv`, `scs`, `gcv`, `sca`, `cva`, `asbl`, `vzw`, `aisbl`, `ivzw`, `se`, `sas`, `sarl`, `gmbh`, `ag`, `ltd`, `inc`, `llc`, `plc` ;
-6. retirer de même la forme qui ouvre le nom, mais seulement parmi les formes belges qui ne commencent jamais une marque : `asbl`, `vzw`, `aisbl`, `ivzw`, `srl`, `sprl`, `bvba`, `scrl`, `cvba`.
+6. retirer ensuite la forme juridique qui ouvre le nom, tant qu'il y en a une, mais seulement parmi les formes belges qui ne commencent jamais une marque : `asbl`, `vzw`, `aisbl`, `ivzw`, `srl`, `sprl`, `bvba`, `scrl`, `cvba`.
 
 Les étapes 5 et 6 ne retirent jamais le dernier mot : « SA » seul garde la clé `sa`. Un nom sans lettre ni chiffre (« !!! ») est refusé à la saisie.
 
@@ -250,6 +250,7 @@ Exemples, sur des noms fictifs :
 | SRL Lune Rousse | `lune rousse` |
 | ASBL Les Amis du Parc | `les amis du parc` |
 | Les Amis du Parc ASBL | `les amis du parc` |
+| Les Œuvres du Cœur ASBL | `les oeuvres du coeur` |
 | AG Logistique SA | `ag logistique` |
 | SC Durand | `sc durand` |
 | NV Lumière Verte SA | `nv lumiere verte` |
@@ -257,6 +258,7 @@ Exemples, sur des noms fictifs :
 
 - « AG Logistique » et « SC Durand » gardent leur début : AG et SC y sont des initiales, pas des formes juridiques. Les formes courtes ne se retirent donc qu'en fin de nom, au prix de « NV Lumière Verte SA », qui ne rejoint pas « Lumière Verte ».
 - La clé ne rapproche pas deux noms différents : « Lumière Verte Belgique » et « Lumière Verte » font deux entreprises. L'écran de saisie propose donc les entreprises déjà enregistrées pendant qu'on tape (#11).
+- Limites connues, rares : « S. A. » écrit avec une espace donne deux mots, `s a`, qui ne se retirent pas ; un point au milieu d'un mot en colle les deux moitiés (« Lumière.Verte » donne `lumiereverte`) ; un nom qui finit par un mot qui est aussi une forme juridique le perd (« Mon CV » donne `mon`). Les propositions de l'écran de saisie rattrapent ces cas.
 - Le nom affiché est celui de la première saisie.
 - Changer l'entreprise d'une candidature (#25) la rattache à l'entreprise que reconnaît le nouveau nom, ou en crée une. L'ancienne entreprise n'est pas renommée.
 
@@ -265,8 +267,8 @@ Exemples, sur des noms fictifs :
 Une offre arrive par un connecteur (ADR-0001, D6) : en V1, le texte collé (#36) ou le fichier CSV (#40). Trois règles disent si elle est déjà enregistrée.
 
 1. **Même source, identifiant connu** : le couple (source, identifiant externe) est unique (D5). Une offre reconnue n'est ni recréée ni écrasée. En V1, aucune source ne fournit d'identifiant sûr : le texte collé n'en a pas, et l'identifiant d'un fichier CSV tenu ailleurs ne vaut que dans ce fichier. La règle servira au Forem, en V2.
-2. **Même source, même texte** : sans identifiant externe, le couple (source, empreinte) est unique. L'empreinte est le SHA-256 du texte normalisé : décomposition et recomposition Unicode (NFKC), minuscules, tout blanc (espace, tabulation, saut de ligne, espace insécable) réduit à une espace, sans blanc au début ni à la fin. Pour une offre collée, c'est le texte collé ; pour une ligne de CSV, ses champs dans l'ordre du format de #40, séparés par un saut de ligne. Recoller le même texte retrouve l'offre enregistrée, même si ses espaces ou ses sauts de ligne ont changé.
-3. **D'une source à l'autre, ou d'un texte à l'autre** : jamais de fusion automatique. Quand une nouvelle offre a la même entreprise (même clé) et le même poste normalisé qu'une offre déjà enregistrée, quelle que soit la source, l'application signale un doublon possible, avec un lien vers l'autre offre. L'utilisateur garde les deux, ou renonce à la nouvelle. Le poste se normalise comme le nom d'une entreprise, sans retirer de forme juridique : « Développeur .NET (H/F) » et « developpeur  .net h/f » donnent tous deux `developpeur net h f`. Une offre sans entreprise n'est pas comparée.
+2. **Même source, même texte** : sans identifiant externe, le couple (source, empreinte) est unique. L'empreinte est le SHA-256 du texte normalisé : décomposition et recomposition Unicode (NFKC), minuscules, tout blanc (espace, tabulation, saut de ligne, espace insécable) réduit à une espace, sans blanc au début ni à la fin. Pour une offre collée, c'est le texte collé. Pour une ligne de CSV, chaque champ se normalise à part, puis les champs se joignent dans l'ordre du format de #40, par le caractère U+001F (séparateur d'unité) : ce n'est pas un blanc, donc un champ vide garde sa place. Recoller le même texte retrouve l'offre enregistrée, même si ses espaces ou ses sauts de ligne ont changé.
+3. **D'une source à l'autre, ou d'un texte à l'autre** : jamais de fusion automatique. Quand une nouvelle offre a la même entreprise (même clé) et le même poste normalisé qu'une offre déjà enregistrée, quelle que soit la source, l'application signale un doublon possible, avec un lien vers l'autre offre. L'utilisateur garde les deux, ou renonce à la nouvelle. La comparaison se fait à l'enregistrement de l'offre, puis de nouveau quand on change son entreprise ou son poste. Le poste se normalise comme le nom d'une entreprise, sans retirer de forme juridique : « Développeur .NET (H/F) » et « developpeur  .net h/f » donnent tous deux `developpeur net h f`. Une offre sans entreprise n'est pas comparée.
 
 - À l'import d'un fichier CSV (#40), une ligne reconnue par la règle 1 ou 2 est écartée et signalée dans le compte rendu ; un doublon possible (règle 3) est importé, et signalé comme tel.
 - Le texte d'une offre ne change plus après l'import (#36 le garde tel quel) : son empreinte reste juste.
@@ -287,7 +289,7 @@ Deux sortes de valeurs, jamais mêlées :
 - **Heure qui existe deux fois** : au retour à l'heure d'hiver, l'horloge revient de 03:00 à 02:00, le 25/10/2026 puis le 31/10/2027. Une heure de cette plage se lit à l'heure d'hiver (UTC+1), comme le fait `TimeZoneInfo.ConvertTimeToUtc` : 02:30 le 25/10/2026 donne `2026-10-25T01:30:00Z`[^dotnet-ambigu].
 - **Calculs en jours**, dont l'échéance d'une relance : sur la date, jamais en heures. On prend la date locale de l'instant, puis on ajoute des jours.
 - **Aujourd'hui** : la date locale de l'horloge.
-- **Stockage** (#11) : EF Core écrit ces valeurs en texte dans SQLite. Il traduit en SQL les comparaisons et les tris de `DateTime` et de `DateOnly`, mais pas ceux de `DateTimeOffset`, qu'il fait en mémoire[^ef-sqlite][^ef-fonctions] : d'où le `DateTime` en UTC. À la lecture, un convertisseur rend au `DateTime` son genre `Utc`[^ef-genre].
+- **Stockage** (#11) : EF Core écrit ces valeurs en texte dans SQLite. Avec `DateTimeOffset`, que SQLite ne connaît pas, ni les comparaisons ni les tris ne se traduiraient en SQL : il faudrait les faire dans l'application. La documentation d'EF Core recommande donc un `DateTime` converti en UTC[^ef-sqlite]. Les fonctions de date de `DateTime` et de `DateOnly`, elles, se traduisent en SQL[^ef-fonctions]. À la lecture, un convertisseur rend au `DateTime` son genre `Utc`[^ef-genre].
 
 ### Exemple
 
@@ -313,7 +315,7 @@ Ces valeurs ont été relevées le 2026-11-18 par une sonde en .NET 10 (`TimeZon
 | --- | --- |
 | #11 | l'entreprise et sa clé ; la candidature : poste, date d'envoi jamais future, départ à Envoyée ; les instants en UTC et leur convertisseur ; la conversion des heures saisies |
 | #12 | les passages permis, l'annulation du dernier changement, les trois sortes d'événement et l'ordre de l'historique |
-| #14 | le contact minimal ; les règles des relances : candidature en cours, une seule à faire, échéance sur la date, délai par défaut en réglage, choix du destinataire, clôture dans l'historique, abandon quand la candidature se clôt |
+| #14 | le contact minimal ; les règles des relances : candidature en cours, une seule à faire, échéance sur la date, délai par défaut en réglage, relance échue ou de la semaine, choix du destinataire, clôture dans l'historique, abandon quand la candidature se clôt |
 | #25 | les champs modifiables : poste, entreprise (reconnue de nouveau) et date d'envoi, mais pas le statut ; la suppression d'une candidature emporte ses événements et ses relances, et laisse son offre et son entreprise |
 | #36 | la règle 2, sur le texte collé ; la règle 3 ; le texte gardé tel quel |
 | #38 | une offre, au plus une candidature ; « Postuler » reprend l'entreprise et le poste ; l'offre sans entreprise |
@@ -329,8 +331,8 @@ Ces valeurs ont été relevées le 2026-11-18 par une sonde en .NET 10 (`TimeZon
 Consultées le 2026-11-18 :
 
 [^ef-heritage]: Microsoft Learn, EF Core, héritage (une table par hiérarchie, par défaut) : <https://learn.microsoft.com/en-us/ef/core/modeling/inheritance>
-[^ef-sqlite]: Microsoft Learn, EF Core, limites du fournisseur SQLite (`DateTimeOffset` comparé et trié en mémoire) : <https://learn.microsoft.com/en-us/ef/core/providers/sqlite/limitations>
-[^ef-fonctions]: Microsoft Learn, EF Core, fonctions traduites par le fournisseur SQLite (`DateTime`, `DateOnly`) : <https://learn.microsoft.com/en-us/ef/core/providers/sqlite/functions>
+[^ef-sqlite]: Microsoft Learn, EF Core, limites du fournisseur SQLite (comparaisons et tris de `DateTimeOffset` non traduits en SQL, `DateTime` en UTC recommandé) : <https://learn.microsoft.com/en-us/ef/core/providers/sqlite/limitations>
+[^ef-fonctions]: Microsoft Learn, EF Core, fonctions traduites par le fournisseur SQLite (fonctions de date de `DateTime` et de `DateOnly`) : <https://learn.microsoft.com/en-us/ef/core/providers/sqlite/functions>
 [^ef-genre]: Microsoft Learn, EF Core, conversions de valeurs (« Specify the DateTime.Kind when reading dates ») : <https://learn.microsoft.com/en-us/ef/core/modeling/value-conversions>
 [^dotnet-fuseaux]: Microsoft Learn, .NET, vue d'ensemble des fuseaux horaires (heures invalides et ambiguës) : <https://learn.microsoft.com/en-us/dotnet/standard/datetime/time-zone-overview>
 [^dotnet-ambigu]: Microsoft Learn, .NET, résoudre une heure ambiguë (la lire à l'heure d'hiver) : <https://learn.microsoft.com/en-us/dotnet/standard/datetime/resolve-ambiguous-times>

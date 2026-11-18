@@ -36,8 +36,12 @@ Une entreprise se reconnaît à une clé tirée de son nom : accents retirés, m
 ### Dédoublonner les offres
 
 1. **Identifiant sûr** : le couple (source, identifiant externe) de la D5 reste la règle d'une source qui en fournit un. Aucune ne le fait en V1 ; le Forem le fera en V2.
-2. **Offre sans identifiant**, le second cas de la D5 : le couple (source, empreinte) la reconnaît. L'empreinte est le SHA-256 de son texte normalisé (Unicode NFKC, minuscules, blancs réduits). Recoller le même texte retrouve l'offre enregistrée. Une ligne de CSV se traite de même, sur ses champs.
+2. **Offre sans identifiant**, le second cas de la D5 : le couple (source, empreinte) la reconnaît. L'empreinte est le SHA-256 de son texte normalisé (Unicode NFKC, minuscules, blancs réduits). Recoller le même texte retrouve l'offre enregistrée. Une ligne de CSV se traite de même : chaque champ se normalise à part, puis les champs se joignent par un séparateur qui n'est pas un blanc (U+001F).
 3. **Même offre vue sur deux sources**, le premier cas : jamais de fusion automatique. Une offre qui a la même entreprise et le même poste normalisé qu'une offre enregistrée, quelle que soit sa source, est signalée comme doublon possible ; l'utilisateur garde les deux, ou renonce à la nouvelle.
+
+### Corriger un statut
+
+Une candidature ne change de statut que par les passages du diagramme d'états, ou en annulant son dernier changement de statut. Ce changement disparaît alors de l'historique, et la candidature reprend le statut d'avant. L'annulation corrige une erreur de clic, et reprend une candidature close, par exemple quand une réponse arrive après « Sans réponse ».
 
 ### Garder les dates et les heures
 
@@ -56,8 +60,10 @@ L'exemple chiffré est dans le modèle de domaine, « Dates et heures ».
 - **Une entité « annonce »**, une offre et ses parutions, une par source : c'est le bon modèle quand des sources automatiques publieront les mêmes offres. En V1, où chaque offre arrive à la main, elle ajouterait une neuvième entité et ses écrans pour un cas rare.
 - **L'adresse de l'offre comme identifiant** : une même offre a une adresse par site, et une adresse change avec ses paramètres de suivi.
 - **Aucun dédoublonnage des offres collées** : coller deux fois la même offre en créerait deux.
+- **Rouvrir une candidature close par un passage de plus**, vers son statut d'avant : la trace resterait, mais une erreur sur un passage qui fait avancer (Envoyée vers Entretien) ne se corrigerait pas, et neuf flèches de retour rendraient le diagramme d'états illisible.
+- **Des passages en arrière entre statuts en cours** : autant de flèches et de boutons de plus, pour des erreurs rares.
 - **L'heure locale, sans fuseau** : l'heure qui existe deux fois à l'automne resterait ambiguë, et les heures changeraient de sens si le fuseau du poste changeait.
-- **`DateTimeOffset`** : avec SQLite, EF Core ne traduit ni ses comparaisons ni ses tris en SQL, et les fait en mémoire ; Microsoft recommande un `DateTime` en UTC[^ef-sqlite].
+- **`DateTimeOffset`** : avec SQLite, EF Core ne traduit ni ses comparaisons ni ses tris en SQL, qu'il faudrait faire dans l'application ; sa documentation recommande un `DateTime` converti en UTC[^ef-sqlite].
 - **Une échéance en instant**, l'envoi plus 7 × 24 heures : elle tombe un jour trop tard quand le passage à l'heure d'été se place entre les deux.
 - **Convertir les heures dans l'interface** : la règle vivrait en deux endroits, et le navigateur en applique une autre. Relevé le 2026-11-18 dans Chromium : il avance d'une heure, sans erreur, une heure qui n'existe pas (le 29/03/2026 à 02:30 devient 03:30), et lit à l'heure d'été une heure qui existe deux fois.
 
@@ -68,6 +74,8 @@ L'exemple chiffré est dans le modèle de domaine, « Dates et heures ».
   - deux noms différents d'une même entreprise font deux entreprises (« Lumière Verte » et « Lumière Verte Belgique », « NV Lumière Verte SA » et « Lumière Verte ») : l'écran de saisie doit proposer les entreprises déjà enregistrées (#11) ;
   - un doublon possible se tranche à la main, et deux postes de même intitulé dans une même entreprise seront signalés à tort ;
   - une offre recollée depuis un autre site, au texte différent, n'est pas reconnue : seule la règle 3 la signale ;
+  - annuler un changement de statut efface sa trace de l'historique ;
+  - une candidature saisie après coup prend ses statuts à la date de la saisie : la vraie date d'un entretien passé se garde dans une étape ;
   - une heure saisie dans le trou du passage à l'heure d'été est refusée, et l'utilisateur doit la corriger ;
   - le texte d'une offre ne change plus après l'import, sans quoi son empreinte ne vaudrait plus.
 
