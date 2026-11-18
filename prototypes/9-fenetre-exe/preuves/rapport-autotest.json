@@ -1,0 +1,222 @@
+{
+  "verdict": "réussi",
+  "controles": [
+    {
+      "nom": "sqlite-dossier-temporaire",
+      "ok": true,
+      "detail": {
+        "fichier": "%TEMP%\\sollicito-proto9-xlqxqdrc.mgb\\prototype.sqlite3",
+        "versionSqlite": "3.53.3",
+        "lignesLues": 2
+      }
+    },
+    {
+      "nom": "message-page-vers-hote",
+      "ok": true,
+      "detail": {
+        "type": "prete",
+        "source": "http://127.0.0.1:54338/"
+      }
+    },
+    {
+      "nom": "sqlite-lue-par-la-page",
+      "ok": true,
+      "detail": {
+        "lignesAffichees": 2,
+        "lignesEnBase": 2,
+        "versionSqlite": "3.53.3"
+      }
+    },
+    {
+      "nom": "message-hote-vers-page",
+      "ok": true,
+      "detail": {
+        "type": "bonjour",
+        "accuseRecu": true,
+        "valeurRenvoyeeIdentique": true
+      }
+    },
+    {
+      "nom": "page-locale",
+      "ok": true,
+      "detail": {
+        "page": "http://127.0.0.1:54338/",
+        "origineAttendue": "http://127.0.0.1:54338"
+      }
+    },
+    {
+      "nom": "navigation-autre-site-annulee",
+      "ok": true,
+      "detail": {
+        "cible": "https://autre-origine.invalid/",
+        "navigationStartingAnnulee": true,
+        "navigationCompleted": "OperationCanceled",
+        "pageAvant": "http://127.0.0.1:54338/",
+        "pageApres": "http://127.0.0.1:54338/"
+      }
+    },
+    {
+      "nom": "navigation-meme-serveur-autre-origine-annulee",
+      "ok": true,
+      "detail": {
+        "cible": "http://localhost:54338/",
+        "navigationStartingAnnulee": true,
+        "navigationCompleted": "OperationCanceled",
+        "pageAvant": "http://127.0.0.1:54338/",
+        "pageApres": "http://127.0.0.1:54338/"
+      }
+    },
+    {
+      "nom": "fenetre-ouverte",
+      "ok": true,
+      "detail": {
+        "titreFenetre": "Sollicito : prototype #9",
+        "titrePage": "Prototype #9",
+        "largeur": 900,
+        "hauteur": 620
+      }
+    },
+    {
+      "nom": "capture",
+      "ok": true,
+      "detail": {
+        "fichier": "capture-1.png",
+        "octets": 33550
+      }
+    },
+    {
+      "nom": "exe-autonome-un-seul-fichier",
+      "ok": true,
+      "detail": {
+        "regle": "CoreLib dans le bundle (emplacement vide), aucune assembly lue sur le disque, aucun module de l'installation .NET du poste"
+      }
+    }
+  ],
+  "manquants": [],
+  "erreurs": [],
+  "versions": {
+    "dotnet": ".NET 10.0.15",
+    "webView2Sdk": "1.0.4314.35",
+    "microsoftDataSqlite": "10.0.15",
+    "sqlitePclRaw": "2.1.13.3146"
+  },
+  "sections": {
+    "webview2": {
+      "versionRuntime": "157.0.4341.60",
+      "versionSdk": "1.0.4314.35",
+      "dossierProfil": "%TEMP%\\sollicito-proto9-xlqxqdrc.mgb\\WebView2"
+    },
+    "durees": {
+      "msDepuisMainJusquaPagePrete": 727,
+      "msDepuisDemarrageProcessusJusquaPagePrete": 808
+    },
+    "execution": {
+      "framework": ".NET 10.0.15",
+      "rid": "win-x64",
+      "exe": "%TEMP%\\sollicito-proto9-essai-e32451b9\\Prototype9.exe",
+      "emplacementCoreLib": "",
+      "assembliesLuesSurLeDisque": [],
+      "modulesDepuisInstallationDotnet": [],
+      "modulesHorsWindows": [
+        "%TEMP%\\sollicito-proto9-essai-e32451b9\\Prototype9.exe",
+        "%TEMP%\\.net\\Prototype9\\Qkqxp-wP2l6N\\e_sqlite3.DLL",
+        "%TEMP%\\.net\\Prototype9\\Qkqxp-wP2l6N\\WebView2Loader.dll",
+        "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\157.0.4341.60\\EBWebView\\x64\\EmbeddedBrowserWebView.dll"
+      ]
+    },
+    "requetesRecuesParKestrel": [
+      {
+        "methode": "GET",
+        "hote": "127.0.0.1:54338",
+        "chemin": "/"
+      },
+      {
+        "methode": "GET",
+        "hote": "127.0.0.1:54338",
+        "chemin": "/api/candidatures"
+      },
+      {
+        "methode": "GET",
+        "hote": "127.0.0.1:54338",
+        "chemin": "/favicon.ico"
+      },
+      {
+        "methode": "GET",
+        "hote": "localhost:54338",
+        "chemin": "/"
+      }
+    ],
+    "constatNavigationAnnulee": {
+      "requetesRecuesSousUnAutreHote": [
+        {
+          "methode": "GET",
+          "hote": "localhost:54338",
+          "chemin": "/"
+        }
+      ],
+      "lecture": "une requête listée ici est partie malgré l'annulation ; le serveur doit refuser lui-même un en-tête Host inattendu (ADR-0001, D9)"
+    },
+    "nettoyage": {
+      "dossierTemporaireSupprime": true,
+      "essais": 1
+    }
+  },
+  "etapes": [
+    {
+      "ms": 36,
+      "texte": "dossier temporaire %TEMP%\\sollicito-proto9-xlqxqdrc.mgb"
+    },
+    {
+      "ms": 184,
+      "texte": "Kestrel écoute sur http://127.0.0.1:54338/"
+    },
+    {
+      "ms": 273,
+      "texte": "création de l'environnement WebView2"
+    },
+    {
+      "ms": 598,
+      "texte": "navigation vers http://127.0.0.1:54338/"
+    },
+    {
+      "ms": 613,
+      "texte": "NavigationStarting http://127.0.0.1:54338/ : permise"
+    },
+    {
+      "ms": 705,
+      "texte": "NavigationCompleted n° 2 : réussie"
+    },
+    {
+      "ms": 751,
+      "texte": "NavigationStarting https://autre-origine.invalid/ : annulée"
+    },
+    {
+      "ms": 780,
+      "texte": "NavigationCompleted n° 3 : OperationCanceled"
+    },
+    {
+      "ms": 793,
+      "texte": "NavigationStarting http://localhost:54338/ : annulée"
+    },
+    {
+      "ms": 798,
+      "texte": "NavigationCompleted n° 4 : OperationCanceled"
+    },
+    {
+      "ms": 1187,
+      "texte": "fenêtre fermée"
+    },
+    {
+      "ms": 1428,
+      "texte": "processus du navigateur terminé"
+    },
+    {
+      "ms": 1434,
+      "texte": "Kestrel arrêté"
+    },
+    {
+      "ms": 1476,
+      "texte": "dossier temporaire nettoyé"
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+# Le prototype de #9 n'hérite pas des règles de la racine du dépôt.
+root = true

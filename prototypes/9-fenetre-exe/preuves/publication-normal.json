@@ -1,0 +1,25 @@
+{
+    "sdk":  "10.0.404",
+    "variante":  "normal",
+    "fichiersPublies":  1,
+    "exe":  "Prototype9.exe",
+    "octets":  147411293,
+    "lancements":  [
+                       {
+                           "lancement":  1,
+                           "codeSortie":  0,
+                           "dureeTotaleMs":  1751,
+                           "msAvantDemarrageProcessus":  144,
+                           "msDuDemarrageJusquaPagePrete":  808,
+                           "verdict":  "réussi"
+                       },
+                       {
+                           "lancement":  2,
+                           "codeSortie":  0,
+                           "dureeTotaleMs":  7354,
+                           "msAvantDemarrageProcessus":  3,
+                           "msDuDemarrageJusquaPagePrete":  771,
+                           "verdict":  "réussi"
+                       }
+                   ]
+}
