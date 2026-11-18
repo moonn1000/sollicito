@@ -231,30 +231,32 @@ La clé se calcule dans cet ordre :
 
 1. décomposer les caractères (Unicode NFKD) et retirer les accents : « Société » devient « Societe » ;
 2. passer en minuscules, sans dépendre de la langue du poste (culture invariante) ;
-3. retirer les points, et remplacer par une espace tout autre caractère qui n'est ni une lettre ni un chiffre : « S.A. » devient « sa », « L’Oréal » devient « l oreal » ;
+3. retirer les points, et remplacer par une espace tout autre caractère qui n'est ni une lettre ni un chiffre : « S.A. » devient « sa », « L’Atelier » devient « l atelier » ;
 4. réduire les suites d'espaces à une seule, et retirer celles du début et de la fin ;
 5. retirer la forme juridique qui termine le nom, tant qu'il y en a une : `sa`, `nv`, `srl`, `bv`, `sprl`, `bvba`, `sc`, `cv`, `scrl`, `cvba`, `snc`, `vof`, `scomm`, `commv`, `scs`, `gcv`, `sca`, `cva`, `asbl`, `vzw`, `aisbl`, `ivzw`, `se`, `sas`, `sarl`, `gmbh`, `ag`, `ltd`, `inc`, `llc`, `plc` ;
 6. retirer de même la forme qui ouvre le nom, mais seulement parmi les formes belges qui ne commencent jamais une marque : `asbl`, `vzw`, `aisbl`, `ivzw`, `srl`, `sprl`, `bvba`, `scrl`, `cvba`.
 
 Les étapes 5 et 6 ne retirent jamais le dernier mot : « SA » seul garde la clé `sa`. Un nom sans lettre ni chiffre (« !!! ») est refusé à la saisie.
 
+Exemples, sur des noms fictifs :
+
 | Nom saisi | Clé |
 | --- | --- |
-| Proximus SA | `proximus` |
-| PROXIMUS S.A. | `proximus` |
-| Proximus NV/SA | `proximus` |
-| Société Générale | `societe generale` |
-| L’Oréal Belgilux | `l oreal belgilux` |
-| Brasserie Dupont S.R.L. | `brasserie dupont` |
-| SRL Dupont | `dupont` |
-| ASBL Les Amis | `les amis` |
-| AG Insurance SA | `ag insurance` |
-| SC Johnson | `sc johnson` |
-| NV Bekaert SA | `nv bekaert` |
-| Delhaize Le Lion | `delhaize le lion` |
+| Lumière Verte SA | `lumiere verte` |
+| LUMIÈRE VERTE S.A. | `lumiere verte` |
+| Lumière Verte NV/SA | `lumiere verte` |
+| L’Atelier d’Ondine | `l atelier d ondine` |
+| Brasserie Lune Rousse S.R.L. | `brasserie lune rousse` |
+| SRL Lune Rousse | `lune rousse` |
+| ASBL Les Amis du Parc | `les amis du parc` |
+| Les Amis du Parc ASBL | `les amis du parc` |
+| AG Logistique SA | `ag logistique` |
+| SC Durand | `sc durand` |
+| NV Lumière Verte SA | `nv lumiere verte` |
+| Lumière Verte Belgique | `lumiere verte belgique` |
 
-- « AG Insurance » et « SC Johnson » gardent leur début, où AG et SC ne sont pas des formes juridiques. Les formes courtes ne se retirent donc qu'en fin de nom, au prix de « NV Bekaert SA », qui ne rejoint pas « Bekaert ».
-- La clé ne rapproche pas deux noms différents : « Delhaize Le Lion » et « Delhaize » font deux entreprises. L'écran de saisie propose donc les entreprises déjà enregistrées pendant qu'on tape (#11).
+- « AG Logistique » et « SC Durand » gardent leur début : AG et SC y sont des initiales, pas des formes juridiques. Les formes courtes ne se retirent donc qu'en fin de nom, au prix de « NV Lumière Verte SA », qui ne rejoint pas « Lumière Verte ».
+- La clé ne rapproche pas deux noms différents : « Lumière Verte Belgique » et « Lumière Verte » font deux entreprises. L'écran de saisie propose donc les entreprises déjà enregistrées pendant qu'on tape (#11).
 - Le nom affiché est celui de la première saisie.
 - Changer l'entreprise d'une candidature (#25) la rattache à l'entreprise que reconnaît le nouveau nom, ou en crée une. L'ancienne entreprise n'est pas renommée.
 

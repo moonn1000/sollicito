@@ -49,9 +49,9 @@ L'exemple chiffré est dans le modèle de domaine, « Dates et heures ».
 
 ## Alternatives écartées
 
-- **Rapprocher les noms d'entreprise de façon approchée** (distance d'édition, phonétique) : « Delhaize » et « Delhaize Le Lion » se rejoindraient, mais aussi deux entreprises voisines. Une fusion à tort mêle les candidatures de deux entreprises sans que rien ne la montre ; un doublon se voit, et l'écran de saisie propose les entreprises déjà enregistrées.
+- **Rapprocher les noms d'entreprise de façon approchée** (distance d'édition, phonétique) : « Lumière Verte » et « Lumière Verte Belgique » se rejoindraient, mais aussi deux entreprises voisines. Une fusion à tort mêle les candidatures de deux entreprises sans que rien ne la montre ; un doublon se voit, et l'écran de saisie propose les entreprises déjà enregistrées.
 - **Le numéro d'entreprise (BCE) comme clé** : on le connaît rarement en saisissant une candidature, et un texte d'offre le donne rarement.
-- **Retirer toutes les formes juridiques au début du nom** : « AG Insurance » et « SC Johnson » perdraient le début de leur nom.
+- **Retirer toutes les formes juridiques au début du nom** : un nom qui commence par des initiales, comme « AG Logistique » ou « SC Durand », perdrait son début.
 - **Fusionner automatiquement une même offre vue sur deux sources** : une entreprise publie souvent le même intitulé pour deux postes, dans deux villes ou deux équipes ; une fusion à tort ferait disparaître une offre. Il faudrait aussi choisir quel texte garder.
 - **Une entité « annonce »**, une offre et ses parutions, une par source : c'est le bon modèle quand des sources automatiques publieront les mêmes offres. En V1, où chaque offre arrive à la main, elle ajouterait une neuvième entité et ses écrans pour un cas rare.
 - **L'adresse de l'offre comme identifiant** : une même offre a une adresse par site, et une adresse change avec ses paramètres de suivi.
@@ -65,7 +65,7 @@ L'exemple chiffré est dans le modèle de domaine, « Dates et heures ».
 
 - **Positives** : des règles déterministes, sans réglage, que les tests unitaires du domaine vérifient (#11, #12, #36) ; aucune fusion à tort ; des heures justes de part et d'autre des changements d'heure ; le couple de la D5 prêt pour le Forem.
 - **Négatives** :
-  - deux noms différents d'une même entreprise font deux entreprises (« Delhaize » et « Delhaize Le Lion », « NV Bekaert SA » et « Bekaert ») : l'écran de saisie doit proposer les entreprises déjà enregistrées (#11) ;
+  - deux noms différents d'une même entreprise font deux entreprises (« Lumière Verte » et « Lumière Verte Belgique », « NV Lumière Verte SA » et « Lumière Verte ») : l'écran de saisie doit proposer les entreprises déjà enregistrées (#11) ;
   - un doublon possible se tranche à la main, et deux postes de même intitulé dans une même entreprise seront signalés à tort ;
   - une offre recollée depuis un autre site, au texte différent, n'est pas reconnue : seule la règle 3 la signale ;
   - une heure saisie dans le trou du passage à l'heure d'été est refusée, et l'utilisateur doit la corriger ;
