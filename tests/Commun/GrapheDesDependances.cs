@@ -48,7 +48,13 @@ internal static class GrapheDesDependances
         foreach (var bibliotheque in racine.GetProperty("targets").GetProperty(cible).EnumerateObject())
         {
             // Chaque entrée est nommée « nom/version ».
-            var nom = bibliotheque.Name[..bibliotheque.Name.IndexOf('/', StringComparison.Ordinal)];
+            var separateur = bibliotheque.Name.IndexOf('/', StringComparison.Ordinal);
+            if (separateur < 0)
+            {
+                throw new InvalidOperationException($"Entrée « {bibliotheque.Name} » sans version dans {fichier}.");
+            }
+
+            var nom = bibliotheque.Name[..separateur];
             graphe[nom] = bibliotheque.Value.TryGetProperty("dependencies", out var dependances)
                 ? [.. dependances.EnumerateObject().Select(dependance => dependance.Name)]
                 : [];

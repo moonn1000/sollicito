@@ -15,7 +15,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "vitest run",
-    "check": "pnpm run build && pnpm run test"
+    "check": "tsc -b && vite build && vitest run"
   },
   "dependencies": {
     "react": "19.3.1",
