@@ -100,7 +100,7 @@ Pour lire le diagramme :
 - Chaque entité a aussi un identifiant technique, que le diagramme ne montre pas.
 - `[0..1]` marque un attribut facultatif, `[*]` une liste. «V2» marque une entité modélisée, qui n'entre en base qu'en V2.
 - Types : `texte` ; `code`, un texte court fixé par le programme ; `instant`, une date et une heure gardées en UTC ; `date`, un jour du calendrier, sans heure ni fuseau (voir « Dates et heures ») ; `SHA-256`, une empreinte en hexadécimal ; `adresse`, une adresse électronique ; `URL`, une adresse web en `http` ou `https` (ADR-0001, D9).
-- Le losange plein marque une composition : les événements et les relances d'une candidature n'existent que par elle, et la supprimer les supprime (#25).
+- Le losange plein marque une composition : les événements et les relances d'une candidature n'existent que par elle, et supprimer la candidature les supprime aussi (#25). En V2, les documents appartiennent de même au profil.
 
 ### Les liens
 
@@ -263,7 +263,7 @@ Les étapes 5 et 6 ne retirent jamais le dernier mot : « SA » seul garde la cl
 Une offre arrive par un connecteur (ADR-0001, D6) : en V1, le texte collé (#36) ou le fichier CSV (#40). Trois règles disent si elle est déjà enregistrée.
 
 1. **Même source, identifiant connu** : le couple (source, identifiant externe) est unique (D5). Une offre reconnue n'est ni recréée ni écrasée. En V1, aucune source ne fournit d'identifiant sûr : le texte collé n'en a pas, et l'identifiant d'un fichier CSV tenu ailleurs ne vaut que dans ce fichier. La règle servira au Forem, en V2.
-2. **Même source, même texte** : sans identifiant externe, le couple (source, empreinte) est unique. L'empreinte est le SHA-256 du texte normalisé : décomposition et recomposition Unicode (NFKC), minuscules, tout blanc (espace, tabulation, saut de ligne, espace insécable) réduit à une espace, sans blanc au début ni à la fin. Pour une offre collée, c'est le texte collé ; pour une ligne de CSV, ses champs mis bout à bout, dans l'ordre du format de #40. Recoller le même texte retrouve l'offre enregistrée, même si ses espaces ou ses sauts de ligne ont changé.
+2. **Même source, même texte** : sans identifiant externe, le couple (source, empreinte) est unique. L'empreinte est le SHA-256 du texte normalisé : décomposition et recomposition Unicode (NFKC), minuscules, tout blanc (espace, tabulation, saut de ligne, espace insécable) réduit à une espace, sans blanc au début ni à la fin. Pour une offre collée, c'est le texte collé ; pour une ligne de CSV, ses champs dans l'ordre du format de #40, séparés par un saut de ligne. Recoller le même texte retrouve l'offre enregistrée, même si ses espaces ou ses sauts de ligne ont changé.
 3. **D'une source à l'autre, ou d'un texte à l'autre** : jamais de fusion automatique. Quand une nouvelle offre a la même entreprise (même clé) et le même poste normalisé qu'une offre déjà enregistrée, quelle que soit la source, l'application signale un doublon possible, avec un lien vers l'autre offre. L'utilisateur garde les deux, ou renonce à la nouvelle. Le poste se normalise comme le nom d'une entreprise, sans retirer de forme juridique : « Développeur .NET (H/F) » et « developpeur  .net h/f » donnent tous deux `developpeur net h f`. Une offre sans entreprise n'est pas comparée.
 
 - À l'import d'un fichier CSV (#40), une ligne reconnue par la règle 1 ou 2 est écartée et signalée dans le compte rendu ; un doublon possible (règle 3) est importé, et signalé comme tel.
