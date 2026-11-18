@@ -1,0 +1,2 @@
+<!-- Arrête ici la recherche des Directory.Build.targets parents : le prototype de #9 n'hérite de rien de la racine du dépôt. -->
+<Project />

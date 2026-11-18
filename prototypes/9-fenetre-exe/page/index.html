@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Prototype #9</title>
+<style>
+  body { font-family: "Segoe UI", sans-serif; margin: 24px 32px; color: #1b1b1b; background: #fff; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 22px 0 6px; }
+  code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; }
+  ul { margin: 0; padding-left: 22px; }
+  #journal li::marker { content: "✔  "; color: #107c10; }
+  button { margin-top: 20px; font: inherit; padding: 4px 12px; }
+</style>
+</head>
+<body>
+<h1>Sollicito : prototype #9</h1>
+<p>Page locale servie par Kestrel, à l'origine <code id="origine"></code>.</p>
+
+<h2>Base SQLite du dossier temporaire, lue par l'API locale</h2>
+<ul id="candidatures"></ul>
+
+<h2>Canal interne de la fenêtre et navigations</h2>
+<ul id="journal"></ul>
+
+<button id="sortir" type="button">Tenter d'aller vers une autre origine</button>
+
+<script>
+"use strict";
+// Tout texte s'insère par textContent : jamais de HTML brut.
+const ajouter = (liste, texte) => {
+  const ligne = document.createElement("li");
+  ligne.textContent = texte;
+  document.getElementById(liste).appendChild(ligne);
+};
+
+document.getElementById("origine").textContent = location.origin;
+document.getElementById("sortir").addEventListener("click", () => {
+  location.href = "https://autre-origine.invalid/";
+});
+
+window.chrome.webview.addEventListener("message", (evenement) => {
+  const message = evenement.data;
+  if (message.type === "bonjour") {
+    ajouter("journal", "Message de l'hôte reçu par la page.");
+    window.chrome.webview.postMessage({ type: "accuse", valeur: message.valeur });
+  } else if (message.type === "journal") {
+    ajouter("journal", message.texte);
+  }
+});
+
+(async () => {
+  const reponse = await fetch("/api/candidatures");
+  const donnees = await reponse.json();
+  for (const candidature of donnees.candidatures) {
+    ajouter("candidatures", candidature.entreprise + " : " + candidature.poste);
+  }
+  ajouter("journal", "Message de la page envoyé à l'hôte (SQLite " + donnees.version + ", "
+    + donnees.candidatures.length + " lignes affichées).");
+  window.chrome.webview.postMessage({ type: "prete", candidatures: donnees.candidatures.length, sqlite: donnees.version });
+})();
+</script>
+</body>
+</html>

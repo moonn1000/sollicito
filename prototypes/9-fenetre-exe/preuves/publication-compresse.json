@@ -1,0 +1,31 @@
+{
+    "sdk":  "10.0.404",
+    "variante":  "compresse",
+    "fichiersPublies":  1,
+    "exe":  "Prototype9.exe",
+    "octets":  65240423,
+    "lancements":  [
+                       {
+                           "lancement":  1,
+                           "codeSortie":  0,
+                           "verdict":  "réussi",
+                           "dureeTotaleMs":  1667,
+                           "msAvantDemarrageProcessus":  61,
+                           "msDuDemarrageJusquaPagePrete":  774,
+                           "extractionNeuve":  false,
+                           "dossierExtractionResteApresFermeture":  true,
+                           "octetsExtraits":  2761192
+                       },
+                       {
+                           "lancement":  2,
+                           "codeSortie":  0,
+                           "verdict":  "réussi",
+                           "dureeTotaleMs":  7271,
+                           "msAvantDemarrageProcessus":  2,
+                           "msDuDemarrageJusquaPagePrete":  756,
+                           "extractionNeuve":  false,
+                           "dossierExtractionResteApresFermeture":  true,
+                           "octetsExtraits":  2761192
+                       }
+                   ]
+}

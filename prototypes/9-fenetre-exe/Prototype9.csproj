@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Prototype jetable de la story #9, hors de la solution livrée : voir README.md. -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Prototype9</AssemblyName>
+    <RootNamespace>Prototype9</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
+  <!-- Exe autonome d'un seul fichier : runtimes .NET embarqués, bibliothèques natives (e_sqlite3, WebView2Loader)
+       incluses dans le fichier et extraites au lancement. Pas de trimming : WinForms ne le permet pas. -->
+  <PropertyGroup>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <!-- Pas de symboles : ils emporteraient le chemin du dossier de compilation, donc le nom du compte Windows. -->
+    <DebugType>none</DebugType>
+    <!-- Sans ce réglage, la documentation XML du paquet WebView2 sort à côté de l'exe. -->
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Kestrel dans le même exe que la fenêtre, comme le prévoit le montage de l'ADR-0003. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Versions publiées depuis au moins sept jours : 1.0.4314.35 le 2026-10-23, 10.0.15 le 2026-11-10. -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- La page est embarquée dans l'assembly : aucun fichier à côté de l'exe. -->
+    <EmbeddedResource Include="page\index.html" LogicalName="index.html" />
+  </ItemGroup>
+
+  <!-- Pour .NET 5 et plus, le paquet WebView2 référence ses assemblies Core et WinForms construites pour .NET Core 3.0,
+       et aussi son assembly WPF, inutile ici : sans ce retrait, la compilation signale un conflit sur WindowsBase (MSB3277). -->
+  <Target Name="RetirerWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+
+</Project>
