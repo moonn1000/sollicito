@@ -17,14 +17,19 @@ public static class ApiLocale
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        // 127.0.0.1 et un port libre choisi au lancement, jamais une interface réseau. Une autre écoute,
-        // ajoutée par la configuration, fait échouer le lancement (ReleveDeLAdresseDEcoute).
-        builder.WebHost.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Loopback, 0));
+        // 127.0.0.1 et un port libre choisi au lancement, jamais une interface réseau. L'écoute ne se règle que
+        // dans le code : la section Kestrel de la configuration est ignorée, et rien ne la relit à chaud.
+        // ControleDeLEcoute refuse le reste.
+        builder.WebHost.ConfigureKestrel(kestrel =>
+        {
+            kestrel.Configure(new ConfigurationBuilder().Build(), reloadOnChange: false);
+            kestrel.Listen(IPAddress.Loopback, 0);
+        });
         ReglesDesJournaux.Appliquer(builder.Logging);
 
         builder.Services.AddSingleton<JetonDeLancement>();
         builder.Services.AddSingleton<AdresseDEcoute>();
-        builder.Services.AddHostedService<ReleveDeLAdresseDEcoute>();
+        builder.Services.AddHostedService<ControleDeLEcoute>();
         builder.Services.AddOpenApi();
 
         var app = builder.Build();
@@ -34,6 +39,8 @@ public static class ApiLocale
         // Les fichiers de l'interface (#13) se placeront ici : servis sans jeton, seul leur Host contrôlé (ADR-0003).
         app.UseMiddleware<ControleDuJeton>();
         app.UseMiddleware<ControleDeLOrigine>();
+        // Le routage ne vient qu'après les contrôles : une requête refusée n'est jamais routée.
+        app.UseRouting();
 
         app.MapOpenApi("/api/openapi/{documentName}.json");
         app.MapGet("/api/etat", () => TypedResults.Ok(EtatDeLApplication.Pret))

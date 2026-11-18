@@ -80,8 +80,9 @@ public sealed class ControleDeLHoteTests(ApiLancee api) : IClassFixture<ApiLance
     [Fact]
     public async Task Une_adresse_absolue_vers_un_autre_hote_est_refusee()
     {
+        // L'adresse absolue et Host désignent le même autre hôte : Kestrel l'accepte, c'est l'API qui refuse.
         var ligne = await api.EnvoyerBrutAsync(api.Remplir(
-            "GET http://exemple.invalid/api/etat HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nSollicito-Jeton: {jeton}\r\nConnection: close\r\n\r\n"));
+            "GET http://exemple.invalid/api/etat HTTP/1.1\r\nHost: exemple.invalid\r\nSollicito-Jeton: {jeton}\r\nConnection: close\r\n\r\n"));
 
         Assert.StartsWith("HTTP/1.1 400 ", ligne, StringComparison.Ordinal);
     }

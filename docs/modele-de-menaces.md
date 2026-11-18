@@ -14,7 +14,7 @@
 | Qui | Comment | Ce qui l'arrête |
 | --- | --- | --- |
 | Une page web ouverte dans un navigateur du poste | une requête vers `127.0.0.1` : formulaire, `fetch`, image ou script | le jeton ; l'en-tête `Origin` |
-| La même page, par rebinding DNS | son nom de domaine se met à désigner `127.0.0.1` : pour le navigateur, ses requêtes vers l'API deviennent de même origine | l'en-tête `Host` |
+| La même page, par rebinding DNS | son nom de domaine se met à désigner `127.0.0.1` : pour le navigateur, ses requêtes vers l'API deviennent de même origine | l'en-tête `Host` ; le jeton |
 | Un appareil du réseau local ou d'Internet | une connexion au port de l'API | l'écoute sur `127.0.0.1` seulement |
 | Un autre compte Windows du même PC (session ouverte en parallèle, bureau à distance) | `127.0.0.1` est commun à toutes les sessions du PC : ce compte joint le port | le jeton |
 | Un programme lancé sous le compte de l'utilisateur | tout ce que l'utilisateur peut faire | rien dans l'API : voir « Limites » |
@@ -25,17 +25,23 @@
 Chaque requête passe ces contrôles dans cet ordre (`src/Sollicito.Api/ApiLocale.cs`). Le premier qui échoue répond, sans corps, et la requête ne va pas plus loin.
 
 1. **En-tête `Host`** (400), sur toute requête.
-2. *Fichiers de l'interface, à venir avec #13* : servis sans jeton ni contrôle d'`Origin`, puisque la page les charge avant de recevoir le jeton. Ils sont publics et ne portent aucune donnée (ADR-0003).
+2. *Fichiers de l'interface, à venir avec #13* : servis sans jeton ni contrôle d'`Origin`, puisque la page les charge avant de recevoir le jeton. Ils sont publics et ne portent aucune donnée (ADR-0003). D'ici là, aucune requête n'échappe aux deux contrôles suivants.
 3. **Jeton** (401), sur tout le reste : routes de l'API, documentation OpenAPI, adresses inconnues.
 4. **En-tête `Origin`** (403), sur ce même reste.
 
+Le routage ne vient qu'ensuite : une requête refusée n'est jamais routée.
+
 ### Écoute sur 127.0.0.1
 
-Kestrel n'écoute que sur `127.0.0.1`, sur un port libre choisi à chaque lancement ; aucune interface réseau n'est ouverte. Une fois le serveur démarré, l'API relève l'adresse réellement ouverte. Si elle en trouve une autre, ajoutée par la configuration (`Kestrel:Endpoints`, ou `urls` avec `preferHostingUrls`), elle arrête Kestrel et le lancement échoue.
+Kestrel n'écoute que sur `127.0.0.1`, sur un port libre choisi à chaque lancement ; aucune interface réseau n'est ouverte. L'écoute ne se règle que dans le code :
+
+- les adresses données par la configuration (`urls`, section `Kestrel`) sont ignorées, et la section `Kestrel` n'est pas relue en cours de route ;
+- une configuration qui demande à Kestrel de préférer ses propres adresses (`preferHostingUrls`) fait échouer le lancement avant toute écoute ;
+- une fois Kestrel démarré, l'API relève l'adresse réellement ouverte. Si une autre écoute s'est ouverte, elle arrête Kestrel et le lancement échoue.
 
 Le port n'est pas un secret : tout programme du poste le lit dans la liste des connexions, et une page web peut sonder les ports locaux. Il ne donne accès à rien sans le jeton.
 
-*Tests* : `tests/Sollicito.Api.Tests/EcouteDeLApiTests.cs`. Une seule adresse est ouverte, en `127.0.0.1`. Aucune autre adresse du poste ne répond sur le port de l'API, ni celle d'une carte réseau, ni `[::1]`. Une autre adresse donnée par `urls` reste sans effet. Une écoute ajoutée par la configuration fait échouer le lancement. Ces essais d'écoute interdite visent `127.0.0.2`, une autre adresse locale : une écoute sur `0.0.0.0` ouvrirait l'invite du pare-feu de Windows sur le poste qui lance les tests.
+*Tests* : `tests/Sollicito.Api.Tests/EcouteDeLApiTests.cs`. Une seule adresse est ouverte, en `127.0.0.1`. Aucune autre adresse du poste ne répond sur le port de l'API, ni celle d'une carte réseau, ni `[::1]`. Une adresse donnée par `urls` ou par `Kestrel:Endpoints` reste sans effet, et une écoute ajoutée à chaud dans la configuration ne s'ouvre pas. Avec `preferHostingUrls`, le lancement échoue sans qu'aucune écoute ne se soit ouverte, et l'échec paraît dans les journaux. Une écoute de plus, ouverte par le code, fait échouer le lancement. Ces essais d'écoute interdite visent `127.0.0.2`, une autre adresse locale : une écoute sur `0.0.0.0` ouvrirait l'invite du pare-feu de Windows sur le poste qui lance les tests.
 
 ### Jeton de lancement
 
@@ -52,7 +58,7 @@ Le navigateur envoie dans `Host` le nom qu'il a joint. Une page piégée qui att
 
 Le prototype de #9 l'a montré : une navigation que la fenêtre annule envoie quand même sa requête, et celle vers `localhost` a atteint Kestrel (ADR-0003, « À vérifier »). La politique de sécurité du contenu ne l'arrête pas non plus. Ce contrôle est donc indispensable côté serveur.
 
-*Tests* : `tests/Sollicito.Api.Tests/ControleDeLHoteTests.cs`. Dix valeurs de `Host` inattendues sont refusées, chacune sur quatre routes, même avec le bon jeton : `localhost` en minuscules et en capitales, un autre nom avec et sans port, l'adresse sans port, un autre port, `127.0.0.2`, `[::1]`, l'adresse écrite en décimal, `0.0.0.0`. Sont aussi refusées une écriture vers `localhost`, une requête HTTP/1.0 sans `Host` et une adresse absolue vers un autre hôte.
+*Tests* : `tests/Sollicito.Api.Tests/ControleDeLHoteTests.cs`. Dix valeurs de `Host` inattendues sont refusées, chacune sur quatre routes, même avec le bon jeton : `localhost` en minuscules et en capitales, un autre nom avec et sans port, l'adresse sans port, un autre port, `127.0.0.2`, `[::1]`, l'adresse écrite en décimal, `0.0.0.0`. Sont aussi refusées une écriture vers `localhost`, une requête HTTP/1.0 sans `Host`, et une adresse absolue vers un autre hôte, avec un `Host` assorti que Kestrel accepte.
 
 ### En-tête `Origin`
 
@@ -79,17 +85,20 @@ Un journal dit ce qui s'est passé, jamais ce qu'une requête contenait. Il n'é
 Ce que l'API en applique dès maintenant (`src/Sollicito.Api/Journaux/ReglesDesJournaux.cs`) :
 
 - **La console seule.** Par défaut, ASP.NET Core écrit aussi vers Debug, EventSource et le journal d'événements de Windows[^fournisseurs]. Ce dernier garde ses entrées sur le disque, dans le journal Application, que tout compte connecté au poste peut lire : sa liste d'accès donne la lecture et l'écriture aux utilisateurs interactifs[^journal-application]. Les trois sont retirés.
-- **Pas d'adresse complète.** Les lignes « Request starting » et « Request finished » d'ASP.NET Core écrivent l'adresse de chaque requête, chaîne de requête comprise, au niveau Information. Leur catégorie, `Microsoft.AspNetCore.Hosting.Diagnostics`, est plafonnée à Warning dans le code, pour tous les fournisseurs puis pour la console : un réglage de la configuration propre à la console ne suffit donc pas à la rouvrir.
+- **Deux catégories muettes**, quels que soient les réglages, joker ou réglage propre à un fournisseur compris : la fabrique des journaux leur donne un journal qui n'écrit rien.
+  - `Microsoft.AspNetCore.Hosting.Diagnostics` écrit l'adresse complète de chaque requête, chaîne de requête comprise (« Request starting », « Request finished »), et attache le chemin de la requête à chaque entrée écrite pendant celle-ci.
+  - `Microsoft.AspNetCore.Server.Kestrel.BadRequests` recopie la ligne brute d'une requête mal formée, en-têtes compris.
+- **Pas de routage avant les refus.** Le routage écrit le chemin des requêtes dans ses journaux de mise au point ; une requête refusée n'y arrive pas.
 - **Des refus sans valeurs.** L'API note chaque refus par son motif seul, sans la valeur reçue ni l'adresse de la requête.
 
-Pour les stories suivantes : le chemin d'une adresse, lui, peut paraître dans les journaux de mise au point d'ASP.NET Core ; une route ne porte donc qu'un identifiant, jamais une donnée. Un message d'exception ne reprend pas le contenu qui l'a provoquée. La journalisation des données sensibles d'Entity Framework Core reste coupée.
+Pour les stories suivantes : le chemin d'une requête acceptée, lui, peut paraître dans les journaux de mise au point du routage ; une route ne porte donc qu'un identifiant, jamais une donnée. Un message d'exception ne reprend pas le contenu qui l'a provoquée. La journalisation des données sensibles d'Entity Framework Core reste coupée.
 
-*Tests* : `tests/Sollicito.Api.Tests/ReglesDesJournauxTests.cs`. Les journaux ne vont qu'à la console. L'API est lancée avec chaque catégorie au niveau Trace, et un fournisseur de test garde tout ce qu'un journal pourrait écrire : message, valeurs, exception, portées. Elle reçoit le jeton dans son en-tête, dans l'adresse, dans un cookie et dans `Authorization`, et une donnée fictive dans l'adresse, un en-tête, un cookie, le corps, `Host` et `Origin`. Aucune entrée ne contient ni le jeton ni la donnée. Le test le montre : sans le plafond, il échoue sur la ligne « Request starting », qui porte la chaîne de requête.
+*Tests* : `tests/Sollicito.Api.Tests/ReglesDesJournauxTests.cs`. Les journaux ne vont qu'à la console. L'API est lancée avec chaque catégorie au niveau Trace, y compris par un joker qui vise les catégories muettes et par un réglage propre au fournisseur de test, qui garde tout ce qu'un journal pourrait écrire : message, valeurs, exception, portées. Elle reçoit le jeton dans son en-tête, dans la chaîne de requête, dans le chemin, dans un cookie et dans `Authorization`, et une donnée fictive dans la chaîne de requête, le chemin, un en-tête, un cookie, le corps, `Host` et `Origin`. Elle reçoit aussi trois requêtes mal formées qui portent l'un et l'autre : ligne de requête, ligne d'en-tête, `Host`. Aucune entrée ne contient ni le jeton ni la donnée. Le test échoue dès qu'on rend la parole à l'une des deux catégories muettes, ou qu'on remet le routage avant les refus.
 
 ## Limites
 
 - **Un programme lancé sous le compte de l'utilisateur** n'est arrêté par rien de ce qui précède. Il peut lire la mémoire du processus, jeton compris, et le dossier de données. Il peut lancer Sollicito avec ses propres arguments ou variables d'environnement : `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` suffit à ouvrir le débogage distant de la fenêtre (ADR-0003, « Conséquences »). Il peut aussi écrire dans le dossier où l'exe extrait ses bibliothèques natives, sous `%TEMP%\.net`, qui reste d'un lancement à l'autre (prototype de #9, ADR-0003, « À vérifier »). Seule la frontière du compte Windows le tient à distance ; la D9 le dit déjà de DPAPI.
-- **Un administrateur du poste** peut tout voir, trafic de `127.0.0.1` compris.
+- **Un administrateur du poste** peut tout voir, trafic de `127.0.0.1` compris. Le pilote de capture Npcap, qu'installe notamment Wireshark, ne réserve l'accès à ses périphériques de capture aux administrateurs que si l'option `/admin_only` est choisie à l'installation, ce qui n'est pas le cas par défaut[^npcap] : sur un poste où il est installé sans elle, un autre compte pourrait lire ce trafic, jeton compris.
 - **Le trafic n'est pas chiffré** : HTTP sur `127.0.0.1`, qui ne quitte pas la machine.
 - **Un client qui n'est pas un navigateur** écrit `Host` et `Origin` comme il veut. Ces deux contrôles arrêtent les pages web ; devant un programme, seul le jeton compte.
 - **Le jeton dans l'interface**, une fois remis par la fenêtre (#13), vit dans la mémoire de la page. Un script injecté dans la page pourrait le lire et appeler l'API : d'où l'affichage échappé du contenu et la politique de sécurité du contenu (ADR-0001, D9, « Contenu non fiable » et « Fenêtre »).
@@ -99,6 +108,7 @@ Pour les stories suivantes : le chemin d'une adresse, lui, peut paraître dans l
 ## À reprendre
 
 - **Fenêtre hôte (#13)** : servir les fichiers de l'interface entre le contrôle de `Host` et celui du jeton, à l'endroit marqué dans `ApiLocale.cs`, et ajouter ici la section de la fenêtre. La fenêtre lit l'adresse (`AdresseDEcoute.Origine`) et le jeton (`JetonDeLancement.Valeur()`) dans les services de l'API. Le serveur de développement de l'interface (Vite) sert une autre origine : l'API refusera ses écritures tant qu'elles ne passent pas par l'origine de l'API.
+- **Premières routes qui lisent un corps (#11), et fenêtre (#13)** : en développement, ASP.NET Core place sa page d'exception en tête du chemin des requêtes. Si une route lève une exception, cette page affiche les en-têtes de la requête, jeton compris, dans la réponse. Aucune route n'en lève aujourd'hui : « aucune réponse ne contient le jeton » ne tient qu'à cela.
 - **Exe** : le dossier d'extraction `%TEMP%\.net` (voir « Limites »), et un exe construit par la CI, dont les symboles ne portent pas le chemin d'un poste de développement (prototype de #9).
 
 ## Sources
@@ -110,3 +120,4 @@ Consultées le 2026-11-18 :
 [^origin]: MDN, en-tête `Origin` : <https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Origin>
 [^fournisseurs]: Microsoft Learn, journalisation dans ASP.NET Core, fournisseurs par défaut de `WebApplication.CreateBuilder` : <https://learn.microsoft.com/en-us/aspnet/core/fundamentals/logging/>
 [^journal-application]: Relevé sur le poste de développement par `wevtutil gl Application` : fichier `%SystemRoot%\System32\Winevt\Logs\Application.evtx`, liste d'accès `(A;;0x3;;;IU)`, soit lecture et écriture pour les utilisateurs interactifs.
+[^npcap]: Npcap, guide de l'utilisateur, options de l'installeur (`/admin_only`) : <https://npcap.com/guide/npcap-users-guide.html>

@@ -32,16 +32,24 @@ public sealed class ReglesDesJournauxTests
     [Fact]
     public async Task Ni_le_jeton_ni_une_donnee_de_la_requete_n_apparait_dans_un_journal()
     {
-        // Chaque catégorie au niveau le plus bavard que la configuration permet : le test voit tout ce que
-        // l'API et ASP.NET Core écriraient, sauf ce que la règle des journaux plafonne dans le code.
+        // Chaque catégorie au niveau le plus bavard, y compris par des réglages qui visent les catégories que la
+        // règle fait taire : un joker, et un réglage propre au fournisseur. Le test voit tout ce que l'API et
+        // ASP.NET Core écriraient.
         var capture = new CaptureDesJournaux();
+        KeyValuePair<string, string?>[] niveaux =
+        [
+            new("Logging:LogLevel:Default", "Trace"),
+            new("Logging:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics*", "Trace"),
+            new("Logging:LogLevel:Microsoft.AspNetCore.Server.Kestrel.BadRequests*", "Trace"),
+            new($"Logging:{typeof(CaptureDesJournaux).FullName}:LogLevel:Default", "Trace"),
+        ];
         string jeton;
         await using (var api = await ApiLancee.LancerAsync(builder => builder
-            .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection([new("Logging:LogLevel:Default", "Trace")]))
+            .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(niveaux))
             .ConfigureLogging(journaux => journaux.AddProvider(capture))))
         {
             jeton = api.Jeton;
-            HttpStatusCode[] attendus =
+            HttpStatusCode[] statuts =
             [
                 // L'interface : le jeton dans son en-tête, la donnée dans la chaîne de requête, un en-tête, un cookie, un corps.
                 await StatutAsync(api, HttpMethod.Get, "/api/etat?nom=" + Donnee, jeton: true, requete =>
@@ -56,8 +64,10 @@ public sealed class ReglesDesJournauxTests
                 }),
                 await StatutAsync(api, HttpMethod.Get, "/api/openapi/v1.json", jeton: true),
 
-                // Refusées : le jeton hors de son en-tête, la donnée en guise de jeton, de Host ou d'Origin.
+                // Refusées : le jeton hors de son en-tête, la donnée en guise de jeton, de chemin, de Host ou d'Origin.
                 await StatutAsync(api, HttpMethod.Get, $"/api/etat?{JetonDeLancement.EnTete}={jeton}&nom={Donnee}", jeton: false),
+                await StatutAsync(api, HttpMethod.Get, $"/api/{jeton}/etat", jeton: false),
+                await StatutAsync(api, HttpMethod.Get, $"/api/{Donnee}/etat", jeton: false),
                 await StatutAsync(api, HttpMethod.Get, "/api/etat", jeton: false, requete => requete.Headers.Add("Cookie", $"{JetonDeLancement.EnTete}={jeton}; nom={Donnee}")),
                 await StatutAsync(api, HttpMethod.Get, "/api/etat", jeton: false, requete => requete.Headers.Authorization = new AuthenticationHeaderValue("Bearer", jeton)),
                 await StatutAsync(api, HttpMethod.Get, "/api/etat", jeton: false, requete => requete.Headers.Add(JetonDeLancement.EnTete, Donnee)),
@@ -65,13 +75,24 @@ public sealed class ReglesDesJournauxTests
                 await StatutAsync(api, HttpMethod.Post, "/api/etat?nom=" + Donnee, jeton: true, requete => requete.Headers.Add("Origin", "http://" + Donnee + ".invalid")),
             ];
 
+            // Mal formées, que Kestrel rejette lui-même : ligne de requête (méthode invalide), ligne d'en-tête sans
+            // deux-points, Host.
+            string[] lignesDEtat =
+            [
+                await api.EnvoyerBrutAsync(api.Remplir($"G@T /api/etat?{JetonDeLancement.EnTete}={{jeton}}&nom={Donnee} HTTP/1.1\r\nHost: 127.0.0.1:{{port}}\r\n\r\n")),
+                await api.EnvoyerBrutAsync(api.Remplir($"GET /api/etat HTTP/1.1\r\nHost: 127.0.0.1:{{port}}\r\n{JetonDeLancement.EnTete} {{jeton}} {Donnee}\r\n\r\n")),
+                await api.EnvoyerBrutAsync(api.Remplir($"GET /api/etat HTTP/1.1\r\nHost: 127.0.0.1:{{port}}/{{jeton}}/{Donnee}\r\n\r\n")),
+            ];
+
             Assert.Equal(
                 [
                     HttpStatusCode.OK, HttpStatusCode.MethodNotAllowed, HttpStatusCode.OK,
-                    HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
+                    HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
+                    HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
                     HttpStatusCode.BadRequest, HttpStatusCode.Forbidden,
                 ],
-                attendus);
+                statuts);
+            Assert.All(lignesDEtat, ligne => Assert.StartsWith("HTTP/1.1 400 ", ligne, StringComparison.Ordinal));
         }
 
         // L'API est arrêtée : toutes les entrées sont écrites. La capture a bien tout reçu, jusqu'aux niveaux les plus bavards.
