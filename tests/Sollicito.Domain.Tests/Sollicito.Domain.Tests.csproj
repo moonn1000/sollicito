@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <Compile Include="..\Commun\GrapheDesDependances.cs" Link="Commun\GrapheDesDependances.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Sollicito.Domain\Sollicito.Domain.csproj" />
+  </ItemGroup>
+</Project>

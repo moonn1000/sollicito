@@ -1,0 +1,14 @@
+# Réglages de pnpm pour l'interface : depuis pnpm 11, ils se lisent ici, plus dans .npmrc.
+
+# Aucune version publiée depuis moins de 7 jours (en minutes), dépendances indirectes comprises.
+minimumReleaseAge: 10080
+minimumReleaseAgeStrict: true
+
+# Refuser un paquet dont la preuve de provenance est plus faible que celle de ses versions précédentes.
+trustPolicy: no-downgrade
+
+# Versions exactes dans package.json.
+saveExact: true
+
+# Noms courts dans node_modules/.pnpm : Windows refuse un chemin de plus de 260 caractères.
+virtualStoreDirMaxLength: 32

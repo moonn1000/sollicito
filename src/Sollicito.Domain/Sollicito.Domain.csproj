@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Le domaine ne référence aucun projet ni aucun paquet (ADR-0001, D4).
+       Les tests de tests/Sollicito.Domain.Tests le vérifient. -->
+</Project>
