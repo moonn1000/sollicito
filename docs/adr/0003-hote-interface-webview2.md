@@ -72,7 +72,13 @@ Ce durcissement traduit la D9 de l'ADR-0001 en API WebView2.
 Points relevés le 2026-11-13, à régler par un nouvel ADR si besoin :
 
 - **.NET 10** : le paquet WebView2 n'a pas de cible net10 et fonctionne par compatibilité (« .NET 5 or later »)[^webview2-intro]. À confirmer au premier sprint par un prototype.
-- **Mode de publication** : autonome ou dépendant du framework, selon la taille de l'installeur et ce qu'on demande d'installer.
+  - **Confirmé le 2026-11-18** par le prototype de #9 (`prototypes/9-fenetre-exe/`, hors de la solution livrée). En .NET 10.0.15, le paquet WebView2 1.0.4314.35 fournit ses assemblies Core et WinForms construites pour .NET Core 3.0. Avec le runtime 157.0.4341.60, la fenêtre WinForms affiche une page servie par Kestrel sur 127.0.0.1 ; un message va de la page à l'hôte, puis de l'hôte à la page ; `NavigationStarting` annule les navigations vers une autre origine ; la page lit une base SQLite (`Microsoft.Data.Sqlite` 10.0.15) créée dans un dossier temporaire.
+  - **Exe d'un seul fichier** : publié en autonome, le prototype tient en un fichier de 140,6 Mo, ou de 62,2 Mo avec la compression[^fichier-unique]. Copié seul dans un dossier vide, il se lance sans se servir des runtimes .NET du poste, et sa page est prête en moins d'une seconde. Le mode de publication de la V1 revient à l'ADR-0004 (#65).
+  - **Une navigation annulée envoie quand même sa requête** : la page reste intacte, mais la requête GET peut partir pendant que l'hôte répond[^navigation-annulation]. Celle vers `localhost` a atteint Kestrel. Le refus des en-têtes `Host` inattendus (D9 de l'ADR-0001) est donc indispensable.
+  - **Bibliothèques natives extraites** : celles de SQLite, de WebView2 et d'ASP.NET Core sont écrites au lancement sous `%TEMP%\.net`[^fichier-unique], dans un dossier par version de l'exe (2,6 Mo), qui reste après la fermeture. Un programme du même compte Windows peut écrire dans ce dossier : point à traiter par le modèle de menaces.
+  - **Runtime hors de l'exe** : la fenêtre charge `EmbeddedBrowserWebView.dll` depuis l'installation Evergreen du poste.
+  - **Paquet WebView2** : il référence aussi son assembly WPF, inutile en WinForms, qui déclenche un avertissement MSB3277 tant qu'elle n'est pas retirée de la compilation. Sa documentation XML sort à côté de l'exe sans `PublishReferencesDocumentationFiles=false`.
+- **Mode de publication** : autonome ou dépendant du framework, selon la taille de l'installeur et ce qu'on demande d'installer. Mesures de l'exe autonome au point précédent.
 - **Accès au réseau local de Chromium** (Local Network Access) : désactivé dans WebView2 d'après l'équipe de Microsoft (décembre 2025)[^lna], à revérifier ; sans effet tant que l'interface et l'API partagent la même origine.
 - **Variables `WEBVIEW2_*`** : les effacer du processus avant de créer l'environnement est une piste non vérifiée.
 - **Télémétrie et mises à jour du runtime** : elles quittent la machine, ce que le garde-fou du README (« ne quittent votre machine que les échanges des fonctions que vous activez ») ne dit pas. À concilier, par exemple avec les réglages de diagnostic de Windows, puis à écrire dans le README.
@@ -118,3 +124,7 @@ Consultées le 2026-11-13 :
 [^eula]: Microsoft, licence du runtime WebView2 : <https://developer.microsoft.com/microsoft-edge/api/eula/webview2> ; paquet NuGet du SDK et sa licence : <https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4314.35>
 [^webview2-intro]: Microsoft Learn, présentation de WebView2 (environnements pris en charge) : <https://learn.microsoft.com/en-us/microsoft-edge/webview2/>
 [^lna]: WebView2Feedback, issue #5456 : <https://github.com/MicrosoftEdge/WebView2Feedback/issues/5456>
+
+Consultée le 2026-11-18 :
+
+[^fichier-unique]: Microsoft Learn, déploiement en fichier unique (extraction des bibliothèques natives, compression) : <https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview>
