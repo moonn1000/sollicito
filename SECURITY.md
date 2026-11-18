@@ -2,7 +2,7 @@
 
 ## Versions concernées
 
-Sollicito est en conception : aucune version n'est encore publiée. Cette politique s'appliquera à la dernière version publiée.
+Sollicito est en construction : aucune version n'est encore publiée. Cette politique s'appliquera à la dernière version publiée.
 
 ## Signaler une vulnérabilité
 
@@ -25,4 +25,4 @@ Sont notamment concernés :
 - le stockage des clés d'API d'IA et des données de l'utilisateur ;
 - le traitement des offres importées, qui sont du contenu non fiable : injection de script, injection d'instructions dans l'IA, récupération d'une adresse qui viserait la machine ou le réseau interne ;
 - la sauvegarde, l'export et l'import des données ;
-- l'installeur.
+- l'exe publié et, en V2, l'installeur.
