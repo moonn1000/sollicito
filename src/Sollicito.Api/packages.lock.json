@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "dependencies": {
+    "net10.0": {
+      "sollicito.application": {
+        "type": "Project",
+        "dependencies": {
+          "Sollicito.Domain": "[1.0.0, )"
+        }
+      },
+      "sollicito.domain": {
+        "type": "Project"
+      },
+      "sollicito.infrastructure": {
+        "type": "Project",
+        "dependencies": {
+          "Sollicito.Application": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}
