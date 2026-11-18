@@ -36,7 +36,7 @@ Une entreprise se reconnaît à une clé tirée de son nom : accents retirés, m
 ### Dédoublonner les offres
 
 1. **Identifiant sûr** : le couple (source, identifiant externe) de la D5 reste la règle d'une source qui en fournit un. Aucune ne le fait en V1 ; le Forem le fera en V2.
-2. **Offre sans identifiant**, le second cas de la D5 : le couple (source, empreinte) la reconnaît. L'empreinte est le SHA-256 de son texte normalisé (Unicode NFKC, minuscules, blancs réduits). Recoller le même texte retrouve l'offre enregistrée. Une ligne de CSV se traite de même : chaque champ, privé de ses caractères de contrôle, se normalise à part, puis les champs se joignent par U+001F, un séparateur qui n'est pas un blanc.
+2. **Offre sans identifiant**, le second cas de la D5 : le couple (source, empreinte) la reconnaît. L'empreinte est le SHA-256 de son texte normalisé (Unicode NFKC, minuscules, blancs réduits). Recoller le même texte retrouve l'offre enregistrée. Une ligne de CSV se traite de même : chaque champ, privé de ses caractères de contrôle autres que les blancs, se normalise à part, puis les champs se joignent par U+001F, un séparateur qui n'est pas un blanc.
 3. **Même offre vue sur deux sources**, le premier cas : jamais de fusion automatique. Une offre qui a la même entreprise et le même poste normalisé qu'une offre enregistrée, quelle que soit sa source, est signalée comme doublon possible ; l'utilisateur garde les deux, ou renonce à la nouvelle.
 
 ### Corriger un statut
