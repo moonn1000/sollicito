@@ -54,14 +54,18 @@ public static class TexteDUneLigne
         return true;
     }
 
-    /// <summary>Vrai si le texte n'a aucun caractère de contrôle, et aucune moitié isolée d'une paire de substitution.</summary>
+    /// <summary>
+    /// Vrai si le texte n'a aucun caractère de contrôle, aucun contrôle de la direction du texte (U+202A à U+202E,
+    /// U+2066 à U+2069, qui feraient s'afficher un nom à l'envers ou en désordre dans le tableau de bord), et aucune
+    /// moitié isolée d'une paire de substitution.
+    /// </summary>
     public static bool EstAdmis(string texte)
     {
         ArgumentNullException.ThrowIfNull(texte);
         for (var i = 0; i < texte.Length; i++)
         {
             var caractere = texte[i];
-            if (char.IsControl(caractere))
+            if (char.IsControl(caractere) || caractere is (>= '‪' and <= '‮') or (>= '⁦' and <= '⁩'))
             {
                 return false;
             }

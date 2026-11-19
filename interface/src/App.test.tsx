@@ -25,7 +25,8 @@ test("connectée, l'interface le dit et ouvre le tableau de bord, dans la mise e
   ]);
   expect(within(navigation).getByRole("button", { name: "Tableau de bord" }).getAttribute("aria-current")).toBe("page");
   expect(screen.getByRole("main")).toBeDefined();
-  expect(await screen.findByRole("heading", { level: 2, name: "Tableau de bord" })).toBeDefined();
+  // Au premier affichage, le focus reste où il est.
+  expect(document.activeElement).not.toBe(await screen.findByRole("heading", { level: 2, name: "Tableau de bord" }));
 });
 
 test("hors de la fenêtre de Sollicito, l'interface le dit", async () => {
@@ -63,6 +64,8 @@ test("une candidature saisie s'enregistre, puis le tableau de bord la liste et l
 
   expect(await screen.findByText("Candidature enregistrée : Brasseuse, chez Brasserie Lune Rousse.")).toBeDefined();
   expect(screen.getByRole("button", { name: "Tableau de bord" }).getAttribute("aria-current")).toBe("page");
+  // Mené au tableau de bord, l'utilisateur y trouve le focus, sur son titre.
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "Tableau de bord" })));
   await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(2));
   expect(within(screen.getAllByRole("row")[1]!).getAllByRole("cell").map((cellule) => cellule.textContent)).toEqual([
     "Brasserie Lune Rousse",

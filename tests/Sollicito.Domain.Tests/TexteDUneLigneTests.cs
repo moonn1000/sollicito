@@ -47,6 +47,8 @@ public sealed class TexteDUneLigneTests
         "Dévelo\u0000ppeuse",
         "Dévelo\u007Fppeuse",
         "Dévelo\u0085ppeuse",
+        "Lumière‮AS etreV",
+        "Lumière⁧Verte",
         "Dévelo" + (char)0xD800 + "ppeuse",
         "Développeuse" + (char)0xDC00,
         "Dévelo" + (char)0xDC00 + (char)0xD800 + "ppeuse",

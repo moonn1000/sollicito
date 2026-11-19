@@ -132,7 +132,23 @@ public sealed class ApiLancee : IAsyncLifetime
     {
         Client?.Dispose();
         await _racine.DisposeAsync();
-        // La base est refermée : sans regroupement des connexions, plus rien ne tient son fichier.
-        Directory.Delete(DossierDeDonnees, recursive: true);
+        // La base est refermée : sans regroupement des connexions, plus rien ne tient son fichier. Un outil du poste
+        // (antivirus, indexation) peut encore l'ouvrir un instant : on réessaie, sans jamais masquer l'erreur du test.
+        for (var essai = 1; Directory.Exists(DossierDeDonnees); essai++)
+        {
+            try
+            {
+                Directory.Delete(DossierDeDonnees, recursive: true);
+            }
+            catch (IOException) when (essai < 20)
+            {
+                await Task.Delay(100);
+            }
+            catch (IOException)
+            {
+                // Le dossier temporaire reste : le système le videra.
+                return;
+            }
+        }
     }
 }

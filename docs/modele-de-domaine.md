@@ -324,7 +324,7 @@ L'écran de saisie envoie chaque champ tel que l'utilisateur l'a tapé ; l'API l
 | `poste` | texte d'une ligne |
 | `envoyeeLe` | requis, de la forme `AAAA-MM-JJTHH:MM`, les secondes en option, sans décalage ni `Z` ; une heure qui existe, convertie en UTC dans le fuseau du poste (voir « Dates et heures ») ; pas avant le 1er janvier 2000 à 00:00, heure locale ; jamais après l'instant présent |
 
-Un **texte d'une ligne** perd ses blancs du début et de la fin. Ce qui reste est requis, de 200 caractères au plus (unités UTF-16, comme les compte le navigateur), sans caractère de contrôle (saut de ligne, tabulation…) ni moitié isolée d'une paire de substitution, qu'aucun texte valide ne contient. Le message de refus ne reprend jamais le texte refusé.
+Un **texte d'une ligne** perd ses blancs du début et de la fin. Ce qui reste est requis, de 200 caractères au plus (unités UTF-16, comme les compte le navigateur), sans caractère de contrôle (saut de ligne, tabulation…), sans contrôle de la direction du texte (U+202A à U+202E, U+2066 à U+2069, qui feraient s'afficher un nom à l'envers), ni moitié isolée d'une paire de substitution, qu'aucun texte valide ne contient. Le message de refus ne reprend jamais le texte refusé.
 
 Le plancher de l'an 2000 écarte une date manifestement fausse, comme une année tapée sur deux chiffres, et garde la conversion de l'heure loin des bornes du calendrier.
 

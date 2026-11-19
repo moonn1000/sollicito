@@ -13,17 +13,23 @@ export function TableauDeBord({
   client,
   annonce,
   nouvelleCandidature,
+  prendreLeFocus = false,
 }: {
   client: ClientDeLApi;
   /** Ce qui vient de se passer, par exemple une candidature enregistrée. */
   annonce?: string;
   nouvelleCandidature: () => void;
+  /** Vrai quand l'utilisateur vient d'y être mené : son titre reçoit alors le focus, pas au premier affichage. */
+  prendreLeFocus?: boolean;
 }) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
   const titre = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
-    titre.current?.focus();
+    if (prendreLeFocus) {
+      titre.current?.focus();
+    }
+    // Au montage seulement : le focus suit un changement d'écran.
   }, []);
 
   useEffect(() => {

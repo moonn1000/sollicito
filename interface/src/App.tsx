@@ -23,6 +23,8 @@ export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
   const [connexion, setConnexion] = useState<Connexion>({ etat: "connexion" });
   const [ecran, setEcran] = useState<Ecran>("tableau");
   const [annonce, setAnnonce] = useState<string>();
+  // Vrai dès que l'utilisateur a changé d'écran : le titre de l'écran atteint reçoit alors le focus.
+  const [navigue, setNavigue] = useState(false);
 
   useEffect(() => {
     let affichee = true;
@@ -47,11 +49,13 @@ export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
 
   const naviguer = (vers: Ecran) => {
     setAnnonce(undefined);
+    setNavigue(true);
     setEcran(vers);
   };
 
   const quandEnregistree = (candidature: Candidature) => {
     setAnnonce(`Candidature enregistrée : ${candidature.poste}, chez ${candidature.entreprise.nom}.`);
+    setNavigue(true);
     setEcran("tableau");
   };
 
@@ -63,7 +67,12 @@ export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
     >
       {connexion.etat === "prete" &&
         (ecran === "tableau" ? (
-          <TableauDeBord client={connexion.client} annonce={annonce} nouvelleCandidature={() => naviguer("saisie")} />
+          <TableauDeBord
+            client={connexion.client}
+            annonce={annonce}
+            nouvelleCandidature={() => naviguer("saisie")}
+            prendreLeFocus={navigue}
+          />
         ) : (
           <SaisieDUneCandidature client={connexion.client} quandEnregistree={quandEnregistree} />
         ))}

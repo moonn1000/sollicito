@@ -115,7 +115,8 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
 
       if (reponse.status === 400) {
         const refus = lireLesRefus(await reponse.json().catch(() => undefined));
-        if (refus !== undefined) {
+        // Un refus qui ne désigne aucun champ connu ne dirait rien à l'écran : c'est une erreur.
+        if (refus !== undefined && Object.keys(refus).length > 0) {
           return { enregistree: false, refus };
         }
       }
@@ -139,8 +140,11 @@ function lireLesRefus(probleme: unknown): RefusDeLaSaisie | undefined {
   const refus: RefusDeLaSaisie = {};
   for (const champ of CHAMPS) {
     const messages = (errors as Record<string, unknown>)[champ];
-    if (Array.isArray(messages)) {
-      refus[champ] = messages.filter((message): message is string => typeof message === "string");
+    const textes = Array.isArray(messages)
+      ? messages.filter((message): message is string => typeof message === "string")
+      : [];
+    if (textes.length > 0) {
+      refus[champ] = textes;
     }
   }
 

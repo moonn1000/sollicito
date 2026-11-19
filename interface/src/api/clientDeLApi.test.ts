@@ -45,8 +45,10 @@ test("les refus de la validation reviennent champ par champ", async () => {
 test("un refus sans détail des champs, ou une autre erreur, est signalé comme une erreur de l'API", async () => {
   const sansDetail = apiQuiRepond(Response.json({ title: "La requête est illisible.", status: 400 }, { status: 400 }));
   const enPanne = apiQuiRepond(new Response(null, { status: 500 }));
+  const champInconnu = apiQuiRepond(Response.json({ status: 400, errors: { contact: ["Indiquez le contact."] } }, { status: 400 }));
 
   await expect(creerClientDeLApi(JETON_FICTIF, sansDetail).enregistrerUneCandidature(SAISIE)).rejects.toEqual(new ErreurDeLApi(400));
+  await expect(creerClientDeLApi(JETON_FICTIF, champInconnu).enregistrerUneCandidature(SAISIE)).rejects.toEqual(new ErreurDeLApi(400));
   await expect(creerClientDeLApi(JETON_FICTIF, enPanne).enregistrerUneCandidature(SAISIE)).rejects.toEqual(new ErreurDeLApi(500));
 });
 
