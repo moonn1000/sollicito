@@ -33,7 +33,9 @@ public sealed class VerrouDeLInstance : IDisposable
         }
         catch (IOException erreur) when (erreur.HResult == PartageRefuse)
         {
-            throw new BaseDejaOuverte(erreur);
+            // Sans l'erreur d'origine : son message cite le chemin du fichier, donc le nom du compte Windows, et l'hôte
+            // écrit dans le journal toute la chaîne des exceptions d'un lancement qui échoue.
+            throw new BaseDejaOuverte();
         }
     }
 
@@ -44,9 +46,9 @@ public sealed class VerrouDeLInstance : IDisposable
 /// <summary>Un autre lancement de Sollicito utilise déjà ce dossier de données.</summary>
 public sealed class BaseDejaOuverte : InvalidOperationException
 {
-    /// <summary>Le refus, avec l'erreur d'accès au fichier du verrou.</summary>
-    public BaseDejaOuverte(Exception cause)
-        : base("Un autre lancement de Sollicito utilise déjà ce dossier de données.", cause)
+    /// <summary>Le refus, sans le chemin du dossier.</summary>
+    public BaseDejaOuverte()
+        : base("Un autre lancement de Sollicito utilise déjà ce dossier de données.")
     {
     }
 }

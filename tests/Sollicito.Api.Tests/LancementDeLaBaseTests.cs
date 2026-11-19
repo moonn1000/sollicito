@@ -2,7 +2,9 @@ using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Sollicito.Api.Tests.Outils;
 using Sollicito.Infrastructure.Persistance;
 
@@ -71,6 +73,35 @@ public sealed class LancementDeLaBaseTests
             await using var suivant = await LancerAsync(dossier);
             using var etatSuivant = await suivant.EnvoyerAsync(HttpMethod.Get, "/api/etat", jeton: true);
             Assert.Equal(HttpStatusCode.OK, etatSuivant.StatusCode);
+        }
+        finally
+        {
+            Directory.Delete(dossier, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Le_refus_d_un_second_lancement_n_ecrit_pas_le_chemin_du_dossier_dans_le_journal()
+    {
+        var dossier = Directory.CreateTempSubdirectory("sollicito-tests-").FullName;
+        var capture = new CaptureDesJournaux();
+        try
+        {
+            await using (await LancerAsync(dossier))
+            {
+                // Le second lancement, journaux au niveau le plus bavard : l'hôte y écrit la chaîne des exceptions.
+                await Assert.ThrowsAnyAsync<Exception>(() => Task.Run(() => ApiLancee.LancerAsync(builder => builder
+                    .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection([new("Logging:LogLevel:Default", "Trace")]))
+                    .ConfigureLogging(journaux => journaux.AddProvider(capture))
+                    .ConfigureTestServices(services => services.AddSingleton(new DossierDeLaBase(dossier)))))
+                    .WaitAsync(DelaiDuLancement, TestContext.Current.CancellationToken));
+            }
+
+            var entrees = capture.Entrees.ToArray();
+            // Témoin : le refus est bien dans la capture.
+            Assert.Contains(entrees, entree => entree.Contains("Un autre lancement de Sollicito utilise déjà ce dossier de données.", StringComparison.Ordinal));
+            // Le chemin du dossier de données donnerait le nom du compte Windows.
+            Assert.DoesNotContain(entrees, entree => entree.Contains(dossier, StringComparison.OrdinalIgnoreCase));
         }
         finally
         {

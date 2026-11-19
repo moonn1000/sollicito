@@ -6,7 +6,8 @@ namespace Sollicito.Domain.Textes;
 /// Les règles communes aux textes d'une ligne que saisit l'utilisateur, comme le nom d'une entreprise ou un poste
 /// (modèle de domaine, « Saisie d'une candidature ») : les blancs du début et de la fin sont retirés ; le texte qui
 /// reste est requis, de <see cref="LongueurMaximale"/> caractères au plus, sans caractère de contrôle (saut de ligne,
-/// tabulation…) ni caractère invalide (moitié isolée d'une paire de substitution UTF-16).
+/// tabulation…), sans contrôle de la direction du texte, ni caractère invalide (moitié isolée d'une paire de
+/// substitution UTF-16, non-caractère Unicode) : voir <see cref="EstAdmis"/>.
 /// </summary>
 public static class TexteDUneLigne
 {
