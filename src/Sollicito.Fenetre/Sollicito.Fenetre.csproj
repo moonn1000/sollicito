@@ -1,0 +1,89 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- La fenêtre hôte de l'interface (ADR-0003) : WinForms et WebView2, avec l'API locale dans le même exe. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>Sollicito</AssemblyName>
+    <RootNamespace>Sollicito.Fenetre</RootNamespace>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+
+  <!-- Publication : un exe autonome d'un seul fichier, runtimes .NET embarqués, bibliothèques natives extraites au
+       lancement. Pas de trimming : WinForms ne le permet pas. Aucun fichier de symboles à côté de l'exe, et aucun
+       symbole pour ce projet. Les DLL des projets référencés gardent pourtant le chemin de leur fichier de symboles,
+       donc celui du dossier de compilation et le nom du compte Windows (prototype de #9) : l'exe distribué sortira de
+       la CI (#54), où ce chemin n'est plus celui d'un poste. -->
+  <PropertyGroup>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained Condition="'$(_IsPublishing)' == 'true'">true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugType Condition="'$(_IsPublishing)' == 'true'">none</DebugType>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <!-- Sans ce réglage, la documentation XML du paquet WebView2 sort à côté de l'exe. -->
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+    <!-- Sollicito.Api est aussi un exe, lancé seul par ses tests : la fenêtre l'embarque comme une bibliothèque. -->
+    <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
+  </PropertyGroup>
+
+  <!-- Version de test (configuration Test) : la vraie fenêtre, pilotée par Playwright par le protocole CDP
+       (ADR-0003, « Runtime et tests »). Voir VersionDeTest.cs ; elle ne se publie jamais. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Test'">
+    <DefineConstants>$(DefineConstants);VERSION_DE_TEST</DefineConstants>
+  </PropertyGroup>
+
+  <!-- L'interface React construite (interface/dist), embarquée dans l'exe : aucun fichier à côté de lui. -->
+  <PropertyGroup>
+    <DossierDeLInterface>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', 'interface', 'dist'))</DossierDeLInterface>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="$(DossierDeLInterface)**\*" Link="interface\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" />
+    <PackageReference Include="Microsoft.Web.WebView2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Sollicito.Api\Sollicito.Api.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sollicito.Fenetre.Tests" />
+  </ItemGroup>
+
+  <!-- Pour .NET 5 et plus, le paquet WebView2 référence ses assemblies Core et WinForms, et aussi son assembly WPF,
+       inutile ici : sans ce retrait, la compilation signale un conflit sur WindowsBase (MSB3277). -->
+  <Target Name="RetirerWebView2Wpf" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+
+  <!-- L'exe publié reste seul : ni les symboles des projets référencés (DebugType ne les suit pas), ni les fichiers
+       qui servent à lancer Sollicito.Api seul (deps.json, runtimeconfig.json). -->
+  <Target Name="GarderLExeSeul" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="'%(Extension)' == '.pdb' Or '%(Filename)%(Extension)' == 'Sollicito.Api.deps.json' Or '%(Filename)%(Extension)' == 'Sollicito.Api.runtimeconfig.json'" />
+    </ItemGroup>
+  </Target>
+
+  <!-- Un exe de test ou publié sans son interface afficherait une fenêtre vide : la construction s'arrête. -->
+  <Target Name="ExigerLInterface" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Test' Or '$(_IsPublishing)' == 'true'">
+    <Error Condition="!Exists('$(DossierDeLInterface)index.html')"
+           Text="L'interface n'est pas construite ($(DossierDeLInterface)index.html manque) : lancez d'abord « pnpm --dir interface run build »." />
+  </Target>
+
+  <!-- La version de test ouvre le débogage distant de la fenêtre : elle ne se publie pas. -->
+  <Target Name="RefuserLaPublicationDeLaVersionDeTest" BeforeTargets="PrepareForPublish" Condition="'$(Configuration)' == 'Test'">
+    <Error Text="La version de test (configuration Test) ouvre le débogage distant de la fenêtre : elle ne se publie pas." />
+  </Target>
+
+</Project>

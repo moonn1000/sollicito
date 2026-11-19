@@ -3,12 +3,14 @@
     <Project Path="src/Sollicito.Api/Sollicito.Api.csproj" />
     <Project Path="src/Sollicito.Application/Sollicito.Application.csproj" />
     <Project Path="src/Sollicito.Domain/Sollicito.Domain.csproj" />
+    <Project Path="src/Sollicito.Fenetre/Sollicito.Fenetre.csproj" />
     <Project Path="src/Sollicito.Infrastructure/Sollicito.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Sollicito.Api.Tests/Sollicito.Api.Tests.csproj" />
     <Project Path="tests/Sollicito.Application.Tests/Sollicito.Application.Tests.csproj" />
     <Project Path="tests/Sollicito.Domain.Tests/Sollicito.Domain.Tests.csproj" />
+    <Project Path="tests/Sollicito.Fenetre.Tests/Sollicito.Fenetre.Tests.csproj" />
     <Project Path="tests/Sollicito.Infrastructure.Tests/Sollicito.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>

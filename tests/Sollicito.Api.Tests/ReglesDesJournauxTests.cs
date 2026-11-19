@@ -41,14 +41,22 @@ public sealed class ReglesDesJournauxTests
             new("Logging:LogLevel:Default", "Trace"),
             new("Logging:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics*", "Trace"),
             new("Logging:LogLevel:Microsoft.AspNetCore.Server.Kestrel.BadRequests*", "Trace"),
+            new("Logging:LogLevel:Microsoft.AspNetCore.StaticFiles*", "Trace"),
             new($"Logging:{typeof(CaptureDesJournaux).FullName}:LogLevel:Default", "Trace"),
         ];
         string jeton;
-        await using (var api = await ApiLancee.LancerAsync(builder => builder
-            .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(niveaux))
-            .ConfigureLogging(journaux => journaux.AddProvider(capture))))
+        string racineDuContenu;
+        using var interfaceDeTest = new InterfaceDeTest();
+        await using (var api = await ApiLancee.LancerAsync(builder =>
+        {
+            interfaceDeTest.Servir(builder);
+            builder
+                .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(niveaux))
+                .ConfigureLogging(journaux => journaux.AddProvider(capture));
+        }))
         {
             jeton = api.Jeton;
+            racineDuContenu = api.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath.TrimEnd(Path.DirectorySeparatorChar);
             HttpStatusCode[] statuts =
             [
                 // L'interface : le jeton dans son en-tête, la donnée dans la chaîne de requête, un en-tête, un cookie, un corps.
@@ -64,10 +72,18 @@ public sealed class ReglesDesJournauxTests
                 }),
                 await StatutAsync(api, HttpMethod.Get, "/api/openapi/v1.json", jeton: true),
 
+                // Les fichiers de l'interface, servis sans jeton : la donnée et le jeton dans la chaîne de requête.
+                await StatutAsync(api, HttpMethod.Get, $"/index.html?nom={Donnee}&{JetonDeLancement.EnTete}={jeton}", jeton: false),
+                await StatutAsync(api, HttpMethod.Get, $"/assets/app.js?nom={Donnee}", jeton: false),
+
                 // Acceptées, mais la donnée ou le jeton dans le chemin : une route inconnue, un document OpenAPI inconnu.
                 await StatutAsync(api, HttpMethod.Get, $"/api/{Donnee}", jeton: true),
                 await StatutAsync(api, HttpMethod.Get, $"/api/x/{jeton}", jeton: true),
                 await StatutAsync(api, HttpMethod.Get, $"/api/openapi/{Donnee}.json", jeton: true),
+
+                // Cherchés parmi les fichiers de l'interface, absents, puis refusés : la donnée ou le jeton dans le chemin.
+                await StatutAsync(api, HttpMethod.Get, $"/{Donnee}.js", jeton: false),
+                await StatutAsync(api, HttpMethod.Get, $"/assets/{jeton}.js", jeton: false),
 
                 // Refusées : le jeton hors de son en-tête, la donnée en guise de jeton, de chemin, de Host ou d'Origin.
                 await StatutAsync(api, HttpMethod.Get, $"/api/etat?{JetonDeLancement.EnTete}={jeton}&nom={Donnee}", jeton: false),
@@ -92,7 +108,9 @@ public sealed class ReglesDesJournauxTests
             Assert.Equal(
                 [
                     HttpStatusCode.OK, HttpStatusCode.MethodNotAllowed, HttpStatusCode.OK,
+                    HttpStatusCode.OK, HttpStatusCode.OK,
                     HttpStatusCode.NotFound, HttpStatusCode.NotFound, HttpStatusCode.NotFound,
+                    HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
                     HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
                     HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
                     HttpStatusCode.BadRequest, HttpStatusCode.Forbidden,
@@ -109,6 +127,8 @@ public sealed class ReglesDesJournauxTests
 
         Assert.DoesNotContain(entrees, entree => entree.Contains(jeton, StringComparison.Ordinal));
         Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
+        // Aucun chemin du poste : « Content root path » écrirait celui du projet, donc le nom du compte Windows.
+        Assert.DoesNotContain(entrees, entree => entree.Contains(racineDuContenu, StringComparison.OrdinalIgnoreCase));
     }
 
     private static async Task<HttpStatusCode> StatutAsync(

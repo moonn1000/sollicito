@@ -1,8 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sollicito.Api\Sollicito.Api.csproj" />
+  </ItemGroup>
+
+  <!-- Une interface fictive, servie par les deux fournisseurs de fichiers : embarquée dans l'assembly, comme dans
+       l'exe de la fenêtre, et copiée à côté, sur le disque. -->
+  <PropertyGroup>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Outils\Interface\**\*" />
+    <None Include="Outils\Interface\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
