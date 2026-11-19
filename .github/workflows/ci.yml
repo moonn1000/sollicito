@@ -1,5 +1,6 @@
 # Construit et teste la solution .NET et l'interface à chaque pull request vers main,
-# puis après chaque fusion. Aucun secret : le jeton du workflow ne peut que lire le dépôt.
+# puis après chaque fusion, et pilote la vraie fenêtre par Playwright. Aucun secret : le
+# jeton du workflow ne peut que lire le dépôt.
 # Les actions sont épinglées par empreinte de commit, leur version en commentaire.
 name: CI
 
@@ -67,11 +68,44 @@ jobs:
       - name: Construire et tester
         run: pnpm run check
 
+  # La vraie fenêtre, pilotée par Playwright (interface/tests-fenetre) : l'interface construite,
+  # l'exe en version de test (configuration Test, protocole CDP ouvert), puis le parcours
+  # principal. Le runtime WebView2 Evergreen est celui de l'image du runner.
+  fenetre:
+    name: Fenêtre
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: interface
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Installer le SDK .NET fixé par global.json
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Installer pnpm, version fixée par package.json
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: interface/package.json
+          standalone: true
+
+      - name: Installer les dépendances du fichier de verrouillage
+        run: pnpm install --frozen-lockfile
+
+      - name: Piloter la vraie fenêtre
+        run: pnpm run test:fenetre
+
   # Seule vérification à rendre obligatoire : elle échoue dès qu'un job ci-dessus n'a pas réussi.
   verdict:
     name: Verdict
     if: always()
-    needs: [dotnet, interface]
+    needs: [dotnet, interface, fenetre]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

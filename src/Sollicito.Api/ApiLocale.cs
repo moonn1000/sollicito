@@ -1,4 +1,6 @@
 using System.Net;
+using Microsoft.Extensions.FileProviders;
+using Sollicito.Api.Interface;
 using Sollicito.Api.Journaux;
 using Sollicito.Api.Securite;
 
@@ -8,14 +10,51 @@ namespace Sollicito.Api;
 /// La Web API locale (ADR-0001, D2 et D9 ; ADR-0003) : elle n'écoute que sur 127.0.0.1, exige le jeton du
 /// lancement sur chaque route et refuse elle-même les en-têtes <c>Host</c> et les origines inattendus. Aucune
 /// politique CORS ne l'ouvre à une autre origine : CORS assouplit la règle de même origine, il ne protège pas
-/// le serveur. La fenêtre hôte (#13) lira dans ses services l'adresse d'écoute et le jeton à remettre à l'interface.
+/// le serveur. La fenêtre hôte (src/Sollicito.Fenetre) la construit par <see cref="ConstruirePourLaFenetre"/>,
+/// puis lit dans ses services l'adresse d'écoute et le jeton à remettre à l'interface.
 /// </summary>
 public static class ApiLocale
 {
-    /// <summary>Construit l'API, prête à démarrer.</summary>
-    public static WebApplication Construire(string[] args)
+    /// <summary>Construit l'API seule, prête à démarrer, sans les fichiers de l'interface.</summary>
+    public static WebApplication Construire(string[] args) => Construire(new WebApplicationOptions { Args = args }, ajuster: null);
+
+    /// <summary>
+    /// Construit l'API de la fenêtre hôte, qui sert aussi les fichiers de l'interface. Rien de ce qui entoure le
+    /// lancement ne la règle : l'environnement de production est imposé, car la page d'exception du développement
+    /// afficherait les en-têtes d'une requête, jeton compris ; la ligne de commande ne lui est pas transmise ; aucun
+    /// fichier de configuration n'est lu, ni à côté de l'exe ni dans le dossier courant.
+    /// </summary>
+    /// <param name="fichiersDeLInterface">Les fichiers de l'interface React construite (index.html, assets).</param>
+    /// <param name="dossierDeDonnees">Le dossier de données de l'utilisateur, déjà créé : la racine du contenu.</param>
+    public static WebApplication ConstruirePourLaFenetre(IFileProvider fichiersDeLInterface, string dossierDeDonnees)
     {
-        var builder = WebApplication.CreateBuilder(args);
+        ArgumentNullException.ThrowIfNull(fichiersDeLInterface);
+        ArgumentException.ThrowIfNullOrEmpty(dossierDeDonnees);
+
+        return Construire(
+            new WebApplicationOptions
+            {
+                Args = [],
+                EnvironmentName = Environments.Production,
+                ContentRootPath = dossierDeDonnees,
+            },
+            builder =>
+            {
+                // appsettings.json et ses variantes : un fichier déposé à côté de l'exe, par exemple par un
+                // téléchargement dans le même dossier, ne doit rien régler.
+                foreach (var source in builder.Configuration.Sources.OfType<FileConfigurationSource>().ToArray())
+                {
+                    builder.Configuration.Sources.Remove(source);
+                }
+
+                builder.Services.AddSingleton(new FichiersDeLInterface(fichiersDeLInterface));
+            });
+    }
+
+    private static WebApplication Construire(WebApplicationOptions options, Action<WebApplicationBuilder>? ajuster)
+    {
+        var builder = WebApplication.CreateBuilder(options);
+        ajuster?.Invoke(builder);
 
         // 127.0.0.1 et un port libre choisi au lancement, jamais une interface réseau. L'écoute ne se règle que
         // dans le code : la section Kestrel de la configuration est ignorée, et rien ne la relit à chaud.
@@ -34,9 +73,12 @@ public static class ApiLocale
 
         var app = builder.Build();
 
+        // Chaque réponse, refus compris, porte la politique de sécurité du contenu et les autres en-têtes de sécurité.
+        app.UseMiddleware<EnTetesDeSecurite>();
         // Ordre des refus : Host (400) pour toute requête, puis jeton (401) et Origin (403) pour l'API.
         app.UseMiddleware<ControleDeLHote>();
-        // Les fichiers de l'interface (#13) se placeront ici : servis sans jeton, seul leur Host contrôlé (ADR-0003).
+        // Les fichiers de l'interface, servis sans jeton : seul leur Host est contrôlé (ADR-0003, « Règles d'accès »).
+        FichiersDeLInterface.Servir(app);
         app.UseMiddleware<ControleDuJeton>();
         app.UseMiddleware<ControleDeLOrigine>();
         // Le routage ne vient qu'après les contrôles : une requête refusée n'est jamais routée (OrdreDesControlesTests).

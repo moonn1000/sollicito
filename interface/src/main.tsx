@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
+import { seConnecter } from "./connexion.ts";
 
 const racine = document.getElementById("racine");
 if (racine === null) {
@@ -9,6 +10,6 @@ if (racine === null) {
 
 createRoot(racine).render(
   <StrictMode>
-    <App />
+    <App connecter={seConnecter} />
   </StrictMode>,
 );
