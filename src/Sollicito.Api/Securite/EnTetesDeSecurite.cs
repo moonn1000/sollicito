@@ -26,11 +26,16 @@ internal sealed class EnTetesDeSecurite(RequestDelegate suite)
 
     public Task InvokeAsync(HttpContext http)
     {
-        var enTetes = http.Response.Headers;
+        Poser(http.Response.Headers);
+        return suite(http);
+    }
+
+    /// <summary>Pose les en-têtes de sécurité sur une réponse ; la réponse à une exception les reçoit de nouveau.</summary>
+    internal static void Poser(IHeaderDictionary enTetes)
+    {
         enTetes.ContentSecurityPolicy = PolitiqueDuContenu;
         enTetes.XContentTypeOptions = "nosniff";
         enTetes["Referrer-Policy"] = "no-referrer";
         enTetes.CacheControl = "no-store";
-        return suite(http);
     }
 }

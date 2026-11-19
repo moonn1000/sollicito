@@ -15,8 +15,10 @@ internal static class Program
     private static int Main()
     {
         ApplicationConfiguration.Initialize();
-        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
-        Application.ThreadException += (_, _) =>
+        // L'Application de WinForms, écrite en entier : ici, « Application » désignerait l'espace de noms
+        // Sollicito.Application, celui de la couche application.
+        System.Windows.Forms.Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        System.Windows.Forms.Application.ThreadException += (_, _) =>
         {
             Signalement.Afficher("Sollicito a rencontré une erreur inattendue et va se fermer.");
             Environment.Exit(1);
@@ -50,7 +52,7 @@ internal static class Program
             var origine = new Uri(api.Services.GetRequiredService<AdresseDEcoute>().Origine);
             var jeton = api.Services.GetRequiredService<JetonDeLancement>();
             using var fenetre = new FenetreHote(origine, jeton, lancement);
-            Application.Run(fenetre);
+            System.Windows.Forms.Application.Run(fenetre);
             return fenetre.CodeDeSortie;
         }
         finally

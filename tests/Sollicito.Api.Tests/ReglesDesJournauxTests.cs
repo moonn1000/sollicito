@@ -1,12 +1,14 @@
 using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using Sollicito.Api.Securite;
 using Sollicito.Api.Tests.Outils;
+using Sollicito.Application.Candidatures;
 
 namespace Sollicito.Api.Tests;
 
@@ -46,6 +48,7 @@ public sealed class ReglesDesJournauxTests
         ];
         string jeton;
         string racineDuContenu;
+        string dossierDeDonnees;
         using var interfaceDeTest = new InterfaceDeTest();
         await using (var api = await ApiLancee.LancerAsync(builder =>
         {
@@ -57,6 +60,7 @@ public sealed class ReglesDesJournauxTests
         {
             jeton = api.Jeton;
             racineDuContenu = api.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath.TrimEnd(Path.DirectorySeparatorChar);
+            dossierDeDonnees = api.DossierDeDonnees;
             HttpStatusCode[] statuts =
             [
                 // L'interface : le jeton dans son en-tête, la donnée dans la chaîne de requête, un en-tête, un cookie, un corps.
@@ -94,6 +98,20 @@ public sealed class ReglesDesJournauxTests
                 await StatutAsync(api, HttpMethod.Get, "/api/etat", jeton: false, requete => requete.Headers.Add(JetonDeLancement.EnTete, Donnee)),
                 await StatutAsync(api, HttpMethod.Get, "/api/etat?nom=" + Donnee, jeton: true, requete => requete.Headers.Host = Donnee + ".invalid"),
                 await StatutAsync(api, HttpMethod.Post, "/api/etat?nom=" + Donnee, jeton: true, requete => requete.Headers.Add("Origin", "http://" + Donnee + ".invalid")),
+
+                // Les candidatures : la donnée dans l'entreprise et le poste enregistrés, puis relus par les deux listes.
+                await EnregistrerAsync(api, $$"""{"entreprise":"{{Donnee}} SA","poste":"Poste de {{Donnee}}","envoyeeLe":"2026-11-02T10:00"}"""),
+                await StatutAsync(api, HttpMethod.Get, "/api/candidatures", jeton: true),
+                await StatutAsync(api, HttpMethod.Get, "/api/entreprises", jeton: true),
+                // Refusées par la validation, par la lecture du corps (JSON mal formé, champ inconnu, type inattendu),
+                // par le type du corps, et par le contrôle de l'origine.
+                await EnregistrerAsync(api, $$"""{"entreprise":"{{Donnee}}\t","poste":"{{new string('x', 201)}}{{Donnee}}","envoyeeLe":"{{Donnee}}"}"""),
+                await EnregistrerAsync(api, $$"""{"entreprise":{{Donnee}}"""),
+                await EnregistrerAsync(api, $$"""{"{{Donnee}}":"x"}"""),
+                await EnregistrerAsync(api, $$"""{"poste":["{{Donnee}}"]}"""),
+                await EnregistrerAsync(api, $$"""{"poste":"{{Donnee}}"}""", "text/" + Donnee),
+                await StatutAsync(api, HttpMethod.Post, "/api/candidatures", jeton: true, requete =>
+                    requete.Content = new StringContent($$"""{"poste":"{{Donnee}}"}""", System.Text.Encoding.UTF8, "application/json")),
             ];
 
             // Mal formées, que Kestrel rejette lui-même : ligne de requête (méthode invalide), ligne d'en-tête sans
@@ -114,6 +132,9 @@ public sealed class ReglesDesJournauxTests
                     HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
                     HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
                     HttpStatusCode.BadRequest, HttpStatusCode.Forbidden,
+                    HttpStatusCode.Created, HttpStatusCode.OK, HttpStatusCode.OK,
+                    HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest,
+                    HttpStatusCode.UnsupportedMediaType, HttpStatusCode.Forbidden,
                 ],
                 statuts);
             Assert.All(lignesDEtat, ligne => Assert.StartsWith("HTTP/1.1 400 ", ligne, StringComparison.Ordinal));
@@ -127,8 +148,38 @@ public sealed class ReglesDesJournauxTests
 
         Assert.DoesNotContain(entrees, entree => entree.Contains(jeton, StringComparison.Ordinal));
         Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
-        // Aucun chemin du poste : « Content root path » écrirait celui du projet, donc le nom du compte Windows.
+        // Aucun chemin du poste : « Content root path » écrirait celui du projet, Entity Framework Core celui de la
+        // base, donc tous deux le nom du compte Windows.
         Assert.DoesNotContain(entrees, entree => entree.Contains(racineDuContenu, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(dossierDeDonnees, StringComparison.OrdinalIgnoreCase));
+        // Témoin : la base a bien été lue et écrite pendant le test, et Entity Framework Core écrit dans la capture.
+        Assert.Contains(entrees, entree => entree.StartsWith(nameof(LogLevel.Debug) + " Microsoft.EntityFrameworkCore.Database.Transaction ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Une_exception_pendant_une_requete_n_ecrit_que_son_type()
+    {
+        var capture = new CaptureDesJournaux();
+        await using (var api = await ApiLancee.LancerAsync(builder => builder
+            .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection([new("Logging:LogLevel:Default", "Trace")]))
+            .ConfigureLogging(journaux => journaux.AddProvider(capture))
+            .ConfigureTestServices(services => services.AddScoped<IDepotDesCandidatures>(_ => new DepotEnPanne(Donnee)))))
+        {
+            using var reponse = await api.EnvoyerAsync(HttpMethod.Get, "/api/candidatures", jeton: true);
+            Assert.Equal(HttpStatusCode.InternalServerError, reponse.StatusCode);
+        }
+
+        var entrees = capture.Entrees.ToArray();
+        Assert.Contains(entrees, entree => entree.Contains("Erreur inattendue pendant une requête (InvalidOperationException).", StringComparison.Ordinal));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(entrees, entree => entree.Contains("Panne simulée", StringComparison.Ordinal));
+    }
+
+    // Un enregistrement de candidature, venu de l'interface, avec le corps donné.
+    private static async Task<HttpStatusCode> EnregistrerAsync(ApiLancee api, string corps, string typeDuCorps = "application/json")
+    {
+        using var reponse = await api.EnvoyerCorpsAsync(corps, typeDuCorps);
+        return reponse.StatusCode;
     }
 
     private static async Task<HttpStatusCode> StatutAsync(

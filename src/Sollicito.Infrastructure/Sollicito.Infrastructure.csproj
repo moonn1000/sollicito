@@ -1,4 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <!-- La base SQLite, par Entity Framework Core (ADR-0001, D3) : son schéma évolue par les migrations de
+       Persistance/Migrations, versionnées dans le dépôt. Ajouter une migration, depuis la racine du dépôt :
+       dotnet tool restore
+       dotnet ef migrations add <Nom> -p src/Sollicito.Infrastructure -s src/Sollicito.Api -o Persistance/Migrations -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Sollicito.Application\Sollicito.Application.csproj" />
   </ItemGroup>

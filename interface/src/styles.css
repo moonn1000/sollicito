@@ -1,0 +1,241 @@
+/* La mise en page commune de l'interface (#11, absorbe #24). Servie comme fichier de l'origine de l'interface : la
+   politique de sécurité du contenu n'admet ni style en ligne ni feuille venue d'ailleurs (style-src 'self'). */
+
+:root {
+  color-scheme: light dark;
+  --fond: #f7f7f5;
+  --surface: #ffffff;
+  --texte: #1f2328;
+  --texte-discret: #57606a;
+  --bordure: #d0d7de;
+  --accent: #0b5cad;
+  --accent-texte: #ffffff;
+  --refus: #a40e26;
+  --focus: #0b5cad;
+  font-family: system-ui, "Segoe UI", sans-serif;
+  font-size: 100%;
+  line-height: 1.5;
+  color: var(--texte);
+  background: var(--fond);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fond: #16181b;
+    --surface: #1f2328;
+    --texte: #e6edf3;
+    --texte-discret: #a8b1bb;
+    --bordure: #444c56;
+    --accent: #6cb6ff;
+    --accent-texte: #0d1117;
+    --refus: #ff9492;
+    --focus: #6cb6ff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.mise-en-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.en-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 2rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--bordure);
+}
+
+.en-tete h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.en-tete nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.en-tete nav button {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  background: none;
+  color: var(--texte);
+  font: inherit;
+  cursor: pointer;
+}
+
+.en-tete nav button:hover {
+  border-color: var(--bordure);
+}
+
+.en-tete nav button[aria-current="page"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.contenu {
+  flex: 1;
+  width: 100%;
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.contenu h2 {
+  margin-top: 0;
+}
+
+.pied {
+  padding: 0.5rem 1.5rem;
+  border-top: 1px solid var(--bordure);
+  color: var(--texte-discret);
+  font-size: 0.875rem;
+}
+
+.pied p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+}
+
+.vide button,
+.actions button {
+  padding: 0.5rem 1.1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: var(--accent-texte);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.actions button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.annonce {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--bordure);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+
+.alerte {
+  color: var(--refus);
+  font-weight: 600;
+}
+
+.candidatures {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+}
+
+.candidatures caption {
+  padding-bottom: 0.5rem;
+  color: var(--texte-discret);
+  text-align: left;
+}
+
+.candidatures th,
+.candidatures td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--bordure);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.candidatures th {
+  font-weight: 600;
+}
+
+.saisie {
+  display: grid;
+  gap: 1rem;
+  max-width: 36rem;
+}
+
+.champ {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.champ label {
+  font-weight: 600;
+}
+
+.champ input {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--bordure);
+  border-radius: 0.3rem;
+  background: var(--surface);
+  color: var(--texte);
+  font: inherit;
+}
+
+.champ-refuse input {
+  border: 2px solid var(--refus);
+}
+
+.refus {
+  margin: 0;
+  color: var(--refus);
+}
+
+.propositions p {
+  margin: 0 0 0.3rem;
+  color: var(--texte-discret);
+}
+
+.propositions ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.propositions button {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--bordure);
+  border-radius: 1rem;
+  background: var(--surface);
+  color: var(--texte);
+  cursor: pointer;
+}
+
+.propositions button:hover {
+  border-color: var(--accent);
+}
+
+.statut-de-depart {
+  margin: 0;
+}

@@ -1,8 +1,15 @@
 using System.Net;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.FileProviders;
+using Sollicito.Api.Candidatures;
+using Sollicito.Api.Donnees;
+using Sollicito.Api.Erreurs;
 using Sollicito.Api.Interface;
 using Sollicito.Api.Journaux;
 using Sollicito.Api.Securite;
+using Sollicito.Application.Candidatures;
+using Sollicito.Infrastructure;
+using Sollicito.Infrastructure.Persistance;
 
 namespace Sollicito.Api;
 
@@ -15,8 +22,12 @@ namespace Sollicito.Api;
 /// </summary>
 public static class ApiLocale
 {
-    /// <summary>Construit l'API seule, prête à démarrer, sans les fichiers de l'interface.</summary>
-    public static WebApplication Construire(string[] args) => Construire(new WebApplicationOptions { Args = args }, ajuster: null);
+    /// <summary>
+    /// Construit l'API seule, prête à démarrer, sans les fichiers de l'interface. Sa base vit dans le dossier de
+    /// données de l'utilisateur (<see cref="DossierDeDonnees"/>), développement compris.
+    /// </summary>
+    public static WebApplication Construire(string[] args) =>
+        Construire(new WebApplicationOptions { Args = args }, DossierDeDonnees.DeLUtilisateur(), ajuster: null);
 
     /// <summary>
     /// Construit l'API de la fenêtre hôte, qui sert aussi les fichiers de l'interface. L'environnement de production
@@ -27,7 +38,7 @@ public static class ApiLocale
     /// du même compte Windows peut les poser.
     /// </summary>
     /// <param name="fichiersDeLInterface">Les fichiers de l'interface React construite (index.html, assets).</param>
-    /// <param name="dossierDeDonnees">Le dossier de données de l'utilisateur, déjà créé : la racine du contenu.</param>
+    /// <param name="dossierDeDonnees">Le dossier de données de l'utilisateur, déjà créé : la racine du contenu et le dossier de la base.</param>
     public static WebApplication ConstruirePourLaFenetre(IFileProvider fichiersDeLInterface, string dossierDeDonnees)
     {
         ArgumentNullException.ThrowIfNull(fichiersDeLInterface);
@@ -42,6 +53,7 @@ public static class ApiLocale
                 EnvironmentName = Environments.Production,
                 ContentRootPath = dossierDeDonnees,
             },
+            dossierDeDonnees,
             builder =>
             {
                 // appsettings.json et ses variantes : un fichier déposé à côté de l'exe, par exemple par un
@@ -55,7 +67,7 @@ public static class ApiLocale
             });
     }
 
-    private static WebApplication Construire(WebApplicationOptions options, Action<WebApplicationBuilder>? ajuster)
+    private static WebApplication Construire(WebApplicationOptions options, string dossierDeDonnees, Action<WebApplicationBuilder>? ajuster)
     {
         var builder = WebApplication.CreateBuilder(options);
         ajuster?.Invoke(builder);
@@ -78,8 +90,27 @@ public static class ApiLocale
         builder.Services.AddHostedService<ControleDeLEcoute>();
         builder.Services.AddOpenApi();
 
+        // La base, créée ou mise à jour au lancement, après les contrôles de l'écoute et avant que Kestrel n'écoute.
+        builder.Services.AjouterLaBase(new DossierDeLaBase(dossierDeDonnees));
+        builder.Services.AddHostedService<PreparationDeLaBase>();
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddScoped<EnregistrementDesCandidatures>();
+
+        // Les statuts s'écrivent en toutes lettres. Un champ inconnu du corps rend la requête illisible plutôt que
+        // d'être ignoré : le statut, par exemple, ne vient jamais de l'interface.
+        builder.Services.ConfigureHttpJsonOptions(json =>
+        {
+            json.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+            json.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+        });
+        // Un corps illisible lève une exception dans tous les environnements, et ErreursInattendues y répond.
+        builder.Services.Configure<RouteHandlerOptions>(routes => routes.ThrowOnBadRequest = true);
+
         var app = builder.Build();
 
+        // Aucune exception ne remonte au-delà : en développement, la page d'exception d'ASP.NET Core, placée avant
+        // tout le reste, afficherait les en-têtes de la requête, jeton compris.
+        app.UseMiddleware<ErreursInattendues>();
         // Chaque réponse, refus compris, porte la politique de sécurité du contenu et les autres en-têtes de sécurité.
         app.UseMiddleware<EnTetesDeSecurite>();
         // Ordre des refus : Host (400) pour toute requête, puis jeton (401) et Origin (403) pour l'API.
@@ -95,6 +126,7 @@ public static class ApiLocale
         app.MapGet("/api/etat", () => TypedResults.Ok(EtatDeLApplication.Pret))
             .WithName("EtatDeLApplication")
             .WithSummary("État de l'application");
+        RoutesDesCandidatures.Declarer(app);
 
         return app;
     }
