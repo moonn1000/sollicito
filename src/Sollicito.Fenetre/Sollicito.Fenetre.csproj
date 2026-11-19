@@ -12,8 +12,10 @@
   </PropertyGroup>
 
   <!-- Publication : un exe autonome d'un seul fichier, runtimes .NET embarqués, bibliothèques natives extraites au
-       lancement. Pas de trimming : WinForms ne le permet pas. Pas de symboles publiés : ils emporteraient le chemin du
-       dossier de compilation, donc le nom du compte Windows (prototype de #9). -->
+       lancement. Pas de trimming : WinForms ne le permet pas. Aucun fichier de symboles à côté de l'exe, et aucun
+       symbole pour ce projet. Les DLL des projets référencés gardent pourtant le chemin de leur fichier de symboles,
+       donc celui du dossier de compilation et le nom du compte Windows (prototype de #9) : l'exe distribué sortira de
+       la CI (#54), où ce chemin n'est plus celui d'un poste. -->
   <PropertyGroup>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained Condition="'$(_IsPublishing)' == 'true'">true</SelfContained>
