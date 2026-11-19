@@ -2,8 +2,10 @@ using System.Net;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Sollicito.Api.Donnees;
 using Sollicito.Api.Securite;
 using Sollicito.Api.Tests.Outils;
+using Sollicito.Infrastructure.Persistance;
 
 namespace Sollicito.Api.Tests;
 
@@ -43,6 +45,8 @@ public sealed class ApiDeLaFenetreTests
                 [page.StatusCode, sansJeton.StatusCode, avecJeton.StatusCode, refusee.StatusCode]);
             Assert.Equal(InterfaceDeTest.Page, await page.Content.ReadAsStringAsync(annulation));
             Assert.Equal(dossier, app.Environment.ContentRootPath.TrimEnd(Path.DirectorySeparatorChar));
+            // La base se crée au lancement, dans le dossier de données que donne la fenêtre.
+            Assert.Equal([DossierDeLaBase.NomDuFichier], Directory.GetFiles(dossier).Select(Path.GetFileName));
         }
         finally
         {
@@ -76,6 +80,37 @@ public sealed class ApiDeLaFenetreTests
             Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", avant[1]);
             Directory.Delete(dossier, recursive: true);
         }
+    }
+}
+
+/// <summary>
+/// L'API lancée seule range sa base dans le dossier de données de l'utilisateur, développement compris (ADR-0001,
+/// D10) : ces tests le lisent dans ses services sans la démarrer, donc sans rien créer dans ce dossier.
+/// </summary>
+public sealed class DossierDeLApiSeuleTests
+{
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Production")]
+    public async Task L_API_seule_range_sa_base_dans_le_dossier_de_donnees_de_l_utilisateur(string environnement)
+    {
+        var localDesApplications = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        await using var app = ApiLocale.Construire(["--environment", environnement]);
+
+        Assert.Equal(environnement, app.Environment.EnvironmentName);
+        Assert.Equal(
+            Path.Combine(localDesApplications, "Sollicito", "sollicito.db"),
+            app.Services.GetRequiredService<DossierDeLaBase>().Fichier);
+        Assert.False(app.Services.GetRequiredService<DossierDeLaBase>().Fichier.StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("AppData\\Local")]
+    public void Sans_dossier_local_absolu_l_API_ne_se_construit_pas(string localDesApplications)
+    {
+        Assert.Throws<InvalidOperationException>(() => DossierDeDonnees.Sous(localDesApplications));
     }
 }
 

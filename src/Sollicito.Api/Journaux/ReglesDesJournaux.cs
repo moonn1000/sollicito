@@ -22,7 +22,11 @@ internal static class ReglesDesJournaux
     /// <item><c>Microsoft.AspNetCore.Server.Kestrel.BadRequests</c> recopie la ligne brute d'une requête mal formée ;</item>
     /// <item><c>Microsoft.AspNetCore.Routing.Matching.DfaMatcher</c> écrit le chemin de chaque requête routée ;</item>
     /// <item><c>Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware</c> écrit le chemin de chaque fichier de
-    /// l'interface servi ou cherché (« Sending file. Request path… »), dès le niveau Information.</item>
+    /// l'interface servi ou cherché (« Sending file. Request path… »), dès le niveau Information ;</item>
+    /// <item><c>Microsoft.EntityFrameworkCore.Database.Connection</c>, <c>Microsoft.EntityFrameworkCore.Database.Command</c>
+    /// et <c>Microsoft.EntityFrameworkCore.Migrations</c> écrivent le chemin du fichier de la base, sous le profil
+    /// Windows, donc le nom du compte (« Opening connection to database 'main' on server… », « Closing data reader
+    /// to 'main' on server… », « Migrating using database… »).</item>
     /// </list>
     /// </summary>
     internal static readonly IReadOnlySet<string> CategoriesMuettes = new HashSet<string>(StringComparer.Ordinal)
@@ -31,6 +35,9 @@ internal static class ReglesDesJournaux
         "Microsoft.AspNetCore.Server.Kestrel.BadRequests",
         "Microsoft.AspNetCore.Routing.Matching.DfaMatcher",
         "Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware",
+        "Microsoft.EntityFrameworkCore.Database.Connection",
+        "Microsoft.EntityFrameworkCore.Database.Command",
+        "Microsoft.EntityFrameworkCore.Migrations",
     };
 
     public static void Appliquer(ILoggingBuilder journaux)

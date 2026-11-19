@@ -3,15 +3,19 @@ using System.Net.Sockets;
 using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Sollicito.Api.Securite;
+using Sollicito.Infrastructure.Persistance;
 
 namespace Sollicito.Api.Tests.Outils;
 
 /// <summary>
 /// L'API lancée dans le processus des tests, telle que <c>Program</c> la construit, sur un vrai Kestrel :
 /// 127.0.0.1 et un port choisi au lancement. Le serveur de test en mémoire (TestServer) ne convient pas : il
-/// n'ouvre aucune adresse, et c'est sur l'adresse réellement ouverte que l'API contrôle Host et Origin.
+/// n'ouvre aucune adresse, et c'est sur l'adresse réellement ouverte que l'API contrôle Host et Origin. Sa base
+/// vit dans un dossier temporaire propre à ce lancement, jamais dans le dossier de données de l'utilisateur, et
+/// disparaît avec lui.
 /// </summary>
 public sealed class ApiLancee : IAsyncLifetime
 {
@@ -26,8 +30,16 @@ public sealed class ApiLancee : IAsyncLifetime
 
     private ApiLancee(Action<IWebHostBuilder> ajuster)
     {
-        _usine = _racine.WithWebHostBuilder(ajuster);
+        _usine = _racine.WithWebHostBuilder(builder =>
+        {
+            // Avant les réglages du test, qui peuvent encore le remplacer.
+            builder.ConfigureTestServices(services => services.AddSingleton(new DossierDeLaBase(DossierDeDonnees)));
+            ajuster(builder);
+        });
     }
+
+    /// <summary>Le dossier temporaire où vit la base de ce lancement.</summary>
+    public string DossierDeDonnees { get; } = Directory.CreateTempSubdirectory("sollicito-tests-").FullName;
 
     /// <summary>Origine de l'interface et adresse de l'API : « http://127.0.0.1:port ».</summary>
     public Uri Adresse { get; private set; } = null!;
@@ -120,5 +132,7 @@ public sealed class ApiLancee : IAsyncLifetime
     {
         Client?.Dispose();
         await _racine.DisposeAsync();
+        // La base est refermée : sans regroupement des connexions, plus rien ne tient son fichier.
+        Directory.Delete(DossierDeDonnees, recursive: true);
     }
 }

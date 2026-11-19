@@ -1,6 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- Pour les seuls outils d'Entity Framework Core (dotnet ef), qui partent de ce projet pour écrire une migration
+         (voir Sollicito.Infrastructure.csproj) : ce paquet ne passe ni à la fenêtre ni à l'exe publié. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Sollicito.Application\Sollicito.Application.csproj" />
