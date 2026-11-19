@@ -144,6 +144,11 @@ public sealed class CandidaturesTests
         { "poste", "", "Indiquez le poste." },
         { "poste", new string('p', 201), "Le poste ne doit pas dépasser 200 caractères." },
         { "poste", "Comptable\nsenior", "Le poste ne doit contenir ni saut de ligne, ni tabulation, ni autre caractère de contrôle ou invalide." },
+        // Des non-caractères Unicode : U+FFFE faisait échouer le calcul de la clé (500), et passait dans le poste.
+        { "entreprise", "Lune" + (char)0xFFFE + "Rousse", "Le nom de l'entreprise ne doit contenir ni saut de ligne, ni tabulation, ni autre caractère de contrôle ou invalide." },
+        { "entreprise", "Lune" + char.ConvertFromUtf32(0x10FFFF) + "Rousse", "Le nom de l'entreprise ne doit contenir ni saut de ligne, ni tabulation, ni autre caractère de contrôle ou invalide." },
+        { "poste", "Comptable" + (char)0xFFFE, "Le poste ne doit contenir ni saut de ligne, ni tabulation, ni autre caractère de contrôle ou invalide." },
+        { "poste", "Comptable" + (char)0xFDD0, "Le poste ne doit contenir ni saut de ligne, ni tabulation, ni autre caractère de contrôle ou invalide." },
         { "envoyeeLe", null, "Indiquez la date et l'heure d'envoi." },
         { "envoyeeLe", " ", "Indiquez la date et l'heure d'envoi." },
         { "envoyeeLe", "27/03/2026 23:30", "La date et l'heure d'envoi s'écrivent AAAA-MM-JJTHH:MM, par exemple 2026-03-27T23:30." },

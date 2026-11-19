@@ -52,7 +52,62 @@ public sealed class TexteDUneLigneTests
         "Dévelo" + (char)0xD800 + "ppeuse",
         "Développeuse" + (char)0xDC00,
         "Dévelo" + (char)0xDC00 + (char)0xD800 + "ppeuse",
+        // Non-caractères : U+FDD0 à U+FDEF, U+FFFE et U+FFFF, et leurs équivalents des autres plans.
+        "Lune" + (char)0xFFFE + "Rousse",
+        "Lune" + (char)0xFFFF + "Rousse",
+        "Lune" + (char)0xFDD0 + "Rousse",
+        "Lune" + (char)0xFDEF + "Rousse",
+        "Lune" + char.ConvertFromUtf32(0x1FFFE) + "Rousse",
+        "Lune" + char.ConvertFromUtf32(0x10FFFF) + "Rousse",
     ];
+
+    // Juste à côté des non-caractères : des caractères ordinaires.
+    public static TheoryData<string> VoisinsAdmis =>
+    [
+        "Lune" + (char)0xFDCF + "Rousse",
+        "Lune" + (char)0xFDF0 + "Rousse",
+        "Lune" + (char)0xFFFD + "Rousse",
+        "Lune" + char.ConvertFromUtf32(0x1FFFD) + "Rousse",
+    ];
+
+    [Theory]
+    [MemberData(nameof(VoisinsAdmis))]
+    public void Un_caractere_voisin_d_un_non_caractere_est_admis(string saisie)
+    {
+        Assert.True(TexteDUneLigne.EstAdmis(saisie));
+    }
+
+    [Fact]
+    public void Tout_nom_admis_a_une_cle_calculable_quel_que_soit_son_caractere()
+    {
+        // Chaque point de code, entouré d'un nom ordinaire : un nom admis ne fait jamais échouer le calcul de sa clé
+        // (la normalisation Unicode refuse U+FFFE). Les points de code hors du plan de base, par leur paire.
+        var refusDuCalcul = new List<int>();
+        for (var pointDeCode = 0; pointDeCode <= 0x10FFFF; pointDeCode++)
+        {
+            if (pointDeCode is >= 0xD800 and <= 0xDFFF)
+            {
+                continue;
+            }
+
+            var nom = "Lune " + char.ConvertFromUtf32(pointDeCode) + " Rousse";
+            if (!TexteDUneLigne.EstAdmis(nom))
+            {
+                continue;
+            }
+
+            try
+            {
+                Entreprises.CleDEntreprise.De(nom);
+            }
+            catch (ArgumentException)
+            {
+                refusDuCalcul.Add(pointDeCode);
+            }
+        }
+
+        Assert.Empty(refusDuCalcul);
+    }
 
     [Theory]
     [MemberData(nameof(CaracteresRefuses))]

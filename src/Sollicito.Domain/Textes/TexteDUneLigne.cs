@@ -56,8 +56,10 @@ public static class TexteDUneLigne
 
     /// <summary>
     /// Vrai si le texte n'a aucun caractère de contrôle, aucun contrôle de la direction du texte (U+202A à U+202E,
-    /// U+2066 à U+2069, qui feraient s'afficher un nom à l'envers ou en désordre dans le tableau de bord), et aucune
-    /// moitié isolée d'une paire de substitution.
+    /// U+2066 à U+2069, qui feraient s'afficher un nom à l'envers ou en désordre dans le tableau de bord), aucune
+    /// moitié isolée d'une paire de substitution, et aucun non-caractère Unicode (U+FDD0 à U+FDEF, et les deux derniers
+    /// points de code de chaque plan, U+FFFE et U+FFFF à U+10FFFE et U+10FFFF). Un texte admis se normalise toujours :
+    /// la clé d'une entreprise se calcule (<see cref="Entreprises.CleDEntreprise"/>).
     /// </summary>
     public static bool EstAdmis(string texte)
     {
@@ -70,6 +72,7 @@ public static class TexteDUneLigne
                 return false;
             }
 
+            int pointDeCode = caractere;
             if (char.IsHighSurrogate(caractere))
             {
                 if (i + 1 >= texte.Length || !char.IsLowSurrogate(texte[i + 1]))
@@ -77,9 +80,15 @@ public static class TexteDUneLigne
                     return false;
                 }
 
+                pointDeCode = char.ConvertToUtf32(caractere, texte[i + 1]);
                 i++;
             }
             else if (char.IsLowSurrogate(caractere))
+            {
+                return false;
+            }
+
+            if (EstUnNonCaractere(pointDeCode))
             {
                 return false;
             }
@@ -87,6 +96,10 @@ public static class TexteDUneLigne
 
         return true;
     }
+
+    // Les 66 non-caractères d'Unicode : U+FDD0 à U+FDEF, et U+xFFFE et U+xFFFF de chacun des 17 plans.
+    private static bool EstUnNonCaractere(int pointDeCode) =>
+        pointDeCode is >= 0xFDD0 and <= 0xFDEF || (pointDeCode & 0xFFFE) == 0xFFFE;
 }
 
 /// <summary>Les mots qui désignent un champ dans les messages de refus.</summary>

@@ -45,8 +45,10 @@ public sealed class ApiDeLaFenetreTests
                 [page.StatusCode, sansJeton.StatusCode, avecJeton.StatusCode, refusee.StatusCode]);
             Assert.Equal(InterfaceDeTest.Page, await page.Content.ReadAsStringAsync(annulation));
             Assert.Equal(dossier, app.Environment.ContentRootPath.TrimEnd(Path.DirectorySeparatorChar));
-            // La base se crée au lancement, dans le dossier de données que donne la fenêtre.
-            Assert.Equal([DossierDeLaBase.NomDuFichier], Directory.GetFiles(dossier).Select(Path.GetFileName));
+            // La base se crée au lancement, dans le dossier de données que donne la fenêtre, à côté du verrou du dossier.
+            Assert.Equal(
+                [DossierDeLaBase.NomDuFichier, VerrouDeLInstance.NomDuFichier],
+                Directory.GetFiles(dossier).Select(Path.GetFileName).Order(StringComparer.Ordinal));
         }
         finally
         {
