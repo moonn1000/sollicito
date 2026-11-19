@@ -68,7 +68,8 @@ test("les refus de l'API s'affichent à côté du champ concerné, et le premier
   );
   // L'entreprise, admise, ne porte aucun refus.
   expect(screen.getByLabelText("Entreprise").getAttribute("aria-invalid")).toBeNull();
-  expect(document.activeElement).toBe(poste);
+  // Le focus se déplace dans un effet, après l'affichage des refus : on l'attend.
+  await waitFor(() => expect(document.activeElement).toBe(poste));
   expect(quandEnregistree).not.toHaveBeenCalled();
   // La saisie reste là, à corriger.
   expect(screen.getByLabelText<HTMLInputElement>("Entreprise").value).toBe("Lumière Verte SA");

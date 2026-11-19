@@ -141,7 +141,8 @@ button {
 
 .annonce {
   padding: 0.5rem 0.9rem;
-  border-left: 4px solid var(--accent);
+  border: 1px solid var(--bordure);
+  border-radius: 0.4rem;
   background: var(--surface);
 }
 
