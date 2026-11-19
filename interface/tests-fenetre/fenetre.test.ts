@@ -256,6 +256,28 @@ test("le profil du navigateur intégré vit dans le dossier de données", () => 
   expect(existsSync(join(fenetre.dossierDeDonnees, "WebView2", "EBWebView"))).toBe(true);
 });
 
+test("une candidature saisie dans la fenêtre s'enregistre dans la base du dossier de données et paraît au tableau de bord", async () => {
+  const { page, dossierDeDonnees } = fenetre;
+  // Au premier lancement, les migrations ont créé la base dans le dossier de données.
+  expect(existsSync(join(dossierDeDonnees, "sollicito.db"))).toBe(true);
+  const entreprise = '<img src="x" onerror="alert(1)"> Lumière Verte SA';
+  await rechargerLInterface();
+
+  await page.getByRole("button", { name: "Nouvelle candidature" }).click();
+  await page.getByLabel("Entreprise").fill(entreprise);
+  await page.getByLabel("Poste").fill("Comptable");
+  await page.getByLabel("Date et heure d'envoi").fill("2026-03-27T23:30");
+  await page.getByRole("button", { name: "Enregistrer la candidature" }).click();
+
+  // L'écriture est passée par le contrôle de l'origine : c'est le navigateur intégré qui a posé l'en-tête Origin.
+  await page.getByText(`Candidature enregistrée : Comptable, chez ${entreprise}.`).waitFor();
+  const cellules = await page.getByRole("row").nth(1).getByRole("cell").allTextContents();
+  // L'heure saisie revient telle quelle : l'API l'a lue dans le fuseau du poste, l'interface l'affiche dans le même.
+  expect(cellules).toEqual([entreprise, "Comptable", "27/03/2026 23:30", "Envoyée"]);
+  // Le nom s'affiche comme du texte : aucune image ne s'est créée.
+  expect(await page.locator("main img").count()).toBe(0);
+});
+
 test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fichier", async () => {
   const { origineDeLApi, dossierDeDonnees } = fenetre;
 
@@ -266,6 +288,8 @@ test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fich
   expect(jetonRemis).toMatch(FORME_DU_JETON);
   expect(await fichiersQuiContiennent(await profilRelache(dossierDeDonnees), jetonRemis)).toEqual([]);
   expect(await fichiersQuiContiennent(join(dossierDeDonnees, "telechargements"), jetonRemis)).toEqual([]);
+  // Ni la base, ni rien d'autre dans le dossier de données.
+  expect(await fichiersQuiContiennent(dossierDeDonnees, jetonRemis)).toEqual([]);
 });
 
 // Le navigateur intégré finit de s'arrêter après l'exe, et écrit encore dans le profil. Le dossier du profil ne se

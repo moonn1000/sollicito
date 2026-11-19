@@ -1,32 +1,42 @@
 import { useEffect, useState } from "react";
-import type { ClientDeLApi } from "./api/clientDeLApi.ts";
+import type { Candidature, ClientDeLApi } from "./api/clientDeLApi.ts";
+import { SaisieDUneCandidature } from "./candidatures/SaisieDUneCandidature.tsx";
+import { TableauDeBord } from "./candidatures/TableauDeBord.tsx";
 import { HorsDeLaFenetre } from "./connexion.ts";
+import { MiseEnPage, type Ecran } from "./miseEnPage/MiseEnPage.tsx";
 
-type EtatDeLaConnexion = "connexion" | "prete" | "hors-fenetre" | "injoignable";
+type Connexion =
+  | { etat: "connexion" }
+  | { etat: "prete"; client: ClientDeLApi }
+  | { etat: "hors-fenetre" }
+  | { etat: "injoignable" };
 
-const MESSAGES: Record<EtatDeLaConnexion, string> = {
+const MESSAGES: Record<Connexion["etat"], string> = {
   connexion: "Connexion à l'API locale…",
   prete: "Connectée à l'API locale.",
   "hors-fenetre": "Cette page ne fonctionne que dans la fenêtre de Sollicito.",
   injoignable: "L'API locale ne répond pas. Fermez Sollicito, puis relancez-le.",
 };
 
+/** L'interface : la connexion à l'API locale, puis le tableau de bord et l'écran de saisie, dans la mise en page commune. */
 export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
-  const [etat, setEtat] = useState<EtatDeLaConnexion>("connexion");
+  const [connexion, setConnexion] = useState<Connexion>({ etat: "connexion" });
+  const [ecran, setEcran] = useState<Ecran>("tableau");
+  const [annonce, setAnnonce] = useState<string>();
 
   useEffect(() => {
     let affichee = true;
     connecter()
-      .then((client) => client.lireEtat())
+      .then(async (client) => ({ client, etat: await client.lireEtat() }))
       .then(
-        (reponse) => {
+        ({ client, etat }) => {
           if (affichee) {
-            setEtat(reponse.statut === "pret" ? "prete" : "injoignable");
+            setConnexion(etat.statut === "pret" ? { etat: "prete", client } : { etat: "injoignable" });
           }
         },
         (erreur: unknown) => {
           if (affichee) {
-            setEtat(erreur instanceof HorsDeLaFenetre ? "hors-fenetre" : "injoignable");
+            setConnexion({ etat: erreur instanceof HorsDeLaFenetre ? "hors-fenetre" : "injoignable" });
           }
         },
       );
@@ -35,10 +45,28 @@ export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
     };
   }, [connecter]);
 
+  const naviguer = (vers: Ecran) => {
+    setAnnonce(undefined);
+    setEcran(vers);
+  };
+
+  const quandEnregistree = (candidature: Candidature) => {
+    setAnnonce(`Candidature enregistrée : ${candidature.poste}, chez ${candidature.entreprise.nom}.`);
+    setEcran("tableau");
+  };
+
   return (
-    <main>
-      <h1>Sollicito</h1>
-      <p role="status">{MESSAGES[etat]}</p>
-    </main>
+    <MiseEnPage
+      ecran={ecran}
+      naviguer={connexion.etat === "prete" ? naviguer : undefined}
+      etatDeLaConnexion={MESSAGES[connexion.etat]}
+    >
+      {connexion.etat === "prete" &&
+        (ecran === "tableau" ? (
+          <TableauDeBord client={connexion.client} annonce={annonce} nouvelleCandidature={() => naviguer("saisie")} />
+        ) : (
+          <SaisieDUneCandidature client={connexion.client} quandEnregistree={quandEnregistree} />
+        ))}
+    </MiseEnPage>
   );
 }
