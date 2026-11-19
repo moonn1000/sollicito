@@ -1,10 +1,10 @@
 # Modèle de domaine de la V1
 
-- **Mis à jour le** : 2026-11-18, avec #6
+- **Mis à jour le** : 2026-11-19, avec #11 (saisie et stockage d'une candidature)
 - **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D5 ; [ADR-0005](adr/0005-modele-de-domaine.md) (entreprises reconnues, offres dédoublonnées, dates et heures)
 - **Périmètre** : les huit entités de la D5. Six entrent en base en V1 : Entreprise, Contact, Offre, Candidature, Événement de candidature et Relance. Profil et Document sont modélisés ici et entrent en base en V2 ([spec de la V1](https://github.com/moonn1000/sollicito/issues/5), « Entités en base »).
 
-Ce modèle remplace l'esquisse de la D5 (ADR-0005). Le code du domaine le suit à partir de #11 : une pull request qui s'en écarte met ce document à jour.
+Ce modèle remplace l'esquisse de la D5 (ADR-0005). Le code du domaine le suit depuis #11 (`src/Sollicito.Domain`) : une pull request qui s'en écarte met ce document à jour. #11 y a ajouté les règles de la saisie (voir « Saisie d'une candidature »).
 
 ## Les entités
 
@@ -241,7 +241,7 @@ La clé se calcule dans cet ordre :
 5. retirer la forme juridique qui termine le nom, tant qu'il y en a une : `sa`, `nv`, `srl`, `bv`, `sprl`, `bvba`, `sc`, `cv`, `scrl`, `cvba`, `snc`, `vof`, `scomm`, `commv`, `scs`, `gcv`, `sca`, `cva`, `asbl`, `vzw`, `aisbl`, `ivzw`, `se`, `sas`, `sarl`, `gmbh`, `ag`, `ltd`, `inc`, `llc`, `plc` ;
 6. retirer ensuite la forme juridique qui ouvre le nom, tant qu'il y en a une, mais seulement parmi les formes belges qui ne commencent jamais une marque : `asbl`, `vzw`, `aisbl`, `ivzw`, `srl`, `sprl`, `bvba`, `scrl`, `cvba`.
 
-Les étapes 5 et 6 ne retirent jamais le dernier mot : « SA » seul garde la clé `sa`. Un nom sans lettre ni chiffre (« !!! ») est refusé à la saisie.
+Les étapes 5 et 6 ne retirent jamais le dernier mot : « SA » seul garde la clé `sa`. Un nom sans lettre ni chiffre (« !!! ») est refusé à la saisie. En base, la clé est unique : la base elle-même refuse une seconde entreprise de même clé, et deux enregistrements simultanés n'en créent qu'une.
 
 Exemples, sur des noms fictifs :
 
@@ -294,7 +294,7 @@ Deux sortes de valeurs, jamais mêlées :
 - **Heure qui existe deux fois** : au retour à l'heure d'hiver, l'horloge revient de 03:00 à 02:00, le 25/10/2026 puis le 31/10/2027. Une heure de cette plage se lit à l'heure d'hiver (UTC+1), comme le fait `TimeZoneInfo.ConvertTimeToUtc` : 02:30 le 25/10/2026 donne `2026-10-25T01:30:00Z`[^dotnet-ambigu].
 - **Calculs en jours**, dont l'échéance d'une relance : sur la date, jamais en heures. On prend la date locale de l'instant, puis on ajoute des jours.
 - **Aujourd'hui** : la date locale de l'horloge.
-- **Stockage** (#11) : EF Core écrit ces valeurs en texte dans SQLite. Avec `DateTimeOffset`, que SQLite ne connaît pas, ni les comparaisons ni les tris ne se traduiraient en SQL : il faudrait les faire dans l'application. La documentation d'EF Core recommande donc un `DateTime` converti en UTC[^ef-sqlite]. Les fonctions de date de `DateTime` et de `DateOnly`, elles, se traduisent en SQL[^ef-fonctions]. À la lecture, un convertisseur rend au `DateTime` son genre `Utc`[^ef-genre].
+- **Stockage** (en place depuis #11) : EF Core écrit ces valeurs en texte dans SQLite. Avec `DateTimeOffset`, que SQLite ne connaît pas, ni les comparaisons ni les tris ne se traduiraient en SQL : il faudrait les faire dans l'application. La documentation d'EF Core recommande donc un `DateTime` converti en UTC[^ef-sqlite]. Les fonctions de date de `DateTime` et de `DateOnly`, elles, se traduisent en SQL[^ef-fonctions]. À la lecture, un convertisseur rend au `DateTime` son genre `Utc`[^ef-genre].
 
 ### Exemple
 
@@ -313,6 +313,20 @@ Le passage à l'heure d'été tombe entre les deux, le 29 mars. Un calcul en heu
 Deux conversions de plus, pour les tests : le 18/11/2026 à 14:30 donne `2026-11-18T13:30:00Z`, et le 01/07/2026 à 14:30 donne `2026-07-01T12:30:00Z`.
 
 Ces valeurs ont été relevées le 2026-11-18 par une sonde en .NET 10 (`TimeZoneInfo`, fuseau « Romance Standard Time » de Windows 11), et la lecture du navigateur dans Chromium.
+
+## Saisie d'une candidature
+
+L'écran de saisie envoie chaque champ tel que l'utilisateur l'a tapé ; l'API le lit et le valide, et renvoie pour chaque champ refusé un message lisible, que l'écran affiche à côté du champ. Le statut n'est pas un champ de la saisie : une candidature part toujours d'Envoyée, et l'API refuse un corps qui en porte un.
+
+| Champ | Règle |
+| --- | --- |
+| `entreprise` | texte d'une ligne (voir ci-dessous), avec au moins une lettre ou un chiffre ; l'entreprise de même clé, si elle est enregistrée, est reprise |
+| `poste` | texte d'une ligne |
+| `envoyeeLe` | requis, de la forme `AAAA-MM-JJTHH:MM`, les secondes en option, sans décalage ni `Z` ; une heure qui existe, convertie en UTC dans le fuseau du poste (voir « Dates et heures ») ; pas avant le 1er janvier 2000 à 00:00, heure locale ; jamais après l'instant présent |
+
+Un **texte d'une ligne** perd ses blancs du début et de la fin. Ce qui reste est requis, de 200 caractères au plus (unités UTF-16, comme les compte le navigateur), sans caractère de contrôle (saut de ligne, tabulation…) ni moitié isolée d'une paire de substitution, qu'aucun texte valide ne contient. Le message de refus ne reprend jamais le texte refusé.
+
+Le plancher de l'an 2000 écarte une date manifestement fausse, comme une année tapée sur deux chiffres, et garde la conversion de l'heure loin des bornes du calendrier.
 
 ## Ce que les stories en reprennent
 

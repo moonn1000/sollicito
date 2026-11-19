@@ -1,8 +1,8 @@
 # Modèle de menaces
 
-- **Mis à jour le** : 2026-11-19, avec la fenêtre hôte (#13)
+- **Mis à jour le** : 2026-11-19, avec l'enregistrement des candidatures (#11)
 - **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D9 et D10 ; [ADR-0003](adr/0003-hote-interface-webview2.md), « Règles d'accès » et « Durcissement de la fenêtre » ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md)
-- **Périmètre** : l'API locale, ses journaux et la fenêtre hôte. Le contenu non fiable, les clés d'IA, les sauvegardes et l'exe ajouteront leur section avec les stories qui les construisent.
+- **Périmètre** : l'API locale, ses journaux et sa base, la fenêtre hôte, et les textes saisis. Les offres et la sortie de l'IA, les clés d'IA, les sauvegardes et l'exe ajouteront leur section avec les stories qui les construisent.
 
 ## Ce qui est protégé
 
@@ -23,7 +23,7 @@
 
 ## Protections de l'API locale
 
-Chaque requête passe ces contrôles dans cet ordre (`src/Sollicito.Api/ApiLocale.cs`). Le premier qui échoue répond, sans corps, et la requête ne va pas plus loin. Toute réponse, refus compris, porte d'abord les en-têtes de sécurité (voir « Politique de sécurité du contenu et autres en-têtes »).
+Chaque requête passe ces contrôles dans cet ordre (`src/Sollicito.Api/ApiLocale.cs`). Le premier qui échoue répond, sans corps, et la requête ne va pas plus loin. Toute réponse, refus compris, porte d'abord les en-têtes de sécurité (voir « Politique de sécurité du contenu et autres en-têtes »). En tête de tout, l'API répond elle-même à une exception (voir « Erreurs inattendues »).
 
 1. **En-tête `Host`** (400), sur toute requête.
 2. **Fichiers de l'interface** (`index.html`, scripts, styles) : servis sans jeton ni contrôle d'`Origin`, puisque la page les charge avant de recevoir le jeton. Ils sont publics et ne portent aucune donnée (ADR-0003). Seule une lecture (`GET`, `HEAD`) d'un fichier qui existe est servie, à un chemin fait de segments simples, et rien sous `/api` : toute autre adresse passe aux deux contrôles suivants. La fenêtre fournit ces fichiers, embarqués dans l'exe ; lancée seule, l'API n'en sert aucun.
@@ -71,7 +71,7 @@ Le navigateur ajoute `Origin` aux requêtes d'une autre origine, et aux requête
 
 Une lecture intersite simple (image, script) peut partir sans `Origin`[^origin] : contre elle, c'est le jeton qui protège. `Origin` double le jeton : il arrête une écriture ou une lecture intersite même si le jeton avait fui vers une autre origine.
 
-*Tests* : `tests/Sollicito.Api.Tests/ControleDeLOrigineTests.cs`. Avec le bon jeton, une écriture (`POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`) sans origine ou d'origine `null` est refusée ; un `POST` ou une lecture d'une autre origine aussi, sur neuf origines essayées. Une écriture venue de l'interface passe les contrôles : aucune route n'accepte encore d'écriture, d'où la réponse 405 de la route de l'état.
+*Tests* : `tests/Sollicito.Api.Tests/ControleDeLOrigineTests.cs`. Avec le bon jeton, une écriture (`POST`, `PUT`, `PATCH`, `DELETE`, `OPTIONS`) sans origine ou d'origine `null` est refusée ; un `POST` ou une lecture d'une autre origine aussi, sur neuf origines essayées. Une écriture venue de l'interface passe les contrôles : la route de l'état n'accepte aucune écriture, d'où sa réponse 405.
 
 ### Aucune politique CORS
 
@@ -84,6 +84,26 @@ CORS assouplit la règle de même origine du navigateur ; il ne protège pas le 
 Un chemin n'est servi comme fichier que s'il est fait de segments simples : lettres, chiffres, `-`, `_`, et des points entre eux. Les fournisseurs de fichiers lisent les autres formes chacun à sa façon : un antislash y sépare deux dossiers, un point final disparaît sous Windows. Sans cette règle, `/api%5Cfichier.json` faisait servir sans jeton un fichier rangé sous `api/` (revue de #13). Antislash, segment vide (`//`), `.` et `..`, point final, deux-points, tilde et caractère encodé ne désignent donc aucun fichier.
 
 *Tests* : `tests/Sollicito.Api.Tests/FichiersDeLInterfaceTests.cs`, sur une interface fictive servie par les deux fournisseurs : embarquée dans l'assembly, comme dans l'exe, et lue sur le disque. La page, la racine et un script sont servis sans jeton, chacun sous son type. Sous un autre en-tête `Host`, ils sont refusés (400). Une adresse sans fichier, un dossier et une adresse de l'interface encore inconnue restent soumis au jeton (401). Un fichier rangé sous `api/` n'est jamais servi : 401 sans jeton, 404 avec ; quatorze autres écritures du chemin, envoyées telles quelles (antislash brut ou encodé, `//`, point final, `..`, flux de données `::$DATA`, nom court `~1`…), n'en font servir aucun. Une écriture vers un fichier reste soumise au jeton et à l'origine. `ControleDuJetonTests.cs` : lancée seule, l'API refuse `/` et `/index.html` sans jeton.
+
+### Routes des candidatures
+
+`GET /api/candidatures`, `POST /api/candidatures` et `GET /api/entreprises` (#11) passent par les mêmes contrôles que toute route, et figurent dans la documentation OpenAPI.
+
+- Aucune ne porte de donnée dans son adresse : les textes saisis voyagent dans le corps de l'enregistrement. Les entreprises que l'écran de saisie propose se lisent en une fois, et l'écran les filtre lui-même : une recherche par l'adresse écrirait le texte tapé dans une chaîne de requête.
+- Le corps se lit strictement : un champ inconnu, comme un statut, rend la requête illisible (400) au lieu d'être ignoré ; un corps qui n'est pas du JSON reçoit un 415. Chaque champ est validé par l'API, qui rend ses refus champ par champ, sans reprendre le texte refusé (modèle de domaine, « Saisie d'une candidature »).
+
+*Tests* : `tests/Sollicito.Api.Tests/ProtectionsDesCandidaturesTests.cs`. Sur chacune des trois routes, une requête sans jeton (401), sous un autre `Host` (400) ou d'une autre origine (403) est refusée et n'enregistre rien ; un enregistrement sans origine ou d'origine `null` aussi (403). Les trois routes figurent dans la documentation OpenAPI. `tests/Sollicito.Api.Tests/CandidaturesTests.cs` : les refus de chaque champ, et sept corps illisibles ou étrangers, n'enregistrent rien.
+
+### Erreurs inattendues
+
+En développement, ASP.NET Core place sa page d'exception avant tout le reste du chemin des requêtes. Elle afficherait les en-têtes de la requête, jeton compris, et le message de l'exception, en HTML, en texte ou en JSON selon ce que la requête accepte. Aucune exception ne l'atteint : la première étape du chemin, `ErreursInattendues` (`src/Sollicito.Api/Erreurs/ErreursInattendues.cs`), répond elle-même, quel que soit l'environnement.
+
+- Un corps illisible reçoit son statut, 400 le plus souvent, et toute autre exception un 500. La réponse est un problème sans détail (`application/problem+json`) : ni en-tête, ni message, ni pile. Les en-têtes de sécurité lui sont remis.
+- En développement, un corps illisible lève une exception au lieu d'un simple 400 (`RouteHandlerOptions.ThrowOnBadRequest`) : l'API le règle à vrai partout, pour que tous les environnements passent par ce même chemin.
+- Le journal ne note que le type de l'exception : son message peut reprendre ce que la requête contenait.
+- La fenêtre impose de plus l'environnement de production (voir « L'API de la fenêtre »).
+
+*Tests* : `tests/Sollicito.Api.Tests/PageDExceptionTests.cs`, en développement puis en production, en acceptant `text/html`, `application/json`, `text/plain` ou rien. Une route dont le dépôt échoue, avec un message qui cite une donnée fictive, répond 500 ; un corps mal formé, 400. Les deux rendent un problème sans détail, qui ne contient ni le jeton, ni le nom de son en-tête, ni la donnée, ni le mot « Exception », ni de HTML, et gardent les en-têtes de sécurité. Sans `ErreursInattendues`, les seize cas échouent (essai du 19/11).
 
 ## Protections de la fenêtre
 
@@ -154,7 +174,9 @@ Chaque réponse, refus compris, porte (`src/Sollicito.Api/Securite/EnTetesDeSecu
 
 Le profil du navigateur intégré vit dans `%LOCALAPPDATA%\Sollicito\WebView2`, fixé à la création de l'environnement ; par défaut, WebView2 l'écrirait à côté de l'exe. Si le dossier `%LOCALAPPDATA%` de l'utilisateur est introuvable, le lancement s'arrête plutôt que d'écrire dans le dossier courant.
 
-*Tests* : `tests/Sollicito.Fenetre.Tests/DossierDeDonneesTests.cs` ; `fenetre.test.ts` : le profil se crée dans le dossier de données donné à la version de test.
+La base SQLite vit dans le même dossier (`sollicito.db`), que la fenêtre donne à l'API qu'elle construit ; l'API lancée seule y range aussi la sienne, développement compris. Au lancement, avant que Kestrel n'écoute, les migrations versionnées la créent ou la mettent à jour. Les connexions ne sont pas regroupées : une fois la base refermée, plus rien ne tient son fichier ouvert. Les tests créent chacun leur base dans un dossier temporaire, jamais dans le dossier de données de l'utilisateur.
+
+*Tests* : `tests/Sollicito.Fenetre.Tests/DossierDeDonneesTests.cs` ; `fenetre.test.ts` : le profil se crée dans le dossier de données donné à la version de test, la base aussi, et une candidature saisie dans la fenêtre s'y enregistre ; après la fermeture, aucun fichier du dossier ne contient le jeton. `tests/Sollicito.Api.Tests/ApiDeLaFenetreTests.cs` : l'API de la fenêtre crée sa base dans le dossier donné ; l'API seule range la sienne sous `%LOCALAPPDATA%\Sollicito`. `CandidaturesTests.cs` : la base des tests vit dans le dossier temporaire, et les migrations appliquées sont toutes celles du code.
 
 ### L'API de la fenêtre
 
@@ -168,6 +190,12 @@ Le profil du navigateur intégré vit dans `%LOCALAPPDATA%\Sollicito\WebView2`, 
 
 Le test Playwright pilote la vraie fenêtre par le protocole CDP, ouvert dans la seule version de test (configuration `Test`, `src/Sollicito.Fenetre/VersionDeTest.cs`), sur un port de `127.0.0.1` choisi par le test. Elle reprend les réglages de la version publiée, et ne s'en écarte que sur ces points : le port CDP ; un dossier de données donné par le test, sans lequel elle refuse de se lancer ; les liens externes notés dans un fichier au lieu d'être ouverts, et les navigations annulées notées dans un autre ; le dossier de téléchargement placé dans ce dossier, quand la version publiée garde le dossier Téléchargements de l'utilisateur ; une caméra et un micro simulés ; ses messages d'erreur écrits sur la sortie d'erreur, sans boîte de dialogue. Le code de ces écarts n'est pas compilé dans la version publiée, et `dotnet publish -c Test` échoue.
 
+## Textes saisis
+
+Les textes que l'utilisateur saisit (une entreprise, un poste) s'affichent comme du texte, jamais comme du HTML : l'interface les écrit par React, qui les échappe, et n'emploie nulle part `dangerouslySetInnerHTML` (ADR-0001, D9, « Contenu non fiable »). Ils ne paraissent dans aucun journal (voir « Règle des journaux »). Un script qui passerait par eux lirait le jeton dans la page (voir « Limites ») : la politique de sécurité du contenu double l'échappement.
+
+*Tests* : `interface/src/candidatures/TableauDeBord.test.tsx` et `SaisieDUneCandidature.test.tsx` : un nom d'entreprise et un poste porteurs de balises (`<img onerror>`, `<b>`, `<script>`) s'affichent tels quels, et aucune de ces balises ne se crée, ni dans la liste ni parmi les entreprises proposées. `fenetre.test.ts` : de même dans la vraie fenêtre, après un enregistrement.
+
 ## Règle des journaux
 
 Un journal dit ce qui s'est passé, jamais ce qu'une requête contenait. Il n'écrit ni le jeton, ni une clé, ni le contenu des offres, des candidatures ou du profil, ni aucune autre donnée personnelle : ni chaîne de requête, ni en-tête, ni cookie, ni corps. Il peut écrire une étape, un refus, une erreur, un identifiant, un nombre, une durée.
@@ -175,17 +203,18 @@ Un journal dit ce qui s'est passé, jamais ce qu'une requête contenait. Il n'é
 Ce que l'API en applique dès maintenant (`src/Sollicito.Api/Journaux/ReglesDesJournaux.cs`) :
 
 - **La console seule.** Par défaut, ASP.NET Core écrit aussi vers Debug, EventSource et le journal d'événements de Windows[^fournisseurs]. Ce dernier garde ses entrées sur le disque, dans le journal Application, que tout compte connecté au poste peut lire : sa liste d'accès donne la lecture et l'écriture aux utilisateurs interactifs[^journal-application]. Les trois sont retirés.
-- **Quatre catégories muettes**, quels que soient les réglages, joker ou réglage propre à un fournisseur compris : la fabrique des journaux leur donne un journal qui n'écrit rien.
+- **Sept catégories muettes**, quels que soient les réglages, joker ou réglage propre à un fournisseur compris : la fabrique des journaux leur donne un journal qui n'écrit rien.
   - `Microsoft.AspNetCore.Hosting.Diagnostics` écrit l'adresse complète de chaque requête, chaîne de requête comprise (« Request starting », « Request finished »), et attache le chemin de la requête à chaque entrée écrite pendant celle-ci.
   - `Microsoft.AspNetCore.Server.Kestrel.BadRequests` recopie la ligne brute d'une requête mal formée, en-têtes compris.
   - `Microsoft.AspNetCore.Routing.Matching.DfaMatcher` écrit le chemin de chaque requête routée, dans ses journaux de mise au point.
   - `Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware` écrit le chemin de chaque fichier de l'interface servi ou cherché, dès le niveau Information.
+  - `Microsoft.EntityFrameworkCore.Database.Connection`, `Microsoft.EntityFrameworkCore.Database.Command` et `Microsoft.EntityFrameworkCore.Migrations` écrivent le chemin du fichier de la base, sous le profil Windows, donc le nom du compte : à l'ouverture et à la fermeture de chaque connexion, à la fermeture de chaque lecture, au début des migrations (niveau Debug). Les requêtes SQL qu'écrirait la deuxième ne portent pas les valeurs : la journalisation des données sensibles reste coupée.
 - **Des refus sans valeurs.** L'API note chaque refus par son motif seul, sans la valeur reçue ni l'adresse de la requête.
-- **Aucun chemin du poste.** Les messages d'état de l'hôte sont coupés (`SuppressStatusMessages`) : « Content root path » écrirait un chemin du profil Windows, donc le nom du compte. « Now listening on », qui vient du serveur web, reste écrit.
+- **Aucun chemin du poste.** Les messages d'état de l'hôte sont coupés (`SuppressStatusMessages`) : « Content root path » écrirait un chemin du profil Windows, donc le nom du compte. « Now listening on », qui vient du serveur web, reste écrit. Un échec de la préparation de la base ne note que le type de l'erreur, dont le message citerait le chemin du fichier.
 
 Pour les stories suivantes : une route ne porte qu'un identifiant, jamais une donnée. Une nouvelle route, ou un nouveau composant d'ASP.NET Core, peut amener une catégorie qui recopie la requête : elle rejoint alors les catégories muettes, et le test des journaux essaie la nouvelle route. Un message d'exception ne reprend pas le contenu qui l'a provoquée. La journalisation des données sensibles d'Entity Framework Core reste coupée.
 
-*Tests* : `tests/Sollicito.Api.Tests/ReglesDesJournauxTests.cs`. Les journaux ne vont qu'à la console. L'API est lancée avec chaque catégorie au niveau Trace, y compris par un joker qui vise les catégories muettes et par un réglage propre au fournisseur de test, qui garde tout ce qu'un journal pourrait écrire : message, valeurs, exception, portées. Elle reçoit le jeton dans son en-tête, dans la chaîne de requête, dans le chemin, dans un cookie et dans `Authorization`, et une donnée fictive dans la chaîne de requête, le chemin, un en-tête, un cookie, le corps, `Host` et `Origin`, sur des requêtes acceptées comme refusées, fichiers de l'interface compris. Elle reçoit aussi trois requêtes mal formées qui portent l'un et l'autre : ligne de requête, ligne d'en-tête, `Host`. Aucune entrée ne contient ni le jeton ni la donnée. Le test échoue dès qu'on rend la parole à l'une des quatre catégories muettes. Aucune entrée ne contient non plus la racine du contenu, qu'écrirait « Content root path ».
+*Tests* : `tests/Sollicito.Api.Tests/ReglesDesJournauxTests.cs`. Les journaux ne vont qu'à la console. L'API est lancée avec chaque catégorie au niveau Trace, y compris par un joker qui vise les catégories muettes et par un réglage propre au fournisseur de test, qui garde tout ce qu'un journal pourrait écrire : message, valeurs, exception, portées. Elle reçoit le jeton dans son en-tête, dans la chaîne de requête, dans le chemin, dans un cookie et dans `Authorization`, et une donnée fictive dans la chaîne de requête, le chemin, un en-tête, un cookie, le corps, `Host` et `Origin`, sur des requêtes acceptées comme refusées, fichiers de l'interface compris. Elle reçoit aussi trois requêtes mal formées qui portent l'un et l'autre : ligne de requête, ligne d'en-tête, `Host`. Les routes des candidatures reçoivent la donnée dans l'entreprise et le poste d'une candidature enregistrée, puis relue par les deux listes, et dans des enregistrements refusés : par la validation, par la lecture du corps (JSON mal formé, champ inconnu, type inattendu), par le type du corps et par le contrôle de l'origine. Aucune entrée ne contient ni le jeton ni la donnée. Le test échoue dès qu'on rend la parole à l'une des sept catégories muettes. Aucune entrée ne contient non plus la racine du contenu, qu'écrirait « Content root path », ni le dossier de la base. Un second test fait échouer une route par une exception dont le message cite la donnée : seul son type paraît dans les journaux.
 
 ## Limites
 
@@ -202,7 +231,6 @@ Pour les stories suivantes : une route ne porte qu'un identifiant, jamais une do
 
 ## À reprendre
 
-- **Premières routes qui lisent un corps (#11)** : la fenêtre impose l'environnement de production, où ASP.NET Core n'a pas de page d'exception. L'API lancée seule, en développement, la garde en tête du chemin des requêtes : si une route lève une exception, cette page affiche les en-têtes de la requête, jeton compris, à qui l'a envoyée. Aucune route n'en lève aujourd'hui.
 - **Brouillon de relance (#14)** : la page demande l'ouverture du lien `mailto` à l'hôte par un message, soumis au même contrôle de la source que le canal du jeton (ADR-0003) ; tout autre schéma externe reste annulé.
 - **Interface en développement** : le serveur de développement de Vite sert une autre origine. L'API refuse ses écritures, et l'interface ne reçoit le jeton que dans la fenêtre.
 - **Exe** : le dossier d'extraction `%TEMP%\.net` (voir « Limites »), et un exe construit par la CI, dont les symboles ne portent pas le chemin d'un poste de développement (prototype de #9).
