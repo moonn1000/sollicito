@@ -72,16 +72,19 @@ test("le jeton parvient à l'interface par le canal interne, part dans son en-t�
 });
 
 test("aucune navigation ni requête ne sort vers une autre origine", async () => {
-  const { page } = fenetre;
+  const { page, dossierDeDonnees } = fenetre;
   const avant = page.url();
-
-  for (const cible of [
-    `${temoin.origine}/navigation?donnee=fictive`,
-    "https://exemple.invalid/navigation",
+  // Trente navigations vers le témoin : sans le filtre des requêtes, les trente lui arrivent malgré leur annulation
+  // (ADR-0006). Puis le même serveur sous un autre nom, un site, et deux schémas externes.
+  const cibles = [
+    ...Array.from({ length: 30 }, (_, numero) => `${temoin.origine}/navigation/${numero}?donnee=fictive`),
     `http://localhost:${new URL(avant).port}/`,
+    "https://exemple.invalid/navigation",
     "mailto:contact@exemple.invalid",
     "ms-settings:privacy",
-  ]) {
+  ];
+
+  for (const cible of cibles) {
     await page.evaluate((adresse) => {
       location.href = adresse;
     }, cible);
@@ -124,9 +127,14 @@ test("aucune navigation ni requête ne sort vers une autre origine", async () =>
   expect(page.url()).toBe(avant);
   expect(sousRessources).toEqual({ fetch: "refusée", image: "refusée", script: "refusée" });
   expect(temoin.requetes).toEqual([]);
+  // La fenêtre a annulé chaque navigation, schémas externes compris (la version de test les note).
+  expect(await lignes(join(dossierDeDonnees, "navigations-annulees.txt"))).toEqual(expect.arrayContaining(cibles));
+  // Celle vers localhost n'a pas atteint l'API, qui l'aurait refusée en le notant (texte sans accent : la sortie de
+  // l'exe n'est pas en UTF-8).
+  expect(fenetre.sortie()).not.toContain("Host inattendu");
 });
 
-test("un lien http ou https cliqué s'ouvre dans le navigateur par défaut, sans nouvelle fenêtre ; tout autre lien est refusé", async () => {
+test("un lien http ou https cliqué en nouvelle fenêtre s'ouvre dans le navigateur par défaut ; aucun autre", async () => {
   const { page, navigateur, dossierDeDonnees } = fenetre;
   await rechargerLInterface();
   const avant = page.url();
@@ -136,6 +144,8 @@ test("un lien http ou https cliqué s'ouvre dans le navigateur par défaut, sans
     ["lien-mailto", "mailto:contact@exemple.invalid", "_blank"],
     ["lien-ftp", "ftp://exemple.invalid/fichier", "_blank"],
     ["lien-reglages", "ms-settings:privacy", "_blank"],
+    // Sur place, sans nouvelle fenêtre : annulé comme toute navigation, il ne s'ouvre nulle part (ADR-0006).
+    ["lien-sur-place", "https://exemple.invalid/sur-place", ""],
   ];
   await page.evaluate((aCreer) => {
     for (const [id, adresse, cible] of aCreer) {
@@ -148,16 +158,25 @@ test("un lien http ou https cliqué s'ouvre dans le navigateur par défaut, sans
     }
   }, liens);
 
+  // Un script qui ouvre une fenêtre sans geste de l'utilisateur. Playwright en donne un à chaque évaluation ; il
+  // expire au bout de cinq secondes.
+  const activationAuMomentDeLOuverture = await page.evaluate(async () => {
+    await new Promise((resoudre) => setTimeout(resoudre, 6_000));
+    const active = navigator.userActivation.isActive;
+    window.open("https://exemple.invalid/sans-geste");
+    return active;
+  });
+  // Puis les clics de l'utilisateur ; celui sur place en dernier, car sa navigation annulée reste en suspens pour Playwright.
   for (const [id] of liens) {
     await page.click(`#${id}`, { noWaitAfter: true });
   }
   await attendre(1_500);
 
+  expect(activationAuMomentDeLOuverture).toBe(false);
   expect(navigateur.contexts().flatMap((contexte) => contexte.pages())).toHaveLength(1);
   expect(page.url()).toBe(avant);
-  const journal = join(dossierDeDonnees, "liens-ouverts.txt");
-  const ouverts = existsSync(journal) ? (await readFile(journal, "utf8")).split(/\r?\n/).filter(Boolean) : [];
-  expect(ouverts).toEqual(["https://exemple.invalid/offre?id=1", "http://exemple.invalid/"]);
+  expect(await lignes(join(dossierDeDonnees, "liens-ouverts.txt"))).toEqual(["https://exemple.invalid/offre?id=1", "http://exemple.invalid/"]);
+  expect(await lignes(join(dossierDeDonnees, "navigations-annulees.txt"))).toContain("https://exemple.invalid/sur-place");
 });
 
 test("tout téléchargement est refusé", async () => {
@@ -265,6 +284,11 @@ async function profilRelache(dossierDeDonnees: string): Promise<string> {
       await attendre(250);
     }
   }
+}
+
+// Les lignes d'un fichier que note la version de test ; aucune si elle n'a rien noté.
+async function lignes(fichier: string): Promise<string[]> {
+  return existsSync(fichier) ? (await readFile(fichier, "utf8")).split(/\r?\n/).filter(Boolean) : [];
 }
 
 // Une navigation annulée par la fenêtre reste en suspens pour Playwright, qui attendrait sa fin avant un clic : la

@@ -45,6 +45,7 @@ public sealed class ReglesDesJournauxTests
             new($"Logging:{typeof(CaptureDesJournaux).FullName}:LogLevel:Default", "Trace"),
         ];
         string jeton;
+        string racineDuContenu;
         using var interfaceDeTest = new InterfaceDeTest();
         await using (var api = await ApiLancee.LancerAsync(builder =>
         {
@@ -55,6 +56,7 @@ public sealed class ReglesDesJournauxTests
         }))
         {
             jeton = api.Jeton;
+            racineDuContenu = api.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath.TrimEnd(Path.DirectorySeparatorChar);
             HttpStatusCode[] statuts =
             [
                 // L'interface : le jeton dans son en-tête, la donnée dans la chaîne de requête, un en-tête, un cookie, un corps.
@@ -125,6 +127,8 @@ public sealed class ReglesDesJournauxTests
 
         Assert.DoesNotContain(entrees, entree => entree.Contains(jeton, StringComparison.Ordinal));
         Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
+        // Aucun chemin du poste : « Content root path » écrirait celui du projet, donc le nom du compte Windows.
+        Assert.DoesNotContain(entrees, entree => entree.Contains(racineDuContenu, StringComparison.OrdinalIgnoreCase));
     }
 
     private static async Task<HttpStatusCode> StatutAsync(

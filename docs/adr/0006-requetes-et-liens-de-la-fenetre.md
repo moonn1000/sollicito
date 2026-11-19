@@ -29,23 +29,26 @@ Le point « Navigation » de l'ADR-0003 se lit désormais ainsi : `NavigationSta
 
 `NewWindowRequested` reste toujours traité, et le lien ne s'ouvre dans le navigateur par défaut qu'à trois conditions :
 
-- la demande vient de l'utilisateur (`IsUserInitiated`), un clic et non un script ;
+- la demande vient d'un geste de l'utilisateur (`IsUserInitiated`) : un clic, ou un script qui tourne pendant ce clic. Un `window.open` lancé hors d'un geste, par une minuterie ou au chargement de la page, est ignoré ;
 - l'adresse est absolue, en `http` ou `https` ;
 - elle ne porte pas d'identifiants (`https://banque.exemple@autre.exemple/`), forme qui sert à tromper sur la destination.
 
 Le shell de Windows reçoit l'adresse réécrite par .NET (`Uri.AbsoluteUri`). Tout autre lien est ignoré, comme le prévoit déjà l'ADR-0003.
+
+Seul un lien qui ouvre une nouvelle fenêtre s'ouvre ainsi au-dehors. Un lien cliqué sur place, sans `target="_blank"`, est une navigation : elle est annulée, et le lien ne s'ouvre nulle part. L'interface écrit donc ses liens externes en nouvelle fenêtre.
 
 ## Alternatives écartées
 
 - **L'annulation et la CSP seules** : la requête d'une navigation de premier niveau part, avec son adresse.
 - **Ne filtrer que les documents** (contexte `Document`) : la CSP couvre déjà les autres ressources, mais un filtre sur tout ne coûte qu'un événement par requête et double aussi la CSP.
 - **Ouvrir tout lien `http` ou `https` d'une nouvelle fenêtre**, comme l'écrivait l'ADR-0003 : un script pourrait ouvrir le navigateur par défaut sur une adresse de son choix, sans clic.
+- **Ouvrir aussi au-dehors un lien cliqué sur place**, depuis `NavigationStarting` : la navigation deviendrait une sortie de plus, à garder par les mêmes conditions. L'annulation simple de l'ADR-0003 suffit, puisque l'interface écrit ses liens externes en nouvelle fenêtre.
 
 ## Conséquences
 
 - Chaque requête de la page lève un événement sur le fil de la fenêtre. L'interface, servie en local, n'en fait que quelques-unes à son chargement.
-- Le test Playwright de la vraie fenêtre (`interface/tests-fenetre`) vérifie, à chaque pull request, qu'aucune requête n'atteint le serveur témoin : navigations, `fetch`, image, script, cadre, balise (`sendBeacon`) et formulaire. Il suit donc le comportement du runtime, qui se met à jour seul (ADR-0003, « Conséquences »).
-- Un lien ouvert par un script, même légitime, ne s'ouvre plus : l'interface ouvre ses liens externes par un vrai lien, cliqué par l'utilisateur.
+- Le test Playwright de la vraie fenêtre (`interface/tests-fenetre`) refait l'essai à chaque pull request : trente navigations vers le serveur témoin, puis un `fetch`, une image, un script, un cadre, une balise (`sendBeacon`) et un formulaire ; aucune requête ne doit lui parvenir. Il suit donc le comportement du runtime, qui se met à jour seul (ADR-0003, « Conséquences »).
+- Un `window.open` lancé hors d'un geste de l'utilisateur ne s'ouvre pas, et un lien externe cliqué sur place non plus : l'interface ouvre ses liens externes par un vrai lien, en nouvelle fenêtre, cliqué par l'utilisateur.
 - Le [modèle de menaces](../modele-de-menaces.md) décrit ces protections et leurs limites.
 
 ## Sources

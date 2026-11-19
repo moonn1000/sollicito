@@ -74,7 +74,16 @@ internal sealed class FenetreHote : Form
             navigateur.Profile.DefaultDownloadFolderPath = telechargements;
         }
 
-        navigateur.NavigationStarting += (_, args) => args.Cancel = !ReglesDeLaFenetre.EstDeLOrigine(args.Uri, _origine);
+        // Une navigation hors de l'origine est annulée, lien cliqué sur place compris : seul un lien qui ouvre une
+        // nouvelle fenêtre s'ouvre dans le navigateur par défaut (ADR-0006).
+        navigateur.NavigationStarting += (_, args) =>
+        {
+            if (!ReglesDeLaFenetre.EstDeLOrigine(args.Uri, _origine))
+            {
+                args.Cancel = true;
+                _lancement.NoterUneNavigationAnnulee?.Invoke(args.Uri);
+            }
+        };
         navigateur.FrameNavigationStarting += (_, args) => args.Cancel = !ReglesDeLaFenetre.EstDeLOrigine(args.Uri, _origine);
         navigateur.NewWindowRequested += SurNouvelleFenetre;
         navigateur.LaunchingExternalUriScheme += (_, args) => args.Cancel = true;

@@ -60,6 +60,7 @@ public sealed class EnTetesDeSecuriteTests(ApiAvecInterface lancement) : IClassF
                 ["font-src"] = "'self'",
                 ["connect-src"] = "'self'",
                 ["frame-src"] = "'none'",
+                ["worker-src"] = "'none'",
                 ["base-uri"] = "'none'",
                 ["form-action"] = "'none'",
                 ["frame-ancestors"] = "'none'",

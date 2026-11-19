@@ -19,10 +19,12 @@ public static class ApiLocale
     public static WebApplication Construire(string[] args) => Construire(new WebApplicationOptions { Args = args }, ajuster: null);
 
     /// <summary>
-    /// Construit l'API de la fenêtre hôte, qui sert aussi les fichiers de l'interface. Rien de ce qui entoure le
-    /// lancement ne la règle : l'environnement de production est imposé, car la page d'exception du développement
-    /// afficherait les en-têtes d'une requête, jeton compris ; la ligne de commande ne lui est pas transmise ; aucun
-    /// fichier de configuration n'est lu, ni à côté de l'exe ni dans le dossier courant.
+    /// Construit l'API de la fenêtre hôte, qui sert aussi les fichiers de l'interface. L'environnement de production
+    /// est imposé, quelles que soient les variables d'environnement, car la page d'exception du développement
+    /// afficherait les en-têtes d'une requête, jeton compris. La ligne de commande de l'exe ne lui est pas transmise,
+    /// et aucun fichier de configuration n'est lu, ni à côté de l'exe ni dans le dossier courant. Les variables
+    /// d'environnement gardent leur effet ordinaire sur le reste (journaux, limites de Kestrel) : seul un programme
+    /// du même compte Windows peut les poser.
     /// </summary>
     /// <param name="fichiersDeLInterface">Les fichiers de l'interface React construite (index.html, assets).</param>
     /// <param name="dossierDeDonnees">Le dossier de données de l'utilisateur, déjà créé : la racine du contenu.</param>
@@ -34,7 +36,9 @@ public static class ApiLocale
         return Construire(
             new WebApplicationOptions
             {
-                Args = [],
+                // Aucun fichier de configuration à surveiller : sans ce réglage, la racine du contenu, donc tout le
+                // dossier de données et le profil du navigateur, resterait observée pendant toute la session.
+                Args = ["--hostBuilder:reloadConfigOnChange=false"],
                 EnvironmentName = Environments.Production,
                 ContentRootPath = dossierDeDonnees,
             },
@@ -65,6 +69,9 @@ public static class ApiLocale
             kestrel.Listen(IPAddress.Loopback, 0);
         });
         ReglesDesJournaux.Appliquer(builder.Logging);
+        // Ni « Content root path » ni « Hosting environment » : le premier écrit un chemin du profil Windows, donc le
+        // nom du compte. « Now listening on », qui vient du serveur web, reste écrit.
+        builder.Services.Configure<ConsoleLifetimeOptions>(options => options.SuppressStatusMessages = true);
 
         builder.Services.AddSingleton<JetonDeLancement>();
         builder.Services.AddSingleton<AdresseDEcoute>();

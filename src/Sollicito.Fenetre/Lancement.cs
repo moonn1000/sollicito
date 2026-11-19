@@ -5,11 +5,13 @@ namespace Sollicito.Fenetre;
 /// <param name="ArgumentsDuNavigateur">Arguments ajoutés au navigateur intégré ; aucun dans la version publiée.</param>
 /// <param name="OuvreurDeLiens">Ce qui ouvre un lien externe : le navigateur par défaut dans la version publiée.</param>
 /// <param name="DossierDesTelechargements">Le dossier où tomberait un téléchargement ; celui du profil dans la version publiée.</param>
+/// <param name="NoterUneNavigationAnnulee">Ce qui note chaque navigation annulée ; rien dans la version publiée.</param>
 internal sealed record Lancement(
     string DossierDeDonnees,
     string? ArgumentsDuNavigateur,
     IOuvreurDeLiens OuvreurDeLiens,
-    string? DossierDesTelechargements)
+    string? DossierDesTelechargements,
+    Action<string>? NoterUneNavigationAnnulee)
 {
     /// <summary>Le lancement de cet exe.</summary>
     public static Lancement Lire()
@@ -21,7 +23,8 @@ internal sealed record Lancement(
             Fenetre.DossierDeDonnees.DeLUtilisateur(),
             ArgumentsDuNavigateur: null,
             new OuvreurParLeShell(),
-            DossierDesTelechargements: null);
+            DossierDesTelechargements: null,
+            NoterUneNavigationAnnulee: null);
 #endif
     }
 }

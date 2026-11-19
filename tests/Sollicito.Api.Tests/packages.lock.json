@@ -13,6 +13,15 @@
           "Microsoft.Extensions.Hosting": "10.0.15"
         }
       },
+      "Microsoft.Extensions.FileProviders.Embedded": {
+        "type": "Direct",
+        "requested": "[10.0.15, )",
+        "resolved": "10.0.15",
+        "contentHash": "1uOmE46L6BeIEQv7x4lynMzeSO3cRe8DeDSvFMcWZRCIHblNRpiAWFGiDP0d8HRy06DKdCBC0GtYEkSS+/fg0w==",
+        "dependencies": {
+          "Microsoft.Extensions.FileProviders.Abstractions": "10.0.15"
+        }
+      },
       "xunit.v3": {
         "type": "Direct",
         "requested": "[4.0.3, )",
