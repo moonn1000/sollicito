@@ -20,9 +20,14 @@ internal sealed partial class SauvegardesAutomatiques(
     // lancement, ne copie rien en s'arrêtant.
     private volatile bool _demarre;
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public override Task StartAsync(CancellationToken cancellationToken)
     {
         _demarre = true;
+        return base.StartAsync(cancellationToken);
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
         // Hors du fil du lancement : un dossier débranché ne retarde pas la fenêtre.
         await Task.Yield();
         try
