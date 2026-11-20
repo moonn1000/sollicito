@@ -1,10 +1,10 @@
 # Modèle de domaine de la V1
 
-- **Mis à jour le** : 2026-11-20, avec #12 (faire avancer une candidature, son historique et ses étapes)
+- **Mis à jour le** : 2026-11-20, avec #25 (modifier ou supprimer une candidature)
 - **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D5 ; [ADR-0005](adr/0005-modele-de-domaine.md) (entreprises reconnues, offres dédoublonnées, dates et heures)
 - **Périmètre** : les huit entités de la D5. Six entrent en base en V1 : Entreprise, Contact, Offre, Candidature, Événement de candidature et Relance. Profil et Document sont modélisés ici et entrent en base en V2 ([spec de la V1](https://github.com/moonn1000/sollicito/issues/5), « Entités en base »).
 
-Ce modèle remplace l'esquisse de la D5 (ADR-0005). Le code du domaine le suit depuis #11 (`src/Sollicito.Domain`) : une pull request qui s'en écarte met ce document à jour. #11 y a ajouté les règles de la saisie (voir « Saisie d'une candidature ») ; #12, celles d'une étape (voir « Noter une étape »).
+Ce modèle remplace l'esquisse de la D5 (ADR-0005). Le code du domaine le suit depuis #11 (`src/Sollicito.Domain`) : une pull request qui s'en écarte met ce document à jour. #11 y a ajouté les règles de la saisie (voir « Saisie d'une candidature ») ; #12, celles d'une étape (voir « Noter une étape ») ; #25, celles de la modification et de la suppression (voir « Modifier ou supprimer une candidature »).
 
 ## Les entités
 
@@ -130,7 +130,7 @@ La candidature est la racine de son agrégat : ses événements et ses relances 
 | Clôture de relance | la relance faite ou abandonnée | l'horloge, au moment où on la marque |
 
 - Les trois sortes vivent dans une seule table, avec une colonne qui dit la sorte : c'est l'héritage par défaut d'EF Core, une table par hiérarchie[^ef-heritage]. La V1 garde ainsi six entités en base. #12 crée la table avec les deux premières sortes ; la clôture de relance la rejoint avec les relances (#14).
-- L'envoi n'est pas un événement : la candidature le date elle-même (`EnvoyeeLe`), et son historique commence là.
+- L'envoi n'est pas un événement : la candidature le date elle-même (`EnvoyeeLe`), et son historique commence là. Aucun événement ne précède l'envoi : une étape n'est pas datée avant lui (#12), et une date d'envoi corrigée ne passe pas après le premier événement (#25).
 - L'historique se lit par `SurvenuLe`, du plus ancien au plus récent ; à égalité, dans l'ordre d'enregistrement.
 - Une étape « Entretien » note un entretien ; le statut Entretien dit qu'on en a obtenu un. Noter une étape ne fait pas avancer la candidature.
 
@@ -266,7 +266,12 @@ Exemples, sur des noms fictifs :
 - La clé ne rapproche pas deux noms différents : « Lumière Verte Belgique » et « Lumière Verte » font deux entreprises. L'écran de saisie propose donc les entreprises déjà enregistrées pendant qu'on tape (#11).
 - Limites connues, rares : « S. A. » écrit avec une espace donne deux mots, `s a`, qui ne se retirent pas ; un point au milieu d'un mot en colle les deux moitiés (« Lumière.Verte » donne `lumiereverte`) ; un nom qui finit par un mot qui est aussi une forme juridique le perd (« Mon CV » donne `mon`). Les propositions de l'écran de saisie rattrapent ces cas.
 - Le nom affiché est celui de la première saisie.
-- Changer l'entreprise d'une candidature (#25) la rattache à l'entreprise que reconnaît le nouveau nom, ou en crée une. L'ancienne entreprise n'est pas renommée.
+- Changer l'entreprise d'une candidature (#25) la rattache à l'entreprise que reconnaît le nouveau nom, ou en crée une. L'ancienne entreprise n'est ni renommée ni supprimée, même quand plus aucune candidature ne la désigne : elle reste en base, et l'écran de saisie la propose toujours.
+- Limites de la modification (#25), que voit l'utilisateur :
+  - une faute de frappe corrigée, qui changeait la clé (« Lumière Vert » corrigé en « Lumière Verte »), laisse l'entreprise fautive en base et parmi les propositions de la saisie ;
+  - un autre nom de même clé (« Lumiere Verte » corrigé en « Lumière Verte SA ») garde l'entreprise et son nom affiché : la correction ne se voit pas.
+
+  Renommer ou retirer une entreprise reste hors de la V1.
 
 ## Dédoublonner les offres
 
@@ -339,9 +344,30 @@ La fiche d'une candidature (#12) ajoute à l'historique une étape, qui ne chang
 | `survenuLe` | requis, de la forme `AAAA-MM-JJTHH:MM`, les secondes en option, sans décalage ni `Z` ; une heure qui existe, convertie en UTC dans le fuseau du poste (voir « Dates et heures ») ; jamais avant l'envoi de la candidature ; au plus un an après l'instant présent, en heure locale |
 | `note` | facultative : un texte libre, sur plusieurs lignes (voir ci-dessous) |
 
-- **L'historique commence à l'envoi** : une étape peut être passée ou à venir, mais elle ne précède pas l'envoi. Une étape datée à l'instant même de l'envoi est admise. Le plafond d'un an écarte une année mal tapée (2062 pour 2026), et garde la conversion de l'heure loin des bornes du calendrier. Modifier la date d'envoi (#25) devra tenir compte de cette règle pour les étapes déjà notées.
+- **L'historique commence à l'envoi** : une étape peut être passée ou à venir, mais elle ne précède pas l'envoi. Une étape datée à l'instant même de l'envoi est admise. Le plafond d'un an écarte une année mal tapée (2062 pour 2026), et garde la conversion de l'heure loin des bornes du calendrier. Réciproquement, une date d'envoi corrigée ne passe pas après le premier événement de l'historique (voir « Modifier ou supprimer une candidature »).
 - **La note** : ses fins de ligne s'écrivent U+000A, quelle que soit leur forme d'origine, puis elle perd ses blancs du début et de la fin. Vide, elle ne fait aucune note. Elle compte 2 000 caractères au plus (unités UTF-16). Les sauts de ligne et les tabulations y sont admis ; les autres règles sont celles d'un texte d'une ligne : ni autre caractère de contrôle, ni contrôle de la direction du texte, ni non-caractère, ni moitié isolée d'une paire de substitution. Le message de refus ne reprend jamais le texte refusé.
 - **L'heure d'un changement de statut** vient de l'horloge, pas de l'utilisateur : la date d'un entretien passé se garde dans une étape (voir « Chaque passage »).
+
+## Modifier ou supprimer une candidature
+
+La fiche d'une candidature (#12) mène à sa modification et à sa suppression (#25).
+
+**Modifier** corrige l'entreprise, le poste et la date d'envoi. Comme pour la saisie, l'écran envoie les trois champs tels que l'utilisateur les a tapés ; l'API les lit et les valide, et renvoie pour chaque champ refusé un message lisible. Une modification refusée ne change rien : ni la candidature, ni les entreprises.
+
+| Champ | Règle |
+| --- | --- |
+| `entreprise` | celle de la saisie ; la candidature rejoint l'entreprise que reconnaît la clé du nom, ou une entreprise créée (voir « Reconnaître une entreprise ») |
+| `poste` | celle de la saisie |
+| `envoyeeLe` | celles de la saisie, et jamais après le premier événement de l'historique ; renvoyée inchangée, elle garde l'instant enregistré |
+
+- **L'historique commence à l'envoi** : la date d'envoi corrigée ne passe pas après le premier événement de l'historique, le plus ancien, quelle que soit sa sorte : étape, changement de statut ou correction. À l'instant même de ce premier événement, elle est admise. L'écran de modification rappelle cette date sous le champ. La modification relit l'historique dans la même écriture exclusive que les actions de la fiche : une étape notée en même temps ne passe jamais avant l'envoi.
+- **Une date inchangée** : renvoyée telle que l'écran la montre, c'est-à-dire la même minute dans le fuseau du poste, la date d'envoi garde l'instant enregistré, sans repasser par les règles. Corriger le seul poste n'est ainsi jamais refusé pour sa date, ni ne la déplace : ni l'heure qui existe deux fois, relue à l'heure d'hiver, ni une horloge reculée depuis l'envoi, ni les secondes que l'écran ne montre pas.
+- **Ni le statut ni l'historique** ne changent : aucun événement ne s'ajoute, et chacun garde sa date. Le statut n'est pas un champ : l'API refuse un corps qui en porte un. Une candidature close se modifie comme une autre.
+- **Ce que montre l'écran** : la fiche et l'annonce de la modification montrent le nom de l'entreprise rattachée, celui de sa première saisie (voir les limites de « Reconnaître une entreprise »).
+
+**Supprimer** retire la candidature, après une confirmation affichée dans l'interface, jamais par une boîte du navigateur. La suppression est définitive : elle emporte tous les événements de la candidature, corrections comprises, et, quand elles entreront en base (#14), ses relances. Elle laisse son entreprise, que la saisie propose toujours, et son offre (#38). Une candidature close se supprime comme une autre.
+
+**Limite que voit l'utilisateur** : l'historique ne se modifie pas en V1. Une étape mal datée plafonne donc la date d'envoi pour de bon ; la seule issue est de supprimer la candidature, puis de la saisir de nouveau.
 
 ## Ce que les stories en reprennent
 
@@ -349,10 +375,10 @@ La fiche d'une candidature (#12) ajoute à l'historique une étape, qui ne chang
 | --- | --- |
 | #11 | l'entreprise et sa clé ; la candidature : poste, date d'envoi jamais future, départ à Envoyée ; les instants en UTC et leur convertisseur ; la conversion des heures saisies |
 | #12 | les passages permis, la correction du dernier changement, deux des trois sortes d'événement (changement de statut, étape) et l'ordre de l'historique ; les règles d'une étape |
-| #14 | le contact minimal ; les règles des relances : candidature en cours, une seule à faire, échéance sur la date, délai par défaut en réglage, relance échue ou de la semaine, choix du destinataire, clôture dans l'historique (la troisième sorte d'événement), abandon quand la candidature se clôt |
-| #25 | les champs modifiables : poste, entreprise (reconnue de nouveau) et date d'envoi, mais pas le statut ; une date d'envoi qui passerait après une étape déjà notée ; la suppression d'une candidature emporte ses événements et ses relances, et laisse son offre et son entreprise |
+| #14 | le contact minimal ; les règles des relances : candidature en cours, une seule à faire, échéance sur la date, délai par défaut en réglage, relance échue ou de la semaine, choix du destinataire, clôture dans l'historique (la troisième sorte d'événement), abandon quand la candidature se clôt ; et ce que #25 lui confie, faute de relances en base : une date d'envoi corrigée ne déplace pas l'échéance, un changement d'entreprise retire le destinataire de la relance à faire, et la suppression de la candidature emporte ses relances |
+| #25 | les champs modifiables : poste, entreprise (reconnue de nouveau) et date d'envoi, mais pas le statut ; une date d'envoi corrigée qui ne passe pas après le premier événement de l'historique, et qui, renvoyée inchangée, garde l'instant enregistré ; la suppression d'une candidature emporte ses événements, et laisse son entreprise ; les deux limites que voit l'utilisateur |
 | #36 | la règle 2, sur le texte collé ; la règle 3 ; le texte gardé tel quel |
-| #38 | une offre, au plus une candidature ; « Postuler » reprend l'entreprise et le poste ; l'offre sans entreprise |
+| #38 | une offre, au plus une candidature ; « Postuler » reprend l'entreprise et le poste ; l'offre sans entreprise ; et ce que #25 lui confie, faute d'offres en base : supprimer la candidature laisse son offre, qui peut en recevoir une nouvelle |
 | #40 | les règles 2 et 3 pour une ligne de CSV, et leur compte rendu |
 
 ## En V2
