@@ -1,6 +1,6 @@
 # ADR-0002 : budget nul
 
-- **Statut** : acceptée ; la mention de Photino.NET remplacée par l'[ADR-0003](0003-hote-interface-webview2.md) (hôte de l'interface)
+- **Statut** : acceptée ; la mention de Photino.NET remplacée par l'[ADR-0003](0003-hote-interface-webview2.md) (hôte de l'interface) ; pour la V1, celles de l'installeur, d'Inno Setup, du Forem et du guide d'installation remplacées en partie par l'[ADR-0004](0004-v1-resserree-paliers.md) (V1 resserrée, livrée en paliers)
 - **Date** : 2026-11-13
 - **Remplace en partie** : [ADR-0001](0001-cadrage-architecture-v1.md), D13 (signature de code)
 
