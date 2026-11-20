@@ -19,7 +19,10 @@ Le 2026-11-20, FRS a demandé de corriger ces deux limites dans #25.
 
 ### Le nom affiché se corrige par l'écran de modification
 
-Dans l'écran de modification d'une candidature, un nom de même clé qu'une entreprise enregistrée, mais écrit autrement, corrige le nom affiché de cette entreprise, pour toutes ses candidatures. L'écran le dit avant l'enregistrement, avec le nombre de candidatures concernées, et l'enregistrement attend l'accord de l'utilisateur. Sans cet accord, la candidature peut rejoindre l'entreprise sous son nom enregistré.
+Dans l'écran de modification d'une candidature, un nom de même clé qu'une entreprise enregistrée, mais écrit autrement, corrige le nom affiché de cette entreprise, pour toutes ses candidatures. La règle vaut aussi quand ce nom désigne une autre entreprise que celle de la candidature, qui la rejoint.
+
+- **L'accord se donne à l'API** : la modification porte un champ d'accord (`corrigerLeNomDeLEntreprise`). Sans lui, l'API refuse la modification (409) sans rien changer, dans la même écriture exclusive que la modification elle-même. Son refus porte le nom enregistré, lu en base, et le nombre de candidatures concernées, celle qu'on modifie comprise ; il ne reprend jamais le texte saisi, et aucun journal n'écrit ces noms.
+- **L'écran le dit avant l'enregistrement** : quel nom serait corrigé, en quoi, pour combien de candidatures, et si la candidature change d'entreprise. L'utilisateur corrige le nom, ce qui relance la modification avec l'accord, ou le garde : la candidature rejoint alors l'entreprise sous son nom enregistré, que rien ne renomme.
 
 La saisie d'une candidature (#11) ne change jamais le nom affiché : elle reprend l'entreprise de même clé, sous le nom de sa première saisie, comme le dit l'ADR-0005.
 
@@ -34,6 +37,8 @@ Les règles complètes sont dans le [modèle de domaine](../modele-de-domaine.md
 - **Garder la règle de l'ADR-0005 telle quelle** : les deux limites restaient, et l'utilisateur ne pouvait corriger ni l'orthographe d'une entreprise ni une faute de frappe sans laisser de trace parmi les propositions.
 - **Corriger le nom aussi à la saisie** : une saisie rapide, en minuscules ou sans accents, renommerait sans le dire l'entreprise de toutes les autres candidatures.
 - **Corriger le nom sans avertir** : la correction change ce qu'affichent d'autres candidatures ; l'utilisateur doit la voir avant qu'elle ne se fasse.
+- **Un aperçu par une route à part**, qui dirait avant l'envoi quel nom serait corrigé : une route de plus à protéger, et son nombre de candidatures pourrait changer avant l'enregistrement. Le refus de la modification elle-même porte un état lu dans l'écriture qui l'aurait faite.
+- **Le nom saisi dans le refus** : l'écran le connaît déjà, et le modèle de menaces veut qu'un refus ne reprenne pas le texte de la requête.
 - **Supprimer l'entreprise sans candidature** : la suppression ne se rattrape pas. Les offres (#36, #38) désigneront aussi des entreprises, sans candidature, et la clé doit continuer de les reconnaître.
 - **Un écran de gestion des entreprises** (renommer, fusionner, retirer) : il règle tous les cas, mais ajoute un écran et ses règles à la V1 resserrée (ADR-0004) pour des corrections rares.
 
