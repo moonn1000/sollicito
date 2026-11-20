@@ -130,7 +130,7 @@ La fenêtre (`src/Sollicito.Fenetre`) n'affiche que l'interface locale (ADR-0001
 
 ### Nouvelles fenêtres et liens externes
 
-- `NewWindowRequested` est toujours traité : aucune seconde fenêtre ne s'ouvre. Un lien s'ouvre dans le navigateur par défaut, par le shell de Windows, à trois conditions (ADR-0006). La demande vient d'un geste de l'utilisateur (`IsUserInitiated`) : un clic, ou un script qui tourne pendant ce clic. L'adresse est absolue, en `http` ou `https`. Elle ne porte pas d'identifiants. Tout autre lien est ignoré.
+- `NewWindowRequested` est toujours traité : aucune seconde fenêtre ne s'ouvre. Un lien s'ouvre dans le navigateur par défaut, par le shell de Windows, à trois conditions (ADR-0006). La demande vient d'un geste de l'utilisateur (`IsUserInitiated`) : un clic, ou un script lancé pendant l'activation que ce geste ouvre, même par une minuterie. L'activation expire au bout d'environ cinq secondes (#78). L'adresse est absolue, en `http` ou `https`. Elle ne porte pas d'identifiants. Tout autre lien est ignoré.
 - Seul un lien qui ouvre une nouvelle fenêtre s'ouvre ainsi : un lien cliqué sur place est une navigation, annulée, et il ne s'ouvre nulle part. L'interface écrit ses liens externes en nouvelle fenêtre (`target="_blank"`).
 - Ce qui reste : un lien cliqué emporte son adresse, telle qu'elle est écrite, vers le navigateur par défaut ; c'est voulu, un lien d'offre s'ouvre ainsi (D9). Un script injecté qui attendrait un clic de l'utilisateur pourrait encore ouvrir une adresse de son choix : la politique de sécurité du contenu, qui interdit les scripts injectés, reste la première barrière.
 
