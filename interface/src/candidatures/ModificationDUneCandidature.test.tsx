@@ -279,3 +279,32 @@ test("pour une seule candidature, l'accord se dit au singulier ; modifier un cha
   remplir("Poste", "Comptable senior");
   expect(avertissement()).toBeNull();
 });
+
+test("un accord donné, puis un champ modifié, ne vaut plus : l'envoi suivant repart sans accord", async () => {
+  let repondre: () => void = () => {};
+  const modifierUneCandidature = vi
+    .fn<ReturnType<typeof clientSimule>["modifierUneCandidature"]>()
+    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 2 })
+    .mockImplementationOnce(() => new Promise((resoudre) => (repondre = () => resoudre({ issue: "refusee", refus: { envoyeeLe: [PREMIER_EVENEMENT] } }))))
+    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 2 });
+  afficher(clientSimule({ modifierUneCandidature }));
+
+  await screen.findByLabelText("Entreprise");
+  remplir("Entreprise", "LUMIÈRE VERTE S.A.");
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
+  const corriger = within(await screen.findByRole("region", { name: "Corriger le nom de l'entreprise ?" })).getByRole("button", {
+    name: "Corriger le nom pour les 2 candidatures",
+  });
+  // Deux clics : le second, arrêté par l'envoi en cours, laisserait un accord en attente.
+  act(() => {
+    corriger.click();
+    corriger.click();
+  });
+  repondre();
+  await waitFor(() => expect(screen.getByLabelText("Date et heure d'envoi").getAttribute("aria-invalid")).toBe("true"));
+  remplir("Entreprise", "Lumiere Verte");
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
+
+  await waitFor(() => expect(modifierUneCandidature).toHaveBeenCalledTimes(3));
+  expect(modifierUneCandidature.mock.calls.map((appel) => appel[2])).toEqual([false, true, false]);
+});

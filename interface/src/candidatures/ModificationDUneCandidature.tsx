@@ -138,7 +138,11 @@ export function ModificationDUneCandidature({
           messageDEchec="La candidature n'a pas pu être modifiée. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le."
           aideDeLEnvoi={premier === undefined ? undefined : aideDeLaDate(premier, maintenant())}
           annuler={revenir}
-          quandModifie={() => setAvertissement(undefined)}
+          quandModifie={() => {
+            // Un champ modifié rend l'avertissement caduc, et le choix qu'on y aurait fait avec lui.
+            choix.current = undefined;
+            setAvertissement(undefined);
+          }}
         >
           <p className="statut-de-depart">
             Statut : <strong>{LIBELLES_DES_STATUTS[fiche.statut] ?? fiche.statut}</strong>. Il ne change pas ici : il

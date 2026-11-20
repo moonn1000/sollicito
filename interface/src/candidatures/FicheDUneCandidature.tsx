@@ -449,8 +449,10 @@ export function FicheDUneCandidature({
             etapeEnCorrection={etapeEnCorrection}
             ouvrir={(etape) => {
               setAnnonceDeLHistorique(undefined);
+              setConfirmation("fermee");
               setEtapeEnCorrection(etape.id);
             }}
+            enCours={enCours}
             boutonDeCorrection={(etape) => (bouton) => {
               if (bouton === null) {
                 boutonsDeCorrection.current.delete(etape);
@@ -494,6 +496,7 @@ function Historique({
   annonce,
   etapeEnCorrection,
   ouvrir,
+  enCours,
   boutonDeCorrection,
   formulaireDeCorrection,
 }: {
@@ -505,6 +508,8 @@ function Historique({
   /** L'étape dont le formulaire de correction est ouvert. */
   etapeEnCorrection: number | undefined;
   ouvrir: (etape: EtapeLue) => void;
+  /** Vrai pendant une autre action de la fiche : aucune correction ne s'ouvre alors. */
+  enCours: boolean;
   boutonDeCorrection: (etape: number) => (bouton: HTMLButtonElement | null) => void;
   formulaireDeCorrection: (etape: EtapeLue) => ReactNode;
 }) {
@@ -522,6 +527,7 @@ function Historique({
         <button
           type="button"
           className="secondaire corriger"
+          disabled={enCours}
           ref={boutonDeCorrection(evenement.id)}
           aria-label={`Corriger l'étape : ${decrireLEvenement(evenement)}, ${afficherLInstant(evenement.survenuLe)}`}
           onClick={() => ouvrir(evenement)}

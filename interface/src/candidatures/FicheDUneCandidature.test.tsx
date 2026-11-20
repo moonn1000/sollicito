@@ -564,3 +564,33 @@ test("l'envoi se range à son instant : seuls des événements corrigés peuvent
     "18/11/2026 14:30Statut passé d'Envoyée à Entretien",
   ]);
 });
+
+test("ouvrir la correction d'une étape ferme la confirmation de la suppression", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  expect(confirmation()).not.toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+
+  expect(confirmation()).toBeNull();
+  expect(screen.getByRole("group", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" })).toBeDefined();
+});
+
+test("pendant une autre action de la fiche, aucune étape ne s'ouvre à la correction", async () => {
+  let repondre: () => void = () => {};
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(
+    clientSimule({
+      lireLaFiche: async () => fiche,
+      changerLeStatut: () => new Promise((resoudre) => (repondre = () => resoudre({ faite: true, fiche: ficheFictive({ ...fiche, statut: "Refusee", passagesPermis: [] }) }))),
+    }),
+  );
+
+  fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+
+  const corriger = screen.getByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" });
+  await waitFor(() => expect(corriger.hasAttribute("disabled")).toBe(true));
+  repondre();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }).hasAttribute("disabled")).toBe(false));
+});
