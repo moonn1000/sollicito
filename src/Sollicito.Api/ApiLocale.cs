@@ -6,6 +6,7 @@ using Sollicito.Api.Donnees;
 using Sollicito.Api.Erreurs;
 using Sollicito.Api.Interface;
 using Sollicito.Api.Journaux;
+using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Securite;
 using Sollicito.Application.Candidatures;
 using Sollicito.Infrastructure;
@@ -94,6 +95,11 @@ public static class ApiLocale
         builder.Services.AjouterLaBase(new DossierDeLaBase(dossierDeDonnees));
         builder.Services.AddHostedService<PreparationDeLaBase>();
         builder.Services.AddSingleton(TimeProvider.System);
+        // Les copies du jour (#26), une fois la base prête : leur dossier se lit dans celui de la base, au premier usage.
+        // Enregistrées après la préparation de la base, elles s'arrêtent avant elle : la copie de la fermeture se fait
+        // sous le verrou du dossier.
+        builder.Services.AddSingleton<SauvegardesDeLaBase>();
+        builder.Services.AddHostedService<SauvegardesAutomatiques>();
         builder.Services.AddScoped<EnregistrementDesCandidatures>();
         builder.Services.AddScoped<SuiviDesCandidatures>();
         builder.Services.AddScoped<ModificationDesCandidatures>();
@@ -129,6 +135,7 @@ public static class ApiLocale
             .WithName("EtatDeLApplication")
             .WithSummary("État de l'application");
         RoutesDesCandidatures.Declarer(app);
+        RoutesDesSauvegardes.Declarer(app);
 
         return app;
     }

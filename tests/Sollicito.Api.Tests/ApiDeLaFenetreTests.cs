@@ -52,7 +52,8 @@ public sealed class ApiDeLaFenetreTests
         }
         finally
         {
-            Directory.Delete(dossier, recursive: true);
+            // Avec réessai : un antivirus peut tenir un instant la base ou une copie tout juste écrite (#26).
+            await AppelsDesSauvegardes.SupprimerAsync(dossier);
         }
     }
 
@@ -80,7 +81,8 @@ public sealed class ApiDeLaFenetreTests
         {
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", avant[0]);
             Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", avant[1]);
-            Directory.Delete(dossier, recursive: true);
+            // Avec réessai : un antivirus peut tenir un instant la base ou une copie tout juste écrite (#26).
+            await AppelsDesSauvegardes.SupprimerAsync(dossier);
         }
     }
 }
