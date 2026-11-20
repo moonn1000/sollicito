@@ -10,6 +10,9 @@ namespace Sollicito.Domain.Temps;
 /// </summary>
 public static class HeureLocale
 {
+    /// <summary>Le message d'une heure saisie dans le trou du passage à l'heure d'été.</summary>
+    public const string HeureInexistante = "Cette heure n'existe pas : ce jour-là, au passage à l'heure d'été, l'horloge avance d'une heure.";
+
     /// <summary>
     /// Convertit une heure locale en instant UTC, de genre <see cref="DateTimeKind.Utc"/>. Rend faux pour une heure qui
     /// n'existe pas dans le fuseau.

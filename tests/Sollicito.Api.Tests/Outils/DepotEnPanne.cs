@@ -15,5 +15,7 @@ public sealed class DepotEnPanne(string donnee) : IDepotDesCandidatures
 
     public Task<IReadOnlyList<EntrepriseConnue>> ListerLesEntreprisesAsync(CancellationToken annulation) => throw Panne();
 
+    public Task<CandidatureSuivie?> TrouverAsync(int id, CancellationToken annulation) => throw Panne();
+
     private InvalidOperationException Panne() => new($"Panne simulée en lisant {donnee}.");
 }

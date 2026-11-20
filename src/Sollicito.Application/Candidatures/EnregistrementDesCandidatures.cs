@@ -1,4 +1,3 @@
-using System.Globalization;
 using Sollicito.Domain.Candidatures;
 using Sollicito.Domain.Entreprises;
 
@@ -11,9 +10,6 @@ namespace Sollicito.Application.Candidatures;
 /// </summary>
 public sealed class EnregistrementDesCandidatures(IDepotDesCandidatures depot, TimeProvider horloge)
 {
-    // Les formes que produit un champ datetime-local, à la minute ou à la seconde, sans décalage.
-    private static readonly string[] FormatsDeLEnvoi = ["yyyy'-'MM'-'dd'T'HH':'mm", "yyyy'-'MM'-'dd'T'HH':'mm':'ss"];
-
     /// <summary>Le message d'une date et d'une heure d'envoi absentes.</summary>
     public const string EnvoiManquant = "Indiquez la date et l'heure d'envoi.";
 
@@ -77,7 +73,7 @@ public sealed class EnregistrementDesCandidatures(IDepotDesCandidatures depot, T
             return false;
         }
 
-        if (!DateTime.TryParseExact(saisie, FormatsDeLEnvoi, CultureInfo.InvariantCulture, DateTimeStyles.None, out var heureSaisie))
+        if (!HeureSaisie.EssayerDeLire(saisie, out var heureSaisie))
         {
             erreur = EnvoiIllisible;
             return false;

@@ -55,7 +55,7 @@ public static class DateDEnvoi
 
         if (!HeureLocale.EssayerVersUtc(heureSaisie, fuseau, out instant))
         {
-            erreur = "Cette heure n'existe pas : ce jour-là, au passage à l'heure d'été, l'horloge avance d'une heure.";
+            erreur = HeureLocale.HeureInexistante;
             return false;
         }
 
