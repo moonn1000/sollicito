@@ -1,4 +1,6 @@
 using System.Net;
+using Microsoft.AspNetCore.Http;
+using Sollicito.Api.Interface;
 using Sollicito.Api.Tests.Outils;
 
 namespace Sollicito.Api.Tests;
@@ -116,3 +118,25 @@ public sealed class FichiersSurLeDisqueTests(ApiAvecInterface lancement)
 /// <summary>Les fichiers embarqués dans l'assembly, comme ceux de l'interface dans l'exe de la fenêtre.</summary>
 public sealed class FichiersEmbarquesTests(ApiAvecInterfaceEmbarquee lancement)
     : FichiersDeLInterfaceTests(lancement.Api), IClassFixture<ApiAvecInterfaceEmbarquee>;
+
+/// <summary>
+/// Le filtre des chemins seul, sans serveur ni fournisseur. Kestrel lui passe le chemin déjà décodé : <c>%0A</c> y
+/// arrive en saut de ligne. Les deux fournisseurs refusent ensuite ce caractère, mais le filtre ne s'en remet pas à
+/// eux : une requête brute rendrait 401 avec ou sans lui, et ne prouverait rien.
+/// </summary>
+public sealed class FiltreDesCheminsTests
+{
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/index.html")]
+    [InlineData("/assets/app.js")]
+    public void Un_chemin_simple_peut_etre_servi(string chemin) =>
+        Assert.True(FichiersDeLInterface.PeutEtreServi(new PathString(chemin)));
+
+    [Theory]
+    [InlineData("/api\n")]
+    [InlineData("/index.html\n")]
+    [InlineData("/\n")]
+    public void Un_chemin_termine_par_un_saut_de_ligne_n_est_pas_servi(string chemin) =>
+        Assert.False(FichiersDeLInterface.PeutEtreServi(new PathString(chemin)));
+}

@@ -28,9 +28,10 @@ public sealed partial class FichiersDeLInterface
     /// <summary>
     /// Vrai si le chemin peut désigner un fichier de l'interface : hors de <c>/api</c>, et fait de segments simples
     /// (lettres, chiffres, <c>-</c>, <c>_</c>, et des points entre eux). Ni antislash, ni segment vide (<c>//</c>),
-    /// ni <c>.</c> ou <c>..</c>, ni point final, ni deux-points, ni tilde, ni caractère encodé : les fournisseurs de
-    /// fichiers lisent ces formes chacun à sa façon (un antislash y sépare deux dossiers, un point final disparaît
-    /// sous Windows), et l'une d'elles ferait servir sans jeton un fichier rangé sous <c>/api</c>.
+    /// ni <c>.</c> ou <c>..</c>, ni point final, ni deux-points, ni tilde : les fournisseurs de fichiers lisent ces
+    /// formes chacun à sa façon (un antislash y sépare deux dossiers, un point final disparaît sous Windows), et l'une
+    /// d'elles ferait servir sans jeton un fichier rangé sous <c>/api</c>. Le chemin arrive déjà décodé par Kestrel :
+    /// <c>%5C</c> y est un antislash, refusé, et <c>/%69ndex.html</c> y est <c>/index.html</c>, servi.
     /// </summary>
     public static bool PeutEtreServi(PathString chemin) =>
         chemin.HasValue
@@ -56,6 +57,7 @@ public sealed partial class FichiersDeLInterface
                 .UseStaticFiles(new StaticFileOptions { FileProvider = fichiers }));
     }
 
-    [GeneratedRegex(@"^(/[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*)*/?$", RegexOptions.CultureInvariant)]
+    // \z, et non $ : en .NET, $ admet aussi la place juste avant un saut de ligne final.
+    [GeneratedRegex(@"^(/[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*)*/?\z", RegexOptions.CultureInvariant)]
     private static partial Regex CheminSimple();
 }
