@@ -29,7 +29,7 @@ Le point « Navigation » de l'ADR-0003 se lit désormais ainsi : `NavigationSta
 
 `NewWindowRequested` reste toujours traité, et le lien ne s'ouvre dans le navigateur par défaut qu'à trois conditions :
 
-- la demande vient d'un geste de l'utilisateur (`IsUserInitiated`) : un clic, ou un script qui tourne pendant ce clic. Un `window.open` lancé hors d'un geste, par une minuterie ou au chargement de la page, est ignoré ;
+- la demande vient d'un geste de l'utilisateur (`IsUserInitiated`) : un clic, ou un script lancé pendant l'activation que ce geste ouvre, même par une minuterie. L'activation expire au bout d'environ cinq secondes (#78) : un `window.open` lancé ensuite, ou sans aucun geste, au chargement de la page par exemple, est ignoré ;
 - l'adresse est absolue, en `http` ou `https` ;
 - elle ne porte pas d'identifiants (`https://banque.exemple@autre.exemple/`), forme qui sert à tromper sur la destination.
 
@@ -48,7 +48,7 @@ Seul un lien qui ouvre une nouvelle fenêtre s'ouvre ainsi au-dehors. Un lien cl
 
 - Chaque requête de la page lève un événement sur le fil de la fenêtre. L'interface, servie en local, n'en fait que quelques-unes à son chargement.
 - Le test Playwright de la vraie fenêtre (`interface/tests-fenetre`) refait l'essai à chaque pull request : trente navigations vers le serveur témoin, puis un `fetch`, une image, un script, un cadre, une balise (`sendBeacon`) et un formulaire ; aucune requête ne doit lui parvenir. Il suit donc le comportement du runtime, qui se met à jour seul (ADR-0003, « Conséquences »).
-- Un `window.open` lancé hors d'un geste de l'utilisateur ne s'ouvre pas, et un lien externe cliqué sur place non plus : l'interface ouvre ses liens externes par un vrai lien, en nouvelle fenêtre, cliqué par l'utilisateur.
+- Un `window.open` lancé sans geste de l'utilisateur, ou une fois son activation expirée, ne s'ouvre pas, et un lien externe cliqué sur place non plus : l'interface ouvre ses liens externes par un vrai lien, en nouvelle fenêtre, cliqué par l'utilisateur.
 - Le [modèle de menaces](../modele-de-menaces.md) décrit ces protections et leurs limites.
 
 ## Sources

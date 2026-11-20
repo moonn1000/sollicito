@@ -8,7 +8,9 @@ namespace Sollicito.Api.Tests.Outils;
 /// <summary>
 /// Une interface fictive (<c>Outils/Interface</c>) : une page, un script, et un fichier rangé sous <c>api/</c>, qui
 /// ne doit jamais être servi. Elle remplace l'interface construite, que la fenêtre embarque. Le fournisseur embarqué
-/// est celui de l'exe ; le fournisseur sur le disque lit les chemins autrement (un antislash y sépare deux dossiers).
+/// est celui de l'exe. Les deux fournisseurs lisent certaines formes de chemin à leur façon : l'antislash, qui y
+/// sépare deux dossiers, leur est commun ; le segment vide (<c>//api/…</c>), l'antislash en tête et le point final
+/// (<c>/api./…</c>), entre autres, sont propres au disque.
 /// </summary>
 public sealed class InterfaceDeTest : IDisposable
 {

@@ -22,8 +22,9 @@ internal static class ReglesDeLaFenetre
 
     /// <summary>
     /// Le lien qu'une nouvelle fenêtre ouvre dans le navigateur par défaut, ou <c>null</c> : seulement une adresse
-    /// absolue en <c>http</c> ou <c>https</c>, sans identifiants, et seulement si l'utilisateur l'a demandée (un clic,
-    /// pas un script).
+    /// absolue en <c>http</c> ou <c>https</c>, sans identifiants, et seulement si la demande vient d'un geste de
+    /// l'utilisateur (<c>IsUserInitiated</c>) : un clic, ou un script lancé pendant l'activation que ce geste ouvre,
+    /// même par une minuterie. L'activation expire au bout d'environ cinq secondes.
     /// </summary>
     public static Uri? LienPourLeNavigateur(string? adresse, bool demandeParLUtilisateur)
     {

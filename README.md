@@ -74,7 +74,7 @@ L'intégration continue construit et teste ces deux parties de la même façon, 
 Les protections prévues dès la conception, détaillées dans l'[ADR-0001](docs/adr/0001-cadrage-architecture-v1.md) (D9 et D10) :
 
 - l'API locale refuse les appels venus d'autres pages web, d'autres appareils ou d'autres comptes du PC (voir le [modèle de menaces](docs/modele-de-menaces.md)) : écoute sur 127.0.0.1 seulement, jeton aléatoire à chaque lancement transmis par un en-tête, refus par le serveur des origines et des en-têtes `Host` inattendus ; ses journaux ne contiennent ni le jeton ni vos données ;
-- la fenêtre n'affichera que l'interface de Sollicito, sous une politique de sécurité du contenu stricte ; les liens externes s'ouvriront dans votre navigateur ;
+- la fenêtre n'affiche que l'interface de Sollicito, sous une politique de sécurité du contenu stricte ; les liens externes s'ouvrent dans votre navigateur ;
 - les clés d'API d'IA seront chiffrées par l'API Data Protection d'ASP.NET Core, protégée par DPAPI et liée à votre compte Windows ; jamais stockées en clair, jamais dans les sauvegardes ni les exports ;
 - le contenu des offres sera traité comme non fiable : affichage échappé, et une IA qui ne peut rien déclencher d'elle-même ;
 - aucun secret dans ce dépôt.
