@@ -40,6 +40,29 @@ public static class CopiesVerifiees
     }
 
     /// <summary>
+    /// Efface les fichiers provisoires d'un dossier que désigne <paramref name="estAMoi"/> : ceux qu'une copie interrompue
+    /// a laissés, par un arrêt brutal ou une panne de courant.
+    /// </summary>
+    public static async Task RetirerLesProvisoiresAsync(string dossier, Func<string, bool> estAMoi)
+    {
+        ArgumentNullException.ThrowIfNull(estAMoi);
+        string[] noms;
+        try
+        {
+            noms = [.. Directory.EnumerateFiles(dossier).Select(Path.GetFileName).OfType<string>()];
+        }
+        catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException)
+        {
+            return;
+        }
+
+        foreach (var nom in noms.Where(estAMoi))
+        {
+            await EffacerAsync(Path.Combine(dossier, nom));
+        }
+    }
+
+    /// <summary>
     /// Efface une base et les fichiers que SQLite tient à côté d'elle (journaux), s'ils existent. Au mieux : un dossier
     /// débranché, ou un fichier qu'un autre programme tient encore après quelques essais, ne masque pas l'erreur qui a
     /// fait échouer la copie ; le fichier provisoire restant ne désigne aucune copie, et la copie suivante le retire.
@@ -59,8 +82,8 @@ public static class CopiesVerifiees
         }
     }
 
-    // Une opération sur un fichier, reprise tant qu'un autre programme le tient, quelques fois au plus.
-    private static async Task ReessayerAsync(Action operation)
+    /// <summary>Une opération sur un fichier, reprise tant qu'un autre programme le tient, quelques fois au plus.</summary>
+    public static async Task ReessayerAsync(Action operation)
     {
         for (var essai = 1; ; essai++)
         {

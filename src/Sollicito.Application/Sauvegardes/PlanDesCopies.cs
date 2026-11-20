@@ -25,16 +25,20 @@ public static class PlanDesCopies
 
     /// <summary>
     /// Les copies du jour de l'installation à effacer une fois une nouvelle copie vérifiée : toutes, sauf les sept plus
-    /// récentes, par le jour de leur nom.
+    /// récentes, par le jour de leur nom. La copie qui vient d'être écrite, <paramref name="aGarder"/>, est toujours
+    /// gardée, et compte parmi les sept : des copies datées d'après elle, par une horloge qui avançait, ne la chassent pas.
     /// </summary>
-    public static IReadOnlyList<string> AEffacer(IEnumerable<string> noms, string installation)
+    public static IReadOnlyList<string> AEffacer(IEnumerable<string> noms, string installation, string? aGarder = null)
     {
         ArgumentNullException.ThrowIfNull(noms);
 
-        return [.. CopiesDuJour(noms, installation)
-            .OrderByDescending(copie => copie.Jour)
-            .Skip(CopiesDuJourGardees)
-            .Select(copie => copie.Nom)];
+        var copies = CopiesDuJour(noms, installation);
+        var gardees = copies.Where(copie => copie.Nom == aGarder)
+            .Concat(copies.Where(copie => copie.Nom != aGarder))
+            .Take(CopiesDuJourGardees)
+            .Select(copie => copie.Nom)
+            .ToHashSet(StringComparer.Ordinal);
+        return [.. copies.Where(copie => !gardees.Contains(copie.Nom)).Select(copie => copie.Nom)];
     }
 
     /// <summary>Les copies du jour de l'installation, de la plus récente à la plus ancienne.</summary>

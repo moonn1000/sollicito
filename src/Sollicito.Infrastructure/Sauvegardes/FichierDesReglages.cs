@@ -20,8 +20,11 @@ public sealed class FichierDesReglages(DossierDeLaBase dossier)
             : ReglagesDeLApplication.Lire(texte);
     }
 
-    /// <summary>Écrit les réglages, en gardant ceux que le fichier lisible d'avant portait en plus.</summary>
-    public void Ecrire(ReglagesDeLApplication reglages)
+    /// <summary>
+    /// Écrit les réglages, en gardant ceux que le fichier lisible d'avant portait en plus. Le renommage se reprend tant
+    /// qu'un autre programme, comme un antivirus, tient le fichier un instant.
+    /// </summary>
+    public async Task EcrireAsync(ReglagesDeLApplication reglages)
     {
         ArgumentNullException.ThrowIfNull(reglages);
 
@@ -30,7 +33,7 @@ public sealed class FichierDesReglages(DossierDeLaBase dossier)
         try
         {
             File.WriteAllText(provisoire, texte, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-            File.Move(provisoire, dossier.FichierDesReglages, overwrite: true);
+            await CopiesVerifiees.ReessayerAsync(() => File.Move(provisoire, dossier.FichierDesReglages, overwrite: true));
         }
         finally
         {

@@ -77,6 +77,17 @@ public sealed class PlanDesCopiesTests
     }
 
     [Fact]
+    public void La_copie_qui_vient_d_etre_ecrite_est_gardee_meme_si_des_copies_datees_d_apres_elle_la_depassent()
+    {
+        // Une horloge qui avançait d'un an a laissé sept copies datées de 2027.
+        string[] noms = [.. Enumerable.Range(1, 7).Select(jour => $"sollicito-1a2b3c4d-2027-11-{jour:00}.db"), "sollicito-1a2b3c4d-2026-11-18.db"];
+
+        var aEffacer = PlanDesCopies.AEffacer(noms, Installation, aGarder: "sollicito-1a2b3c4d-2026-11-18.db");
+
+        Assert.Equal(["sollicito-1a2b3c4d-2027-11-01.db"], aEffacer);
+    }
+
+    [Fact]
     public void Sept_copies_ou_moins_ne_donnent_rien_a_effacer()
     {
         Assert.Empty(PlanDesCopies.AEffacer([.. Enumerable.Range(1, 7).Select(jour => $"sollicito-1a2b3c4d-2026-11-{jour:00}.db")], Installation));

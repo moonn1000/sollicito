@@ -183,9 +183,10 @@ internal sealed class FenetreHote : Form
                     : IssueDuChoixDuDossier.Refuse;
         }
         catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException or InvalidOperationException
-            or ArgumentException or System.Runtime.InteropServices.COMException or System.Security.SecurityException)
+            or ArgumentException or System.Runtime.InteropServices.ExternalException or System.Security.SecurityException)
         {
-            // Rien ne change : l'ancien dossier reste.
+            // Rien ne change : l'ancien dossier reste. ExternalException couvre les erreurs du dialogue de Windows
+            // (COMException, Win32Exception) : elles ne ferment pas Sollicito.
         }
         finally
         {

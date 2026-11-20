@@ -32,6 +32,8 @@ public static class MiseAJourDeLaBase
         try
         {
             Directory.CreateDirectory(dossier.DossierDesSauvegardes);
+            // Les restes d'une copie d'avant interrompue, qui ne désignent aucune copie.
+            await CopiesVerifiees.RetirerLesProvisoiresAsync(dossier.DossierDesSauvegardes, nom => NomsDesCopies.EstUnProvisoireDe(nom, installation: null));
             await CopiesVerifiees.EcrireAsync(dossier.Fichier, copieDAvant, annulation);
         }
         catch (Exception erreur) when (erreur is not OperationCanceledException)

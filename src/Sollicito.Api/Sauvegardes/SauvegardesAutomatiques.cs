@@ -37,18 +37,27 @@ internal sealed partial class SauvegardesAutomatiques(
         await Task.Yield();
         try
         {
-            await sauvegardes.FaireLaCopieDuJourSiBesoinAsync(stoppingToken);
+            await VerifierAsync(stoppingToken);
             using var minuterie = new PeriodicTimer(SauvegardesDeLaBase.PeriodeDesVerifications, horloge);
             while (await minuterie.WaitForNextTickAsync(stoppingToken))
             {
-                await sauvegardes.FaireLaCopieDuJourSiBesoinAsync(stoppingToken);
+                await VerifierAsync(stoppingToken);
             }
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             // La fermeture : la copie de fermeture suit.
         }
-        catch (Exception erreur)
+    }
+
+    // Une vérification : une erreur inattendue est notée par son type, et la minuterie continue, pour l'essai suivant.
+    private async Task VerifierAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await sauvegardes.FaireLaCopieDuJourSiBesoinAsync(stoppingToken);
+        }
+        catch (Exception erreur) when (erreur is not OperationCanceledException)
         {
             Interrompues(journal, erreur.GetType().Name);
         }
@@ -78,6 +87,6 @@ internal sealed partial class SauvegardesAutomatiques(
         }
     }
 
-    [LoggerMessage(EventId = 41, Level = LogLevel.Error, Message = "Copies automatiques interrompues ({TypeDErreur}).")]
+    [LoggerMessage(EventId = 41, Level = LogLevel.Error, Message = "Vérification des copies interrompue ({TypeDErreur}) : la suivante se fera à l'heure dite.")]
     private static partial void Interrompues(ILogger journal, string typeDErreur);
 }

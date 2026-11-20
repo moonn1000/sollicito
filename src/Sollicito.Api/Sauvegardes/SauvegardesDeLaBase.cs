@@ -182,7 +182,7 @@ public sealed partial class SauvegardesDeLaBase
 
             try
             {
-                _reglages.Ecrire(new ReglagesDeLApplication(dossier));
+                await _reglages.EcrireAsync(new ReglagesDeLApplication(dossier));
             }
             catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException)
             {
@@ -224,6 +224,7 @@ public sealed partial class SauvegardesDeLaBase
     // La copie du jour dans ce dossier, puis la rotation ; le motif de l'échec, ou rien si elle a réussi.
     private async Task<MotifDEchec?> EssayerDeCopierAsync(string dossier, CancellationToken annulation)
     {
+        string nomDuJour;
         try
         {
             if (string.Equals(dossier, _base.DossierDesSauvegardes, StringComparison.OrdinalIgnoreCase))
@@ -237,8 +238,9 @@ public sealed partial class SauvegardesDeLaBase
                 return MotifDEchec.DossierIntrouvable;
             }
 
-            await RetirerLesProvisoiresAsync(dossier);
-            await CopiesVerifiees.EcrireAsync(_base.Fichier, Path.Combine(dossier, NomsDesCopies.DuJour(_installation, Aujourdhui)), annulation);
+            await CopiesVerifiees.RetirerLesProvisoiresAsync(dossier, nom => NomsDesCopies.EstUnProvisoireDe(nom, _installation));
+            nomDuJour = NomsDesCopies.DuJour(_installation, Aujourdhui);
+            await CopiesVerifiees.EcrireAsync(_base.Fichier, Path.Combine(dossier, nomDuJour), annulation);
         }
         catch (Exception erreur) when (erreur is not OperationCanceledException)
         {
@@ -247,7 +249,7 @@ public sealed partial class SauvegardesDeLaBase
         }
 
         var effacees = 0;
-        foreach (var nom in PlanDesCopies.AEffacer(LireLesNoms(dossier) ?? [], _installation))
+        foreach (var nom in PlanDesCopies.AEffacer(LireLesNoms(dossier) ?? [], _installation, aGarder: nomDuJour))
         {
             try
             {
@@ -263,18 +265,6 @@ public sealed partial class SauvegardesDeLaBase
 
         CopieFaite(_journal, effacees);
         return null;
-    }
-
-    // Les fichiers provisoires que cette installation a laissés, par une copie interrompue : ils ne désignent aucune copie.
-    private async Task RetirerLesProvisoiresAsync(string dossier)
-    {
-        foreach (var nom in LireLesNoms(dossier) ?? [])
-        {
-            if (NomsDesCopies.EstUnProvisoireDe(nom, _installation))
-            {
-                await CopiesVerifiees.EffacerAsync(Path.Combine(dossier, nom));
-            }
-        }
     }
 
     // Lit le réglage du dossier une fois, au premier usage.

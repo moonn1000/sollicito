@@ -75,3 +75,37 @@ test("si l'état des sauvegardes ne se lit pas, le tableau de bord s'affiche san
   await screen.findByText("Aucune candidature enregistrée pour l'instant.");
   expect(screen.queryByRole("alert")).toBeNull();
 });
+
+test("au lancement, tant que la vérification n'est pas faite, l'état se relit : l'alerte vient sur ce premier écran", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const client = clientSimule({
+      lireLesSauvegardes: vi
+        .fn()
+        .mockResolvedValueOnce(sauvegardesFictives({ verifie: false, derniereCopie: null, copies: [] }))
+        .mockResolvedValue(sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-19T08:00:00Z" } })),
+    });
+    tableauDeBord(client);
+
+    await screen.findByText("Aucune candidature enregistrée pour l'instant.");
+    expect(screen.queryByRole("alert")).toBeNull();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect((await screen.findByRole("alert")).textContent).toContain("le dossier des sauvegardes est introuvable");
+    expect(client.lireLesSauvegardes).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("un « Réessayer » que l'API ne mène pas au bout le dit dans l'alerte", async () => {
+  const client = clientSimule({
+    lireLesSauvegardes: async () => sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-19T08:00:00Z" } }),
+    sauvegarderMaintenant: () => Promise.reject(new ErreurDeLApi(500)),
+  });
+  tableauDeBord(client);
+
+  fireEvent.click(await screen.findByRole("button", { name: "Réessayer" }));
+
+  expect(await screen.findByText("Le nouvel essai n'a pas abouti. Réessayez ; si rien ne change, fermez Sollicito, puis relancez-le.")).toBeDefined();
+});

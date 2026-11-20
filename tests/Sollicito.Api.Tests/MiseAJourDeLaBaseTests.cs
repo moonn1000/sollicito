@@ -114,6 +114,26 @@ public sealed class MiseAJourDeLaBaseTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Les_restes_d_une_copie_d_avant_interrompue_se_retirent_a_la_mise_a_jour_suivante()
+    {
+        await BaseDe12.PeuplerAsync(DossierDeLaBase);
+        Directory.CreateDirectory(DossierDeLaBase.DossierDesSauvegardes);
+        var reste = Path.Combine(DossierDeLaBase.DossierDesSauvegardes, NomsDesCopies.AvantMiseAJour(BaseDe12.MigrationSuivante) + ".0a1b2c3d.partielle");
+        var autre = Path.Combine(DossierDeLaBase.DossierDesSauvegardes, "notes-personnelles.txt");
+        await File.WriteAllTextAsync(reste, "fictif", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(autre, "fictif", TestContext.Current.CancellationToken);
+
+        await using (var api = await LancerSurAsync(_dossier, new HorlogeDeTest()))
+        {
+            await api.AttendreLaPremiereVerificationAsync();
+        }
+
+        Assert.False(File.Exists(reste));
+        Assert.True(File.Exists(autre));
+        Assert.True(EstSaine(CopieDAvant));
+    }
+
+    [Fact]
     public async Task Une_copie_d_avant_impossible_n_essaie_aucune_migration_et_le_dit()
     {
         await BaseDe12.PeuplerAsync(DossierDeLaBase);
