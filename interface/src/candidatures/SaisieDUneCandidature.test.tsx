@@ -96,6 +96,23 @@ test("après un refus puis un échec de l'API, le champ corrigé ne garde ni son
   expect(screen.getByLabelText<HTMLInputElement>("Poste").value).toBe("Comptable");
 });
 
+test("un échec de l'API efface aussi les refus d'un champ qu'on n'a pas modifié : ils venaient de l'envoi précédent", async () => {
+  const enregistrerUneCandidature = vi
+    .fn<ReturnType<typeof clientSimule>["enregistrerUneCandidature"]>()
+    .mockResolvedValueOnce({ enregistree: false, refus: { poste: ["Indiquez le poste."] } })
+    .mockRejectedValueOnce(new Error("panne"));
+  afficher(clientSimule({ enregistrerUneCandidature }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer la candidature" }));
+  const poste = screen.getByLabelText("Poste");
+  await waitFor(() => expect(poste.getAttribute("aria-invalid")).toBe("true"));
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer la candidature" }));
+
+  expect((await screen.findByRole("alert")).textContent).toContain("La candidature n'a pas pu être enregistrée.");
+  expect(poste.getAttribute("aria-invalid")).toBeNull();
+  expect(screen.queryByText("Indiquez le poste.")).toBeNull();
+});
+
 test("corriger un champ refusé efface son refus sans déplacer le focus vers un autre champ refusé", async () => {
   const client = clientSimule({
     enregistrerUneCandidature: async () => ({

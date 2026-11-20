@@ -187,7 +187,7 @@ test("la correction vise le changement que la fiche propose de corriger, et s'an
   expect(resume().Statut).toBe("Envoyée");
 });
 
-test("une candidature introuvable, ou une fiche qui ne se charge pas, le dit", async () => {
+test("une candidature introuvable le dit", async () => {
   afficher(clientSimule({ lireLaFiche: () => Promise.reject(new ErreurDeLApi(404)) }));
   expect((await screen.findByRole("alert")).textContent).toBe("Cette candidature n'existe pas, ou plus.");
 });
