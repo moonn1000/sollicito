@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ErreurDeLApi, type ClientDeLApi, type FicheDUneCandidature as Fiche } from "../api/clientDeLApi.ts";
+import { estIntrouvable, type ClientDeLApi, type FicheDUneCandidature as Fiche } from "../api/clientDeLApi.ts";
 import { afficherLInstant, heureSaisieDe, LIBELLES_DES_STATUTS } from "./affichage.ts";
 import { FormulaireDUneCandidature } from "./FormulaireDUneCandidature.tsx";
 
@@ -16,6 +16,7 @@ export function ModificationDUneCandidature({
   candidature,
   revenir,
   quandModifiee,
+  maintenant = () => new Date(),
 }: {
   client: ClientDeLApi;
   candidature: number;
@@ -23,6 +24,8 @@ export function ModificationDUneCandidature({
   revenir: () => void;
   /** Reçoit la fiche à jour. */
   quandModifiee: (fiche: Fiche) => void;
+  /** L'heure présente : un premier événement à venir ne borne pas l'envoi, que l'API refuse déjà dans le futur. */
+  maintenant?: () => Date;
 }) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
   const titre = useRef<HTMLHeadingElement>(null);
@@ -52,6 +55,7 @@ export function ModificationDUneCandidature({
 
   const fiche = chargement.etape === "prete" ? chargement.fiche : undefined;
   const premier = fiche === undefined ? undefined : premierEvenement(fiche);
+  const borne = premier !== undefined && Date.parse(premier) <= maintenant().getTime() ? premier : undefined;
 
   return (
     <section aria-labelledby="titre-de-la-modification">
@@ -102,7 +106,7 @@ export function ModificationDUneCandidature({
           libelleEnCours="Enregistrement…"
           messageDEchec="La candidature n'a pas pu être modifiée. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le."
           aideDeLEnvoi={
-            premier === undefined ? undefined : `Au plus tard le ${afficherLInstant(premier)}, date du premier événement de l'historique.`
+            borne === undefined ? undefined : `Au plus tard le ${afficherLInstant(borne)}, date du premier événement de l'historique.`
           }
           annuler={revenir}
         >
@@ -126,8 +130,4 @@ function premierEvenement(fiche: Fiche): string | undefined {
   }
 
   return premier;
-}
-
-function estIntrouvable(erreur: unknown): boolean {
-  return erreur instanceof ErreurDeLApi && erreur.statut === 404;
 }

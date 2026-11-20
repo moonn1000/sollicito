@@ -58,6 +58,8 @@ export function FormulaireDUneCandidature({
   const [refusRecus, setRefusRecus] = useState(0);
   const [envoi, setEnvoi] = useState<Envoi>("pret");
   const [connues, setConnues] = useState<EntrepriseConnue[]>([]);
+  // Lu aussitôt, sans attendre le rendu : deux envois rapprochés n'en font qu'un.
+  const enCours = useRef(false);
   const champs = {
     entreprise: useRef<HTMLInputElement>(null),
     poste: useRef<HTMLInputElement>(null),
@@ -99,10 +101,11 @@ export function FormulaireDUneCandidature({
 
   async function soumettre(evenement: FormEvent<HTMLFormElement>) {
     evenement.preventDefault();
-    if (envoi === "en-cours") {
+    if (enCours.current) {
       return;
     }
 
+    enCours.current = true;
     setEnvoi("en-cours");
     try {
       const reponse = await envoyer({ entreprise, poste, envoyeeLe });
@@ -117,6 +120,8 @@ export function FormulaireDUneCandidature({
       // Les refus venaient d'un envoi précédent : ils ne disent rien de celui qui vient d'échouer.
       setRefus({});
       setEnvoi("echec");
+    } finally {
+      enCours.current = false;
     }
   }
 

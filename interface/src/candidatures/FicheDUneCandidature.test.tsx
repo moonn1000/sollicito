@@ -386,3 +386,15 @@ test("l'annonce d'une modification s'affiche sur la fiche, jusqu'à la prochaine
   expect(screen.queryByText("Candidature modifiée : Comptable, chez Lumière Verte SA.")).toBeNull();
   expect(screen.getAllByRole("status")).toHaveLength(1);
 });
+
+test("une autre action ferme la confirmation de la suppression, qui portait sur la fiche d'avant", async () => {
+  const { client } = afficher();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  expect(confirmation()).not.toBeNull();
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
+
+  expect(await screen.findByText("Statut changé : Entretien.")).toBeDefined();
+  expect(confirmation()).toBeNull();
+  expect(client.supprimerUneCandidature).not.toHaveBeenCalled();
+});

@@ -141,6 +141,11 @@ export class ErreurDeLApi extends Error {
   }
 }
 
+/** Vrai pour une candidature qui n'existe pas, ou plus : l'API a répondu 404. */
+export function estIntrouvable(erreur: unknown): boolean {
+  return erreur instanceof ErreurDeLApi && erreur.statut === 404;
+}
+
 /** Les appels de l'interface à l'API locale. */
 export interface ClientDeLApi {
   lireEtat(): Promise<EtatDeLApplication>;

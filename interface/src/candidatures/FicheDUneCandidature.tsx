@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ErreurDeLApi,
+  estIntrouvable,
   type ClientDeLApi,
   type EvenementDeLHistorique,
   type FicheDUneCandidature as Fiche,
@@ -125,6 +125,8 @@ export function FicheDUneCandidature({
     setEnCours(true);
     setMessage(undefined);
     setAnnonceDeDepart(undefined);
+    // Une autre action ferme la confirmation de la suppression : elle portait sur la fiche d'avant.
+    setConfirmation("fermee");
     try {
       const resultat = await faire();
       if (!affichee.current) {
@@ -371,6 +373,7 @@ export function FicheDUneCandidature({
             quandNotee={(fiche) => {
               setMessage(undefined);
               setAnnonceDeDepart(undefined);
+              setConfirmation("fermee");
               montrer(fiche);
             }}
           />
@@ -402,8 +405,4 @@ function Historique({ envoyeeLe, evenements }: { envoyeeLe: string; evenements: 
       </ol>
     </section>
   );
-}
-
-function estIntrouvable(erreur: unknown): boolean {
-  return erreur instanceof ErreurDeLApi && erreur.statut === 404;
 }

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { ErreurDeLApi } from "../api/clientDeLApi.ts";
 import { changementFictif, clientSimule, etapeFictive, ficheFictive } from "../tests/clientSimule.ts";
@@ -6,10 +6,13 @@ import { ModificationDUneCandidature } from "./ModificationDUneCandidature.tsx";
 
 const PREMIER_EVENEMENT = "La date et l'heure d'envoi ne peuvent pas suivre le premier événement de l'historique : l'historique commence à l'envoi.";
 
+// Le 18/11/2026 à 14:30, heure de Bruxelles (le fuseau des tests).
+const maintenant = () => new Date("2026-11-18T13:30:00Z");
+
 function afficher(client = clientSimule()) {
   const revenir = vi.fn();
   const quandModifiee = vi.fn();
-  render(<ModificationDUneCandidature client={client} candidature={7} revenir={revenir} quandModifiee={quandModifiee} />);
+  render(<ModificationDUneCandidature client={client} candidature={7} revenir={revenir} quandModifiee={quandModifiee} maintenant={maintenant} />);
   return { client, revenir, quandModifiee };
 }
 
@@ -162,4 +165,26 @@ test("pendant qu'on tape une autre entreprise, l'écran propose celles déjà en
   const propositions = await screen.findByRole("list", { name: "Entreprises déjà enregistrées :" });
   fireEvent.click(within(propositions).getByRole("button", { name: "Brasserie Lune Rousse S.R.L." }));
   expect(screen.getByLabelText<HTMLInputElement>("Entreprise").value).toBe("Brasserie Lune Rousse S.R.L.");
+});
+
+test("un premier événement à venir ne borne pas l'envoi : l'écran n'en dit rien, l'envoi futur étant déjà refusé", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ type: "Entretien", survenuLe: "2026-12-01T08:30:00Z" })] });
+  afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  await screen.findByLabelText("Date et heure d'envoi");
+
+  expect(description("Date et heure d'envoi")).toEqual([]);
+});
+
+test("deux envois rapprochés, avant le rendu suivant, ne font qu'une modification", async () => {
+  const { client } = afficher(clientSimule({ modifierUneCandidature: vi.fn(() => new Promise<never>(() => {})) }));
+
+  const formulaire = (await screen.findByRole("button", { name: "Enregistrer les modifications" })).closest("form")!;
+  // Dans un même lot, sans rendu entre les deux : seule la garde lue aussitôt arrête le second.
+  act(() => {
+    formulaire.requestSubmit();
+    formulaire.requestSubmit();
+  });
+
+  expect(client.modifierUneCandidature).toHaveBeenCalledOnce();
 });
