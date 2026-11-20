@@ -52,6 +52,42 @@ export function demanderLeJeton(canal: CanalDeLHote, delaiEnMs = DELAI_DU_JETON_
   });
 }
 
+/** L'issue du choix du dossier des sauvegardes, telle que l'hôte la rend (#26). */
+export type IssueDuChoixDuDossier = "choisi" | "annule" | "refuse";
+
+const ISSUES_DU_CHOIX: readonly IssueDuChoixDuDossier[] = ["choisi", "annule", "refuse"];
+
+/**
+ * Demande à l'hôte d'ouvrir le dialogue de dossier de Windows, puis rend l'issue du choix (#26, ADR-0008). Le message
+ * ne porte aucun chemin, et la réponse non plus : seul le dialogue en donne un, et la page relit l'état par l'API. Pas
+ * de délai : l'utilisateur prend le temps qu'il veut dans le dialogue. Un message d'une autre forme est ignoré.
+ */
+export function demanderLeChoixDuDossier(canal: CanalDeLHote): Promise<IssueDuChoixDuDossier> {
+  return new Promise((resoudre) => {
+    const ecouter = (evenement: MessageEvent) => {
+      const issue = lireLIssueDuChoix(evenement.data);
+      if (issue !== undefined) {
+        canal.removeEventListener("message", ecouter);
+        resoudre(issue);
+      }
+    };
+
+    canal.addEventListener("message", ecouter);
+    canal.postMessage({ type: "choisirLeDossierDesSauvegardes" });
+  });
+}
+
+function lireLIssueDuChoix(message: unknown): IssueDuChoixDuDossier | undefined {
+  if (typeof message !== "object" || message === null) {
+    return undefined;
+  }
+
+  const { type, issue } = message as { type?: unknown; issue?: unknown };
+  return type === "dossierDesSauvegardes" && ISSUES_DU_CHOIX.includes(issue as IssueDuChoixDuDossier)
+    ? (issue as IssueDuChoixDuDossier)
+    : undefined;
+}
+
 function lireLeJeton(message: unknown): string | undefined {
   if (typeof message !== "object" || message === null) {
     return undefined;

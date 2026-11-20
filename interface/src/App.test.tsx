@@ -3,7 +3,7 @@ import { expect, test, vi } from "vitest";
 import { App } from "./App.tsx";
 import { ErreurDeLApi } from "./api/clientDeLApi.ts";
 import { HorsDeLaFenetre } from "./connexion.ts";
-import { candidatureFictive, changementFictif, clientSimule, ficheFictive } from "./tests/clientSimule.ts";
+import { candidatureFictive, changementFictif, clientSimule, ficheFictive, sauvegardesFictives } from "./tests/clientSimule.ts";
 
 test("l'écran d'accueil affiche le nom de l'application", () => {
   render(<App connecter={() => new Promise(() => {})} />);
@@ -22,6 +22,7 @@ test("connectée, l'interface le dit et ouvre le tableau de bord, dans la mise e
   expect(within(navigation).getAllByRole("button").map((bouton) => bouton.textContent)).toEqual([
     "Tableau de bord",
     "Nouvelle candidature",
+    "Réglages",
   ]);
   expect(within(navigation).getByRole("button", { name: "Tableau de bord" }).getAttribute("aria-current")).toBe("page");
   expect(screen.getByRole("main")).toBeDefined();
@@ -92,7 +93,7 @@ test("depuis le tableau de bord, on ouvre la fiche, on fait avancer la candidatu
   // La fiche n'est pas une entrée de la navigation : aucune n'est marquée comme la page présente.
   const titre = await screen.findByRole("heading", { level: 2, name: "Fiche de la candidature" });
   const navigation = screen.getByRole("navigation", { name: "Navigation principale" });
-  expect(within(navigation).getAllByRole("button").map((bouton) => bouton.getAttribute("aria-current"))).toEqual([null, null]);
+  expect(within(navigation).getAllByRole("button").map((bouton) => bouton.getAttribute("aria-current"))).toEqual([null, null, null]);
   await waitFor(() => expect(document.activeElement).toBe(titre));
   fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
   expect(await screen.findByText("Statut changé : Entretien.")).toBeDefined();
@@ -164,4 +165,30 @@ test("depuis la fiche, on supprime la candidature après confirmation, puis le t
   await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "Tableau de bord" })));
   expect(await screen.findByText("Aucune candidature enregistrée pour l'instant.")).toBeDefined();
   expect(client.supprimerUneCandidature).toHaveBeenCalledExactlyOnceWith(7);
+});
+
+test("la navigation mène aux réglages, dont la section des sauvegardes choisit un dossier par la fenêtre hôte", async () => {
+  const choisirLeDossierDesSauvegardes = vi.fn(async () => "annule" as const);
+  render(<App connecter={async () => clientSimule()} choisirLeDossierDesSauvegardes={choisirLeDossierDesSauvegardes} />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "Réglages" }));
+
+  const titre = await screen.findByRole("heading", { level: 2, name: "Réglages" });
+  await waitFor(() => expect(document.activeElement).toBe(titre));
+  expect(screen.getByRole("button", { name: "Réglages" }).getAttribute("aria-current")).toBe("page");
+  fireEvent.click(await within(screen.getByRole("region", { name: "Sauvegardes" })).findByRole("button", { name: "Choisir un autre dossier…" }));
+  expect(await screen.findByText("Le dossier des sauvegardes n'a pas changé.")).toBeDefined();
+  expect(choisirLeDossierDesSauvegardes).toHaveBeenCalledOnce();
+});
+
+test("l'alerte des sauvegardes du tableau de bord mène aux réglages", async () => {
+  const client = clientSimule({
+    lireLesSauvegardes: async () => sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-19T08:00:00Z" } }),
+  });
+  render(<App connecter={async () => client} />);
+
+  fireEvent.click(await within(await screen.findByRole("alert")).findByRole("button", { name: "Ouvrir les réglages" }));
+
+  expect(await screen.findByRole("heading", { level: 2, name: "Réglages" })).toBeDefined();
+  expect(await screen.findByRole("region", { name: "Sauvegardes" })).toBeDefined();
 });

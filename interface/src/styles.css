@@ -487,3 +487,46 @@ button {
 .historique li.envoi {
   border-left-color: var(--texte-discret);
 }
+
+/* Les sauvegardes (#26) : la section des réglages, et l'alerte du tableau de bord quand les copies ne se font plus. */
+
+.sauvegardes {
+  display: grid;
+  gap: 0.9rem;
+  max-width: 48rem;
+}
+
+.sauvegardes h3 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.sauvegardes > p,
+.sauvegardes .aide {
+  margin: 0;
+}
+
+.sauvegardes .avertissement {
+  margin: 0;
+  font-weight: 600;
+}
+
+.chemin {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-weight: normal;
+  overflow-wrap: anywhere;
+}
+
+.alerte-des-sauvegardes {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--refus);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+
+.alerte-des-sauvegardes p {
+  margin: 0 0 0.75rem;
+  color: var(--refus);
+  font-weight: 600;
+}

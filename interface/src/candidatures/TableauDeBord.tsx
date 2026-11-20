@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Candidature, ClientDeLApi } from "../api/clientDeLApi.ts";
+import { AlerteDesSauvegardes } from "../sauvegardes/AlerteDesSauvegardes.tsx";
 import { afficherLInstant, LIBELLES_DES_STATUTS } from "./affichage.ts";
 
 type Chargement = { etape: "chargement" } | { etape: "pret"; candidatures: Candidature[] } | { etape: "echec" };
@@ -7,13 +8,15 @@ type Chargement = { etape: "chargement" } | { etape: "pret"; candidatures: Candi
 /**
  * Le tableau de bord : les candidatures, les plus récentes d'abord, dans l'ordre que rend l'API, avec leur
  * entreprise, leur poste, leur date d'envoi et leur statut. Le poste ouvre la fiche de la candidature (#12). Les
- * textes s'affichent comme du texte, jamais comme du HTML : React les échappe.
+ * textes s'affichent comme du texte, jamais comme du HTML : React les échappe. Quand les copies de la base ne se font
+ * plus, une alerte le dit en tête (#26).
  */
 export function TableauDeBord({
   client,
   annonce,
   nouvelleCandidature,
   ouvrirLaFiche,
+  ouvrirLesReglages,
   prendreLeFocus = false,
 }: {
   client: ClientDeLApi;
@@ -22,6 +25,8 @@ export function TableauDeBord({
   nouvelleCandidature: () => void;
   /** Ouvre la fiche de la candidature de cet identifiant. */
   ouvrirLaFiche: (candidature: number) => void;
+  /** Ouvre les réglages, où se choisit le dossier des sauvegardes. */
+  ouvrirLesReglages?: () => void;
   /** Vrai quand l'utilisateur vient d'y être mené : son titre reçoit alors le focus, pas au premier affichage. */
   prendreLeFocus?: boolean;
 }) {
@@ -64,6 +69,7 @@ export function TableauDeBord({
           {annonce}
         </p>
       )}
+      <AlerteDesSauvegardes client={client} ouvrirLesReglages={ouvrirLesReglages} />
       {chargement.etape === "chargement" && <p>Chargement des candidatures…</p>}
       {chargement.etape === "echec" && (
         <p className="alerte" role="alert">

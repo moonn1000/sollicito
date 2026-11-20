@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { CanalSimule, JETON_FICTIF } from "../tests/canalSimule.ts";
-import { demanderLeJeton } from "./canalDeLHote.ts";
+import { demanderLeChoixDuDossier, demanderLeJeton } from "./canalDeLHote.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -44,4 +44,29 @@ test("sans jeton remis dans le délai, la demande échoue et cesse d'écouter", 
 
   await verification;
   expect(canal.abonnes).toBe(0);
+});
+
+test("la page demande à l'hôte le choix du dossier des sauvegardes, sans chemin, et reçoit son issue", async () => {
+  const canal = new CanalSimule();
+
+  const issue = demanderLeChoixDuDossier(canal);
+  expect(canal.messagesRecus).toEqual([{ type: "choisirLeDossierDesSauvegardes" }]);
+  canal.envoyer({ type: "dossierDesSauvegardes", issue: "choisi" });
+
+  await expect(issue).resolves.toBe("choisi");
+  expect(canal.abonnes).toBe(0);
+});
+
+test("une réponse au choix du dossier qui n'a pas la forme attendue est ignorée", async () => {
+  const canal = new CanalSimule();
+
+  const issue = demanderLeChoixDuDossier(canal);
+  canal.envoyer({ type: "jeton", jeton: JETON_FICTIF });
+  canal.envoyer({ type: "dossierDesSauvegardes", issue: "C:\Users\Compte.Fictif" });
+  canal.envoyer({ type: "dossierDesSauvegardes" });
+  canal.envoyer("choisi");
+  expect(canal.abonnes).toBe(1);
+  canal.envoyer({ type: "dossierDesSauvegardes", issue: "refuse" });
+
+  await expect(issue).resolves.toBe("refuse");
 });
