@@ -65,7 +65,7 @@ Un fichier absent vaut des réglages par défaut. Un fichier illisible n'arrête
 
 ### Un dossier qui manque : ni copie, ni repli
 
-Si le dossier choisi manque (clé retirée, partage débranché), Sollicito ne fait aucune copie, n'en efface aucune, et ne se replie pas ailleurs. Il ne recrée jamais le dossier : une autre clé a pu prendre la même lettre. Le tableau de bord affiche une alerte : depuis quand aucune copie n'a réussi, et quoi faire. Sollicito réessaie chaque heure, à la fermeture, au lancement suivant et sur « Réessayer » ; l'alerte part dès qu'une copie réussit. Elle se lit dans l'état que l'API tient en mémoire, sans toucher au dossier, qu'un partage débranché pourrait bloquer plusieurs secondes.
+Si le dossier choisi manque (clé retirée, partage débranché), Sollicito ne fait aucune copie, n'en efface aucune, et ne se replie pas ailleurs. Il ne recrée jamais le dossier : une autre clé a pu prendre la même lettre. Le tableau de bord affiche une alerte : depuis quand aucune copie n'a réussi, et quoi faire. L'instant de la dernière copie réussie se garde dans `sauvegardes.json`, à côté des réglages, sans chemin : relancé alors que le dossier manque, Sollicito le dit encore. Sollicito réessaie chaque heure, à la fermeture, au lancement suivant et sur « Réessayer » ; l'alerte part dès qu'une copie réussit. Elle se lit dans l'état que l'API tient en mémoire, sans toucher au dossier, qu'un partage débranché pourrait bloquer plusieurs secondes.
 
 ### La restauration attend #28
 

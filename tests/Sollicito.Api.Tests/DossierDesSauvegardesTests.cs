@@ -120,6 +120,35 @@ public sealed class DossierDesSauvegardesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Relance_alors_que_le_dossier_choisi_manque_Sollicito_dit_encore_depuis_quand_aucune_copie_n_a_reussi()
+    {
+        DateTime derniere;
+        await using (var api = await LancerSurAsync(_dossier, new HorlogeDeTest()))
+        {
+            await api.AttendreLaPremiereVerificationAsync();
+            Assert.Equal(IssueDuChoix.Choisi, await api.Sauvegardes().ChoisirLeDossierAsync(_ailleurs, TestContext.Current.CancellationToken));
+        }
+
+        // La copie de la fermeture est la dernière réussie ; puis la clé est retirée, Sollicito fermé.
+        derniere = File.GetLastWriteTimeUtc(Path.Combine(_ailleurs, Fichiers(_ailleurs).Single()));
+        await SupprimerAsync(_ailleurs);
+
+        await using (var relancee = await LancerSurAsync(_dossier, new HorlogeDeTest()))
+        {
+            var etat = await relancee.AttendreLaPremiereVerificationAsync();
+
+            Assert.Equal(MotifDEchec.DossierIntrouvable, etat.Echec!.Motif);
+            Assert.Equal(derniere, etat.DerniereCopie);
+            Assert.Equal(derniere, (await relancee.LireLesSauvegardesAsync())["derniereCopie"]!.GetValue<DateTime>().ToUniversalTime());
+        }
+
+        // Le fichier ne porte qu'un instant, sans chemin.
+        var garde = Texte(Path.Combine(_dossier, "sauvegardes.json"));
+        Assert.DoesNotContain(Path.GetFileName(_ailleurs), garde, StringComparison.Ordinal);
+        Assert.Equal(["derniereCopie"], JsonNode.Parse(garde)!.AsObject().Select(propriete => propriete.Key));
+    }
+
+    [Fact]
     public async Task Revenir_au_dossier_par_defaut_y_fait_une_copie_et_l_adopte()
     {
         await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest());

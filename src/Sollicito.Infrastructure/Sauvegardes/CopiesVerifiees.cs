@@ -17,16 +17,25 @@ public static class CopiesVerifiees
     private const int Essais = 20;
     private static readonly TimeSpan EntreDeuxEssais = TimeSpan.FromMilliseconds(50);
 
-    /// <summary>Copie la base dans <paramref name="destination"/>, son nom final, une fois la copie vérifiée.</summary>
-    public static async Task EcrireAsync(string baseSource, string destination, CancellationToken annulation)
+    /// <summary>
+    /// Copie la base dans <paramref name="destination"/>, son nom final, une fois la copie vérifiée par
+    /// <paramref name="verifier"/>, <see cref="CopieDeLaBase.EstSaineAsync"/> par défaut. Une copie qui ne se vérifie pas
+    /// lève <see cref="InvalidDataException"/>, sans toucher à la destination.
+    /// </summary>
+    public static async Task EcrireAsync(
+        string baseSource,
+        string destination,
+        CancellationToken annulation,
+        Func<string, CancellationToken, Task<bool>>? verifier = null)
     {
+        verifier ??= CopieDeLaBase.EstSaineAsync;
         var dossier = Path.GetDirectoryName(destination)
             ?? throw new ArgumentException("Une copie se range dans un dossier.", nameof(destination));
         var provisoire = Path.Combine(dossier, NomsDesCopies.Provisoire(Path.GetFileName(destination)));
         try
         {
             await CopieDeLaBase.CopierAsync(baseSource, provisoire, annulation);
-            if (!await CopieDeLaBase.EstSaineAsync(provisoire, annulation))
+            if (!await verifier(provisoire, annulation))
             {
                 throw new InvalidDataException("La copie ne se relit pas comme une base saine.");
             }

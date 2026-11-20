@@ -31,6 +31,7 @@ public sealed partial class SauvegardesDeLaBase
 
     private readonly DossierDeLaBase _base;
     private readonly FichierDesReglages _reglages;
+    private readonly FichierDeLaDerniereCopie _derniereCopieGardee;
     private readonly TimeProvider _horloge;
     private readonly ILogger<SauvegardesDeLaBase> _journal;
     private readonly SemaphoreSlim _uneALaFois = new(1, 1);
@@ -52,6 +53,7 @@ public sealed partial class SauvegardesDeLaBase
         ArgumentNullException.ThrowIfNull(dossierDeLaBase);
         _base = dossierDeLaBase;
         _reglages = new FichierDesReglages(dossierDeLaBase);
+        _derniereCopieGardee = new FichierDeLaDerniereCopie(dossierDeLaBase);
         _horloge = horloge;
         _journal = journal;
         _installation = NomsDesCopies.Installation(Environment.MachineName, dossierDeLaBase.Chemin);
@@ -90,7 +92,7 @@ public sealed partial class SauvegardesDeLaBase
                 await CopierAsync(dossier, annulation);
             }
 
-            Publier();
+            await PublierAsync();
         }
         finally
         {
@@ -109,7 +111,7 @@ public sealed partial class SauvegardesDeLaBase
         {
             Charger();
             await CopierAsync(DossierDesCopies, annulation);
-            return Publier();
+            return await PublierAsync();
         }
         finally
         {
@@ -195,7 +197,7 @@ public sealed partial class SauvegardesDeLaBase
             _reglageIllisible = false;
             ReussirLaCopie();
             DossierChoisi(_journal, dossier is null);
-            Publier();
+            await PublierAsync();
             return IssueDuChoix.Choisi;
         }
         finally
@@ -275,6 +277,7 @@ public sealed partial class SauvegardesDeLaBase
             return;
         }
 
+        _derniereCopie = _derniereCopieGardee.Lire();
         var lecture = _reglages.Lire();
         _dossierChoisi = lecture.Reglages.DossierDesSauvegardes is { } dossier && !EstLeDossierParDefaut(dossier)
             ? Path.TrimEndingDirectorySeparator(dossier)
@@ -294,16 +297,26 @@ public sealed partial class SauvegardesDeLaBase
             Path.TrimEndingDirectorySeparator(_base.DossierDesSauvegardes),
             StringComparison.OrdinalIgnoreCase);
 
-    // Relit les copies gardées, puis publie l'état. Un dossier qui ne se lit plus garde la date de la dernière copie lue.
-    private EtatDesSauvegardes Publier()
+    // Relit les copies gardées, puis publie l'état. Un dossier qui ne se lit plus garde la date de la dernière copie
+    // réussie, que sauvegardes.json garde aussi d'une séance à l'autre.
+    private async Task<EtatDesSauvegardes> PublierAsync()
     {
         var copies = new List<CopieGardee>();
         var dossier = DossierDesCopies;
         var noms = LireLesNoms(dossier);
         copies.AddRange(Garder(dossier, PlanDesCopies.CopiesDuJour(noms ?? [], _installation), SorteDeCopie.DuJour));
-        if (noms is not null)
+        if (copies.Select(copie => (DateTime?)copie.FaiteLe).Max() is { } lue && lue != _derniereCopie)
         {
-            _derniereCopie = copies.Select(copie => (DateTime?)copie.FaiteLe).Max();
+            _derniereCopie = lue;
+            try
+            {
+                await _derniereCopieGardee.EcrireAsync(lue);
+            }
+            catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException)
+            {
+                // Gardée en mémoire seulement : une relance dirait moins bien depuis quand.
+                DerniereCopieNonGardee(_journal, erreur.GetType().Name);
+            }
         }
 
         copies.AddRange(Garder(_base.DossierDesSauvegardes, PlanDesCopies.CopiesDAvantUneMiseAJour(LireLesNoms(_base.DossierDesSauvegardes) ?? []), SorteDeCopie.AvantMiseAJour));
@@ -378,4 +391,7 @@ public sealed partial class SauvegardesDeLaBase
 
     [LoggerMessage(EventId = 37, Level = LogLevel.Warning, Message = "Copie de la fermeture abandonnée : la copie d'avant reste.")]
     private static partial void CopieDeFermetureAbandonnee(ILogger journal);
+
+    [LoggerMessage(EventId = 38, Level = LogLevel.Warning, Message = "Instant de la dernière copie non gardé ({TypeDErreur}).")]
+    private static partial void DerniereCopieNonGardee(ILogger journal, string typeDErreur);
 }
