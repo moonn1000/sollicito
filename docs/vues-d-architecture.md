@@ -12,9 +12,8 @@ Où se place Sollicito : qui s'en sert, avec quels systèmes il échange, et ce 
 
 ```mermaid
 flowchart TB
-    personne["<b>Personne en recherche d'emploi</b><br>[Personne]<br>Mène sa recherche d'emploi en Belgique"]
-
     subgraph poste["Poste de l'utilisateur, sous Windows"]
+        personne["<b>Personne en recherche d'emploi</b><br>[Personne]<br>Mène sa recherche d'emploi en Belgique"]
         sollicito["<b>Sollicito</b><br>[Système logiciel]<br>Candidatures, relances, offres, IA facultative :<br>un exe d'un seul fichier, ses données sur le poste<br>P1 à P5"]
         runtime["<b>Runtime WebView2</b><br>[Système extérieur : composant de Windows]<br>Affiche l'interface de Sollicito<br>P1"]
         navigateur["<b>Navigateur par défaut</b><br>[Système extérieur]<br>Ouvre un lien externe cliqué par l'utilisateur<br>P1"]
@@ -88,16 +87,15 @@ config:
     rankSpacing: 45
 ---
 flowchart TB
-    personne["<b>Personne en recherche d'emploi</b><br>[Personne]"]
-
     subgraph poste["Poste de l'utilisateur, sous Windows"]
+        personne["<b>Personne en recherche d'emploi</b><br>[Personne]"]
         subgraph sollicito["Sollicito"]
             interface["<b>Interface</b><br>[Conteneur : React, TypeScript]<br>Exécutée dans le runtime WebView2<br>P1"]
             subgraph processus["Processus de l'exe"]
                 fenetre["<b>Fenêtre hôte</b><br>[Conteneur : C#, WinForms, WebView2]<br>P1"]
                 api["<b>API locale</b><br>[Conteneur : C#, ASP.NET Core, EF Core]<br>N'écoute que sur 127.0.0.1<br>P1"]
             end
-            subgraph donnees["Dossier de données : %LOCALAPPDATA%\Sollicito"]
+            subgraph donnees["Dossier de données<br>%LOCALAPPDATA%\Sollicito"]
                 base[("<b>Base SQLite</b><br>[Conteneur : SQLite]<br>P2")]
                 cles[("<b>Clés d'IA chiffrées</b><br>[Fichiers]<br>P4")]
                 profil[("<b>Profil WebView2</b><br>[Fichiers du runtime]<br>P1")]
@@ -116,12 +114,13 @@ flowchart TB
 
     personne -- "se sert des écrans" --> interface
     fenetre -- "la démarre" --> api
-    fenetre -- "remet le jeton" --> interface
-    interface -- "HTTP sur 127.0.0.1, jeton" --> api
-    fenetre -- "crée l'environnement, filtre les requêtes" --> runtime
+    fenetre -- "affiche, remet le jeton" --> interface
+    interface -- "HTTP, 127.0.0.1, jeton" --> api
+    api -- "sert ses fichiers" --> interface
+    fenetre -- "crée, filtre les requêtes" --> runtime
     runtime -- "l'exécute" --> interface
     api -- "lit, écrit" --> base
-    api -- "chiffre, relit, P4" --> cles
+    api -- "chiffre, P4" --> cles
     api -- "sauvegarde, P2" --> sauvegardes
     fenetre -- "lien cliqué" --> navigateur
     fenetre -- "brouillon (mailto), P3" --> messagerie
