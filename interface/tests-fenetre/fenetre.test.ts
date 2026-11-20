@@ -3,7 +3,7 @@
 // protocole CDP ; les réglages propres à la version publiée se vérifient à la main.
 // Lancement : `pnpm run test:fenetre`, sous Windows. Les tests se suivent dans l'ordre : le dernier ferme la fenêtre.
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Request } from "playwright-core";
 import { afterAll, beforeAll, expect, test } from "vitest";
@@ -371,6 +371,9 @@ test("la base se copie au lancement, puis dans le dossier choisi par le dialogue
     await attendre(250);
   }
   const [copie] = await copiesDuJour(parDefaut);
+  // Un même dossier s'écrit de deux façons sous Windows : le runner de la CI donne son dossier temporaire en nom court
+  // (RUNNER~1), et l'application garde le dossier choisi en nom long. On compare donc des chemins rendus canoniques.
+  const canonique = async (chemin: string | null) => realpath(chemin ?? "");
 
   // Le dialogue de la version de test lit le dossier à choisir dans un fichier du dossier de données.
   const choisi = join(dossierDeDonnees, "cle-usb-fictive");
@@ -379,15 +382,17 @@ test("la base se copie au lancement, puis dans le dossier choisi par le dialogue
   await page.getByRole("button", { name: "Réglages" }).click();
   const section = page.getByRole("region", { name: "Sauvegardes" });
   await section.getByText("Les copies ne sont pas chiffrées : toute personne qui accède à leur dossier peut les lire.").waitFor();
-  expect(await section.locator("dl.resume dd").first().textContent()).toBe(parDefaut);
+  expect(await canonique(await section.locator("dl.resume dd").first().textContent())).toBe(await canonique(parDefaut));
   await section.getByRole("button", { name: "Choisir un autre dossier…" }).click();
 
   await section.getByText("Dossier des sauvegardes changé : une copie vient d'y être faite. Les copies de l'ancien dossier y restent.").waitFor();
-  expect(await section.locator("dl.resume dd").first().textContent()).toBe(choisi);
+  expect(await canonique(await section.locator("dl.resume dd").first().textContent())).toBe(await canonique(choisi));
   expect(await copiesDuJour(choisi)).toEqual([copie]);
   expect(await copiesDuJour(parDefaut)).toEqual([copie]);
   // Le réglage vit dans le dossier de données, hors de la base.
-  expect(JSON.parse(await readFile(join(dossierDeDonnees, "reglages.json"), "utf8"))).toEqual({ dossierDesSauvegardes: choisi });
+  const reglages = JSON.parse(await readFile(join(dossierDeDonnees, "reglages.json"), "utf8")) as Record<string, string>;
+  expect(Object.keys(reglages)).toEqual(["dossierDesSauvegardes"]);
+  expect(await canonique(reglages.dossierDesSauvegardes ?? null)).toBe(await canonique(choisi));
   copieChoisie = { chemin: join(choisi, copie!), ecriteLe: (await stat(join(choisi, copie!))).mtimeMs };
 });
 
