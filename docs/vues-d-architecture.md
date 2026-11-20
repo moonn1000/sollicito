@@ -60,7 +60,7 @@ flowchart TB
 
 ### Ce qui quitte le poste
 
-Sollicito n'a pas de serveur distant. Trois échanges seulement franchissent la limite du poste, ceux que décrivent l'[ADR-0004](adr/0004-v1-resserree-paliers.md) (« Ce qui quitte la machine ») et le [README](../README.md) (« Ce qui quitte votre machine ») :
+Sollicito n'a pas de serveur distant. Seuls trois échanges prévus franchissent la limite du poste, ceux que décrivent l'[ADR-0004](adr/0004-v1-resserree-paliers.md) (« Ce qui quitte la machine ») et le [README](../README.md) (« Ce qui quitte votre machine ») :
 
 1. ce que l'utilisateur confie à l'IA en ligne, Claude ou OpenAI, s'il en configure une (palier 4) ; un modèle Ollama, qui tourne sur le poste, ne fait rien sortir ;
 2. les données de diagnostic que le runtime WebView2 envoie à Microsoft ;
@@ -99,8 +99,8 @@ flowchart TB
                 base[("<b>Base SQLite</b><br>[Conteneur : SQLite]<br>P2")]
                 cles[("<b>Clés d'IA chiffrées</b><br>[Fichiers]<br>P4")]
                 profil[("<b>Profil WebView2</b><br>[Fichiers du runtime]<br>P1")]
+                sauvegardes[("<b>Sauvegardes</b><br>[Fichiers, dossier réglable]<br>P2")]
             end
-            sauvegardes[("<b>Sauvegardes</b><br>[Fichiers, dossier réglable]<br>P2")]
         end
         runtime["<b>Runtime WebView2</b><br>[Système extérieur]<br>P1"]
         navigateur["<b>Navigateur par défaut</b><br>[Système extérieur]<br>P1"]
@@ -115,13 +115,13 @@ flowchart TB
     personne -- "se sert des écrans" --> interface
     fenetre -- "la démarre" --> api
     fenetre -- "affiche, remet le jeton" --> interface
-    interface -- "HTTP, 127.0.0.1, jeton" --> api
+    interface -- "HTTP sur 127.0.0.1, jeton en en-tête" --> api
     api -- "sert ses fichiers" --> interface
     fenetre -- "crée, filtre les requêtes" --> runtime
     runtime -- "l'exécute" --> interface
     api -- "lit, écrit" --> base
     api -- "chiffre, P4" --> cles
-    api -- "sauvegarde, P2" --> sauvegardes
+    api -- "sauvegarde en tâche de fond, P2" --> sauvegardes
     fenetre -- "lien cliqué" --> navigateur
     fenetre -- "brouillon (mailto), P3" --> messagerie
     api -- "texte à analyser, P4" --> ollama
@@ -162,9 +162,9 @@ flowchart TB
 
 | Conteneur | Technologie | Responsabilités | Dans le dépôt | Palier |
 | --- | --- | --- | --- | --- |
-| Fenêtre hôte | C#, .NET 10, WinForms, contrôle WebView2 | construire et démarrer l'API, l'arrêter à la fermeture ; créer l'environnement du runtime et son profil ; remettre le jeton à l'interface ; annuler les navigations et retenir les requêtes hors de l'origine de l'interface ; ouvrir au-dehors un lien cliqué et, au palier 3, le brouillon d'une relance | `src/Sollicito.Fenetre` | P1 (#13) |
-| API locale | C#, ASP.NET Core, Kestrel, EF Core | écouter sur 127.0.0.1 seulement, sur un port choisi au lancement ; exiger le jeton, contrôler les en-têtes `Host` et `Origin` ; servir les fichiers de l'interface ; porter les règles des candidatures, puis des relances, des offres et de l'IA ; lire et écrire la base, la sauvegarder | `src/Sollicito.Api`, avec `src/Sollicito.Application`, `src/Sollicito.Domain` et `src/Sollicito.Infrastructure` | P1 (#10) |
-| Interface | React, TypeScript, construite par Vite | les écrans ; garder le jeton en mémoire et l'envoyer à chaque appel ; afficher tout texte échappé | `interface/` | P1 (#8, #13) |
+| Fenêtre hôte | C#, .NET 10, WinForms, contrôle WebView2 | construire et démarrer l'API, l'arrêter à la fermeture ; créer l'environnement du runtime et son profil ; remettre le jeton à l'interface ; annuler les navigations et retenir les requêtes hors de l'origine de l'interface ; ouvrir au-dehors un lien cliqué et, au palier 3, le brouillon d'une relance ; au palier 2, ouvrir le dialogue de Windows qui choisit le dossier des sauvegardes (#26) | `src/Sollicito.Fenetre` | P1 (#13) |
+| API locale | C#, ASP.NET Core, Kestrel, EF Core | écouter sur 127.0.0.1 seulement, sur un port choisi au lancement ; exiger le jeton, contrôler les en-têtes `Host` et `Origin` ; servir les fichiers de l'interface ; porter les règles des candidatures, puis des relances, des offres et de l'IA ; lire et écrire la base ; la sauvegarder, au palier 2, par une tâche de fond (voir « Tâches de fond ») | `src/Sollicito.Api`, avec `src/Sollicito.Application`, `src/Sollicito.Domain` et `src/Sollicito.Infrastructure` | P1 (#10) |
+| Interface | React, TypeScript, construite par Vite | les écrans ; garder le jeton en mémoire et l'envoyer dans son en-tête à chaque appel ; afficher tout texte échappé | `interface/` | P1 (#8, #13) |
 | Base SQLite | SQLite, schéma par migrations EF Core | les données de l'utilisateur : six entités en base au terme de la V1 ([modèle de domaine](modele-de-domaine.md)) | migrations : `src/Sollicito.Infrastructure/Persistance/Migrations` | P2 (#11) |
 
 L'API se découpe en couches (Clean Architecture) et en modules : Candidatures, Offres et connecteurs, Relances, IA (ADR-0004, D4). Leur détail est l'affaire de la vue des composants (#59).
@@ -175,17 +175,22 @@ Les données vivent sous le profil de l'utilisateur, dans le dossier de données
 
 - la base, `sollicito.db`, que l'API crée ou met à jour au lancement, avant d'écouter ;
 - le profil du runtime WebView2, `WebView2\`, que la fenêtre fixe à la création de l'environnement ;
+- au palier 2, les sauvegardes, par défaut dans `Sauvegardes\` (#26) : leur dossier se règle, et l'utilisateur peut le placer sur un autre support, puisqu'une copie sur le même disque ne protège pas de sa panne (ADR-0001, D10) ;
+- au palier 2 aussi, les réglages de l'application, dans `reglages.json`, hors de la base, à commencer par le dossier des sauvegardes (#26) ;
 - au palier 4, les clés d'IA, chiffrées par Data Protection et DPAPI, rangées hors de la base : ni les sauvegardes ni les exports ne les emportent.
 
-Les sauvegardes (palier 2) font exception : leur dossier se règle, et l'utilisateur peut le placer sur un autre support, puisqu'une copie sur le même disque ne protège pas de sa panne (ADR-0001, D10). Supprimer l'exe laisse toutes ces données en place (ADR-0004, « Conséquences »).
+Supprimer l'exe laisse toutes ces données en place (ADR-0004, « Conséquences »).
 
 ### Les échanges
 
 - **La fenêtre et l'interface** : la page signale qu'elle est prête, la fenêtre vérifie la source du message et lui remet le jeton, qui ne vit qu'en mémoire ([modèle de menaces](modele-de-menaces.md), « Canal du jeton »).
-- **L'interface et l'API** : l'API sert l'interface et ses routes à la même origine, `http://127.0.0.1:<port>`. Elle n'écoute sur aucune interface réseau, et refuse tout appel qui ne vient pas de l'interface : jeton, `Host`, `Origin` ([modèle de menaces](modele-de-menaces.md), « Qui peut appeler l'API » et « Protections de l'API locale »).
+- **L'interface et l'API** : l'API sert l'interface et ses routes à la même origine, `http://127.0.0.1:<port>`. L'interface l'appelle en HTTP, le jeton dans l'en-tête `Sollicito-Jeton`. L'API n'écoute sur aucune interface réseau, et refuse les appels des autres pages web, des autres appareils et des autres comptes du poste : jeton, `Host`, `Origin`. Un programme lancé sous le compte de l'utilisateur n'est arrêté par rien de cela ([modèle de menaces](modele-de-menaces.md), « Qui peut appeler l'API », « Protections de l'API locale » et « Limites »).
 - **Les sorties de la fenêtre** : la fenêtre annule toute navigation et retient toute requête de la page vers une autre origine (ADR-0006). Seule la fenêtre ouvre au-dehors, par le shell de Windows, un lien `http` ou `https` cliqué par l'utilisateur (ADR-0006) et, au palier 3, le brouillon d'une relance, construit à partir de champs validés par l'API (ADR-0003, « Brouillon de relance »). Le détail et les limites : [modèle de menaces](modele-de-menaces.md), « Protections de la fenêtre » et « Limites ».
 - **L'IA** (palier 4) : c'est l'API, pas la page, qui appelle le fournisseur : chaque clé va à l'adresse officielle de son fournisseur, fixée dans le code, en HTTPS ; l'adresse d'Ollama se règle (ADR-0001, D7).
 
-### Pas de conteneur d'ingestion
+### Tâches de fond
 
-La vue n'a aucun conteneur d'ingestion des offres. L'ingestion en tâche de fond attend la V2, avec le Forem (ADR-0004, D4) : seul le trait pointillé « API locale → Le Forem » la représente. Une tâche de fond tournerait dans le processus de l'API, sans conteneur à elle (ADR-0001, D4). La sauvegarde automatique (#26) est une responsabilité de l'API ; son déclenchement relève de #26.
+Comme l'ADR-0001 (D4) le veut pour l'ingestion des offres, une tâche de fond tourne dans le processus de l'API, sans conteneur à elle.
+
+- **Aucun conteneur d'ingestion des offres.** L'ingestion en tâche de fond attend la V2, avec le Forem (ADR-0004, D4) : seul le trait pointillé « API locale → Le Forem » la représente.
+- **La sauvegarde automatique** (palier 2) est une responsabilité de l'API. Son déclenchement relève de #26, qui l'a fixé ainsi : une minuterie, dans le processus de l'API, fait la copie au lancement et à la fermeture ; une fois par heure, elle fait la copie du nouveau jour et réessaie un dossier de sauvegarde manquant. L'ADR-0008, qui arrive avec #26, consignera ce choix.

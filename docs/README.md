@@ -4,7 +4,7 @@
 - **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D12 (la documentation vit avec le code) ; [ADR-0004](adr/0004-v1-resserree-paliers.md) (la V1 documentée en entier en UML)
 - **Périmètre** : les pages de `docs/`, et ce qui viendra au palier 5
 
-L'architecture de la V1 de Sollicito, telle que la fixe l'ADR-0004 : ce qui est décidé et pourquoi, de quoi Sollicito est fait, ce que l'utilisateur y fait, son modèle de domaine et ses protections. Elle vit avec le code : une pull request qui change ce qu'une page décrit la met à jour (ADR-0001, D12). Les diagrammes sont écrits en Mermaid, que GitHub affiche.
+L'architecture de la V1 de Sollicito, telle que la fixe l'ADR-0004 : ce qui est décidé et pourquoi, de quoi Sollicito est fait, ce que l'utilisateur y fait, son modèle de domaine et ses protections. Elle vit avec le code (ADR-0001, D12) : une pull request qui change ce qu'une page décrit la met à jour, comme le veut la définition de fini de la V1 (#5). Les diagrammes sont écrits en Mermaid, que GitHub affiche.
 
 | Page | Ce qu'elle montre | Diagrammes |
 | --- | --- | --- |
