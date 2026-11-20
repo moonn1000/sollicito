@@ -165,7 +165,7 @@ test("une modification part en PUT, en JSON, vers la fiche, et rend la fiche à 
   const envoyer = apiQuiRepond(Response.json(ficheFictive({ id: 7, poste: "Comptable senior" })));
 
   expect(await creerClientDeLApi(JETON_FICTIF, envoyer).modifierUneCandidature(7, SAISIE)).toEqual({
-    modifiee: true,
+    issue: "modifiee",
     fiche: ficheFictive({ id: 7, poste: "Comptable senior" }),
   });
   const [adresse, options] = envoyer.mock.calls[0]!;
@@ -182,7 +182,7 @@ test("une modification part en PUT, en JSON, vers la fiche, et rend la fiche à 
     errors: { envoyeeLe: ["La date et l'heure d'envoi ne peuvent pas suivre le premier événement de l'historique : l'historique commence à l'envoi."], statut: ["ignoré"] },
   };
   expect(await creerClientDeLApi(JETON_FICTIF, apiQuiRepond(Response.json(probleme, { status: 400 }))).modifierUneCandidature(7, SAISIE)).toEqual({
-    modifiee: false,
+    issue: "refusee",
     refus: { envoyeeLe: ["La date et l'heure d'envoi ne peuvent pas suivre le premier événement de l'historique : l'historique commence à l'envoi."] },
   });
 
@@ -243,4 +243,32 @@ test("une correction d'étape part en POST, en JSON, vers l'étape qu'elle corri
   await expect(creerClientDeLApi(JETON_FICTIF, illisible).corrigerUneEtape(7, 12, saisie)).rejects.toEqual(new ErreurDeLApi(400));
   await expect(creerClientDeLApi(JETON_FICTIF, introuvable).corrigerUneEtape(7, 12, saisie)).rejects.toEqual(new ErreurDeLApi(404));
   await expect(creerClientDeLApi(JETON_FICTIF, envoyer).corrigerUneEtape(7, 0, saisie)).rejects.toThrow(RangeError);
+});
+
+test("sans accord, un nom à corriger revient avec l'entreprise et le nombre de candidatures ; l'accord part dans le corps", async () => {
+  const probleme = {
+    title: "La candidature n'est pas modifiée : ce nom corrigerait celui d'une entreprise enregistrée.",
+    status: 409,
+    entreprise: { id: 4, nom: "Lumière Verte SA" },
+    candidatures: 3,
+  };
+  const refus = apiQuiRepond(Response.json(probleme, { status: 409 }));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, refus).modifierUneCandidature(7, SAISIE)).toEqual({
+    issue: "nomACorriger",
+    entreprise: { id: 4, nom: "Lumière Verte SA" },
+    candidatures: 3,
+  });
+  expect(JSON.parse(String(refus.mock.calls[0]![1]?.body))).toEqual(SAISIE);
+
+  const envoyer = apiQuiRepond(Response.json(ficheFictive()));
+  await creerClientDeLApi(JETON_FICTIF, envoyer).modifierUneCandidature(7, SAISIE, true);
+  expect(JSON.parse(String(envoyer.mock.calls[0]![1]?.body))).toEqual({ ...SAISIE, corrigerLeNomDeLEntreprise: true });
+
+  // Un 409 qui ne porte pas l'entreprise et son nombre, ou les porte mal formés, est une erreur.
+  for (const mal of [{ status: 409 }, { entreprise: { id: "4", nom: "X" }, candidatures: 3 }, { entreprise: { id: 4, nom: "X" }, candidatures: 0 }]) {
+    await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(Response.json(mal, { status: 409 }))).modifierUneCandidature(7, SAISIE)).rejects.toEqual(
+      new ErreurDeLApi(409),
+    );
+  }
 });

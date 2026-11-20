@@ -112,7 +112,7 @@ test("depuis la fiche, on modifie la candidature, puis la fiche l'annonce avec l
     // L'API reconnaît l'entreprise par sa clé : la fiche rendue porte le nom de sa première saisie.
     modifierUneCandidature: async (_, saisie) => {
       fiche = ficheFictive({ ...fiche, poste: saisie.poste.trim(), entreprise: { id: 1, nom: "Lumière Verte SA" } });
-      return { modifiee: true, fiche };
+      return { issue: "modifiee", fiche };
     },
   });
   render(<App connecter={async () => client} />);

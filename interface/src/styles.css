@@ -465,3 +465,25 @@ button {
   margin: 0 0 0.75rem;
   font-weight: 600;
 }
+
+/* L'avertissement d'un nom d'entreprise corrigé (#25, ADR-0007), et la ligne de l'envoi dans l'historique. */
+
+.avertissement {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+
+.avertissement h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.avertissement p {
+  margin: 0 0 0.75rem;
+}
+
+.historique li.envoi {
+  border-left-color: var(--texte-discret);
+}

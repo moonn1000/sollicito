@@ -544,3 +544,23 @@ test("une action sur le statut efface l'annonce d'une correction d'étape", asyn
   expect(screen.queryByText("Étape corrigée : Appel.")).toBeNull();
   expect(screen.getAllByRole("status")).toHaveLength(1);
 });
+
+test("l'envoi se range à son instant : seuls des événements corrigés peuvent le précéder, et il passe premier à égalité", async () => {
+  const fiche = ficheFictive({
+    envoyeeLe: "2026-11-12T09:00:00Z",
+    historique: [
+      etapeFictive({ id: 2, survenuLe: "2026-11-10T09:00:00Z", type: "Appel", estCorrige: true }),
+      etapeFictive({ id: 4, survenuLe: "2026-11-12T09:00:00Z", type: "Entretien", corrige: 2 }),
+      changementFictif({ id: 5, survenuLe: "2026-11-18T13:30:00Z" }),
+    ],
+  });
+  afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  const historique = (await screen.findByRole("heading", { level: 3, name: "Historique" })).closest("section")!;
+  expect(within(historique).getAllByRole("listitem").map((ligne) => ligne.textContent)).toEqual([
+    "10/11/2026 10:00Appelcorrigée",
+    "12/11/2026 10:00Candidature envoyée",
+    "12/11/2026 10:00Correction : EntretienCorriger",
+    "18/11/2026 14:30Statut passé d'Envoyée à Entretien",
+  ]);
+});

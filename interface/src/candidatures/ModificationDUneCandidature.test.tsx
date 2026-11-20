@@ -61,7 +61,7 @@ test("l'aide sous la date nomme le premier événement, quelle que soit sa sorte
 
 test("la modification part telle quelle vers l'API, puis l'écran rend la fiche à jour", async () => {
   const apres = ficheFictive({ poste: "Comptable senior" });
-  const { client, quandModifiee } = afficher(clientSimule({ modifierUneCandidature: vi.fn(async () => ({ modifiee: true as const, fiche: apres })) }));
+  const { client, quandModifiee } = afficher(clientSimule({ modifierUneCandidature: vi.fn(async () => ({ issue: "modifiee" as const, fiche: apres })) }));
 
   await screen.findByLabelText("Poste");
   remplir("Poste", " Comptable senior ");
@@ -69,11 +69,11 @@ test("la modification part telle quelle vers l'API, puis l'écran rend la fiche 
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
 
   await waitFor(() => expect(quandModifiee).toHaveBeenCalledExactlyOnceWith(apres));
-  expect(client.modifierUneCandidature).toHaveBeenCalledExactlyOnceWith(7, {
-    entreprise: "Lumière Verte SA",
-    poste: " Comptable senior ",
-    envoyeeLe: "2026-03-26T09:15",
-  });
+  expect(client.modifierUneCandidature).toHaveBeenCalledExactlyOnceWith(
+    7,
+    { entreprise: "Lumière Verte SA", poste: " Comptable senior ", envoyeeLe: "2026-03-26T09:15" },
+    false,
+  );
 });
 
 test("les refus s'affichent à côté du champ, après l'aide, et le premier champ refusé reçoit le focus", async () => {
@@ -81,7 +81,7 @@ test("les refus s'affichent à côté du champ, après l'aide, et le premier cha
   const { quandModifiee } = afficher(
     clientSimule({
       lireLaFiche: async () => fiche,
-      modifierUneCandidature: async () => ({ modifiee: false, refus: { envoyeeLe: [PREMIER_EVENEMENT] } }),
+      modifierUneCandidature: async () => ({ issue: "refusee", refus: { envoyeeLe: [PREMIER_EVENEMENT] } }),
     }),
   );
 
@@ -103,7 +103,7 @@ test("les refus s'affichent à côté du champ, après l'aide, et le premier cha
 test("après un refus puis un échec de l'API, aucun refus ne reste, et l'échec se signale sans perdre la saisie", async () => {
   const modifierUneCandidature = vi
     .fn<ReturnType<typeof clientSimule>["modifierUneCandidature"]>()
-    .mockResolvedValueOnce({ modifiee: false, refus: { poste: ["Indiquez le poste."] } })
+    .mockResolvedValueOnce({ issue: "refusee", refus: { poste: ["Indiquez le poste."] } })
     .mockRejectedValueOnce(new Error("panne"));
   afficher(clientSimule({ modifierUneCandidature }));
 
@@ -203,4 +203,77 @@ test("un événement corrigé ne borne plus l'envoi : l'aide nomme le premier é
   await screen.findByLabelText("Date et heure d'envoi");
 
   expect(description("Date et heure d'envoi")).toEqual(["Au plus tard le 14/11/2026 10:00, date du premier événement de l'historique."]);
+});
+
+// L'avertissement d'un nom qui corrigerait celui d'une entreprise enregistrée.
+function avertissement() {
+  return screen.queryByRole("region", { name: "Corriger le nom de l'entreprise ?" });
+}
+
+test("un nom de même clé, écrit autrement, attend l'accord : l'écran dit le nom corrigé et le nombre de candidatures", async () => {
+  const apres = ficheFictive({ entreprise: { id: 1, nom: "LUMIÈRE VERTE S.A." } });
+  const modifierUneCandidature = vi
+    .fn<ReturnType<typeof clientSimule>["modifierUneCandidature"]>()
+    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 3 })
+    .mockResolvedValueOnce({ issue: "modifiee", fiche: apres });
+  const { quandModifiee } = afficher(clientSimule({ modifierUneCandidature }));
+
+  await screen.findByLabelText("Entreprise");
+  remplir("Entreprise", " LUMIÈRE VERTE S.A. ");
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
+
+  const question = await screen.findByRole("region", { name: "Corriger le nom de l'entreprise ?" });
+  // Même entreprise : le texte ne parle pas d'un changement d'entreprise ; le nom saisi vient de l'écran.
+  expect(within(question).getByText(/^Ce nom est celui/u).textContent).toBe(
+    "Ce nom est celui de l'entreprise de la candidature, écrit autrement. Son nom affiché « Lumière Verte SA » deviendrait « LUMIÈRE VERTE S.A. », pour ses 3 candidatures, celle-ci comprise.",
+  );
+  await waitFor(() => expect(document.activeElement).toBe(within(question).getByRole("heading", { level: 3 })));
+  expect(quandModifiee).not.toHaveBeenCalled();
+
+  fireEvent.click(within(question).getByRole("button", { name: "Corriger le nom pour les 3 candidatures" }));
+
+  await waitFor(() => expect(quandModifiee).toHaveBeenCalledExactlyOnceWith(apres));
+  expect(modifierUneCandidature).toHaveBeenCalledTimes(2);
+  expect(modifierUneCandidature.mock.calls[0]![2]).toBe(false);
+  expect(modifierUneCandidature.mock.calls[1]).toEqual([7, { entreprise: " LUMIÈRE VERTE S.A. ", poste: "Comptable", envoyeeLe: "2026-03-27T23:30" }, true]);
+});
+
+test("un nom qui désigne une autre entreprise le dit, et « Garder » rattache la candidature sous le nom enregistré", async () => {
+  const modifierUneCandidature = vi
+    .fn<ReturnType<typeof clientSimule>["modifierUneCandidature"]>()
+    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 4, nom: "Brasserie Lune Rousse" }, candidatures: 2 })
+    .mockResolvedValueOnce({ issue: "modifiee", fiche: ficheFictive({ entreprise: { id: 4, nom: "Brasserie Lune Rousse" } }) });
+  const { quandModifiee } = afficher(clientSimule({ modifierUneCandidature }));
+
+  await screen.findByLabelText("Entreprise");
+  remplir("Entreprise", "BRASSERIE LUNE ROUSSE");
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
+
+  const question = await screen.findByRole("region", { name: "Corriger le nom de l'entreprise ?" });
+  expect(within(question).getByText(/^La candidature quitterait/u).textContent).toBe(
+    "La candidature quitterait « Lumière Verte SA » pour rejoindre l'entreprise enregistrée « Brasserie Lune Rousse », que ce nom désigne. Son nom affiché « Brasserie Lune Rousse » deviendrait « BRASSERIE LUNE ROUSSE », pour ses 2 candidatures, celle-ci comprise.",
+  );
+
+  fireEvent.click(within(question).getByRole("button", { name: "Garder « Brasserie Lune Rousse »" }));
+
+  await waitFor(() => expect(quandModifiee).toHaveBeenCalledOnce());
+  expect(modifierUneCandidature.mock.calls[1]).toEqual([7, { entreprise: "Brasserie Lune Rousse", poste: "Comptable", envoyeeLe: "2026-03-27T23:30" }, false]);
+});
+
+test("pour une seule candidature, l'accord se dit au singulier ; modifier un champ retire l'avertissement", async () => {
+  afficher(
+    clientSimule({
+      modifierUneCandidature: async () => ({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 1 }),
+    }),
+  );
+
+  await screen.findByLabelText("Entreprise");
+  remplir("Entreprise", "Lumiere Verte");
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
+
+  const question = await screen.findByRole("region", { name: "Corriger le nom de l'entreprise ?" });
+  expect(within(question).getByRole("button", { name: "Corriger le nom" })).toBeDefined();
+  expect(within(question).getByText(/pour cette seule candidature\.$/u)).toBeDefined();
+  remplir("Poste", "Comptable senior");
+  expect(avertissement()).toBeNull();
 });

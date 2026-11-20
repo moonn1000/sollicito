@@ -51,10 +51,15 @@ export type ResultatDeLEnregistrement =
   | { enregistree: true; candidature: Candidature }
   | { enregistree: false; refus: RefusDeLaSaisie };
 
-/** Ce que rend la modification d'une candidature : sa fiche à jour, ou les refus de ses champs. */
+/**
+ * Ce que rend la modification d'une candidature : sa fiche à jour ; les refus de ses champs ; ou l'entreprise dont le
+ * nom saisi corrigerait le nom affiché, et le nombre de candidatures concernées, celle qu'on modifie comprise : la
+ * modification attend alors l'accord de l'utilisateur (ADR-0007).
+ */
 export type ResultatDeLaModification =
-  | { modifiee: true; fiche: FicheDUneCandidature }
-  | { modifiee: false; refus: RefusDeLaSaisie };
+  | { issue: "modifiee"; fiche: FicheDUneCandidature }
+  | { issue: "refusee"; refus: RefusDeLaSaisie }
+  | { issue: "nomACorriger"; entreprise: EntrepriseConnue; candidatures: number };
 
 /** Le type d'une étape de l'historique, tel que l'API l'écrit (modèle de domaine, « Types énumérés »). */
 export type TypeDEtape = "Appel" | "Entretien" | "Echange" | "Autre";
@@ -180,9 +185,10 @@ export interface ClientDeLApi {
   corrigerUneEtape(candidature: number, etape: number, saisie: SaisieDUneEtape): Promise<ResultatDeLaCorrectionDEtape>;
   /**
    * Corrige l'entreprise, le poste et la date d'envoi d'une candidature, ou rend les refus de ses champs ; une
-   * `ErreurDeLApi` 404 si elle n'existe pas.
+   * `ErreurDeLApi` 404 si elle n'existe pas. Avec `corrigerLeNom`, un nom de même clé, écrit autrement, corrige le
+   * nom affiché de l'entreprise ; sans lui, la modification attend cet accord.
    */
-  modifierUneCandidature(candidature: number, saisie: SaisieDUneCandidature): Promise<ResultatDeLaModification>;
+  modifierUneCandidature(candidature: number, saisie: SaisieDUneCandidature, corrigerLeNom?: boolean): Promise<ResultatDeLaModification>;
   /** Supprime une candidature et tout son historique, définitivement ; une `ErreurDeLApi` 404 si elle n'existe pas. */
   supprimerUneCandidature(candidature: number): Promise<void>;
 }
@@ -297,16 +303,24 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
 
       throw new ErreurDeLApi(reponse.status);
     },
-    modifierUneCandidature: async (candidature, saisie) => {
-      const reponse = await ecrire(adresseDeLaFiche(candidature), saisie, "PUT");
+    modifierUneCandidature: async (candidature, saisie, corrigerLeNom = false) => {
+      const corps = corrigerLeNom ? { ...saisie, corrigerLeNomDeLEntreprise: true } : saisie;
+      const reponse = await ecrire(adresseDeLaFiche(candidature), corps, "PUT");
       if (reponse.status === 200) {
-        return { modifiee: true, fiche: (await reponse.json()) as FicheDUneCandidature };
+        return { issue: "modifiee", fiche: (await reponse.json()) as FicheDUneCandidature };
       }
 
       if (reponse.status === 400) {
         const refus = lireLesRefus(await reponse.json().catch(() => undefined), CHAMPS);
         if (refus !== undefined && Object.keys(refus).length > 0) {
-          return { modifiee: false, refus };
+          return { issue: "refusee", refus };
+        }
+      }
+
+      if (reponse.status === 409) {
+        const aCorriger = lireLeNomACorriger(await reponse.json().catch(() => undefined));
+        if (aCorriger !== undefined) {
+          return { issue: "nomACorriger", ...aCorriger };
         }
       }
 
@@ -342,6 +356,21 @@ function lireLeMotif(probleme: unknown): string | undefined {
 
   const { detail, title } = probleme as { detail?: unknown; title?: unknown };
   return typeof detail === "string" && detail.length > 0 ? detail : typeof title === "string" ? title : undefined;
+}
+
+// L'entreprise dont le nom serait corrigé, et le nombre de candidatures concernées ; rien si le problème ne les porte pas.
+function lireLeNomACorriger(probleme: unknown): { entreprise: EntrepriseConnue; candidatures: number } | undefined {
+  if (typeof probleme !== "object" || probleme === null) {
+    return undefined;
+  }
+
+  const { entreprise, candidatures } = probleme as { entreprise?: unknown; candidatures?: unknown };
+  if (typeof entreprise !== "object" || entreprise === null || !Number.isSafeInteger(candidatures) || (candidatures as number) < 1) {
+    return undefined;
+  }
+
+  const { id, nom } = entreprise as { id?: unknown; nom?: unknown };
+  return Number.isSafeInteger(id) && typeof nom === "string" ? { entreprise: { id: id as number, nom }, candidatures: candidatures as number } : undefined;
 }
 
 // Les refus d'un problème de validation (`errors`), pour les seuls champs attendus ; rien si le problème n'en a pas.

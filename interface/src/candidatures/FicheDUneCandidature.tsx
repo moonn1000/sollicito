@@ -482,8 +482,10 @@ export function FicheDUneCandidature({
 }
 
 /**
- * L'historique, du plus ancien au plus récent, dans l'ordre que rend l'API ; il commence à l'envoi. Chaque étape en
- * vigueur se corrige (#25) : son formulaire s'ouvre à sa place ; une étape corrigée reste, marquée comme corrigée.
+ * L'historique, du plus ancien au plus récent, dans l'ordre que rend l'API. L'envoi s'y range à son instant, au premier
+ * rang à égalité : l'historique en vigueur commence là, et seuls des événements corrigés peuvent le précéder (#25).
+ * Chaque étape en vigueur se corrige : son formulaire s'ouvre à sa place ; une étape corrigée reste, marquée comme
+ * corrigée.
  */
 function Historique({
   envoyeeLe,
@@ -506,6 +508,38 @@ function Historique({
   boutonDeCorrection: (etape: number) => (bouton: HTMLButtonElement | null) => void;
   formulaireDeCorrection: (etape: EtapeLue) => ReactNode;
 }) {
+  // Le rang de l'envoi : avant le premier événement qui ne le précède pas.
+  const rangDeLEnvoi = evenements.findIndex((evenement) => Date.parse(evenement.survenuLe) >= Date.parse(envoyeeLe));
+  const avant = rangDeLEnvoi === -1 ? evenements : evenements.slice(0, rangDeLEnvoi);
+  const apres = rangDeLEnvoi === -1 ? [] : evenements.slice(rangDeLEnvoi);
+  const ligne = (evenement: EvenementDeLHistorique) => (
+    <li key={evenement.id} className={evenement.sorte === "etape" ? "etape" : undefined}>
+      <time dateTime={evenement.survenuLe}>{afficherLInstant(evenement.survenuLe)}</time>
+      <span>{decrireLEvenement(evenement)}</span>
+      {evenement.estCorrige && <span className="marque">{evenement.sorte === "etape" ? "corrigée" : "corrigé"}</span>}
+      {evenement.sorte === "etape" && evenement.note !== null && <p className="note">{evenement.note}</p>}
+      {evenement.sorte === "etape" && !evenement.estCorrige && etapeEnCorrection !== evenement.id && (
+        <button
+          type="button"
+          className="secondaire corriger"
+          ref={boutonDeCorrection(evenement.id)}
+          aria-label={`Corriger l'étape : ${decrireLEvenement(evenement)}, ${afficherLInstant(evenement.survenuLe)}`}
+          onClick={() => ouvrir(evenement)}
+        >
+          Corriger
+        </button>
+      )}
+      {evenement.sorte === "etape" && etapeEnCorrection === evenement.id && (
+        <div className="correction-d-etape" role="group" aria-labelledby={`titre-de-la-correction-${evenement.id}`}>
+          <p id={`titre-de-la-correction-${evenement.id}`}>
+            Corriger l'étape : {decrireLEvenement(evenement)}, {afficherLInstant(evenement.survenuLe)}
+          </p>
+          {formulaireDeCorrection(evenement)}
+        </div>
+      )}
+    </li>
+  );
+
   return (
     <section aria-labelledby="titre-de-l-historique">
       <h3 id="titre-de-l-historique" ref={titre} tabIndex={-1}>
@@ -522,37 +556,12 @@ function Historique({
         </p>
       )}
       <ol className="historique">
-        <li>
+        {avant.map(ligne)}
+        <li className="envoi">
           <time dateTime={envoyeeLe}>{afficherLInstant(envoyeeLe)}</time>
           <span>Candidature envoyée</span>
         </li>
-        {evenements.map((evenement) => (
-          <li key={evenement.id} className={evenement.sorte === "etape" ? "etape" : undefined}>
-            <time dateTime={evenement.survenuLe}>{afficherLInstant(evenement.survenuLe)}</time>
-            <span>{decrireLEvenement(evenement)}</span>
-            {evenement.estCorrige && <span className="marque">{evenement.sorte === "etape" ? "corrigée" : "corrigé"}</span>}
-            {evenement.sorte === "etape" && evenement.note !== null && <p className="note">{evenement.note}</p>}
-            {evenement.sorte === "etape" && !evenement.estCorrige && etapeEnCorrection !== evenement.id && (
-              <button
-                type="button"
-                className="secondaire corriger"
-                ref={boutonDeCorrection(evenement.id)}
-                aria-label={`Corriger l'étape : ${decrireLEvenement(evenement)}, ${afficherLInstant(evenement.survenuLe)}`}
-                onClick={() => ouvrir(evenement)}
-              >
-                Corriger
-              </button>
-            )}
-            {evenement.sorte === "etape" && etapeEnCorrection === evenement.id && (
-              <div className="correction-d-etape" role="group" aria-labelledby={`titre-de-la-correction-${evenement.id}`}>
-                <p id={`titre-de-la-correction-${evenement.id}`}>
-                  Corriger l'étape : {decrireLEvenement(evenement)}, {afficherLInstant(evenement.survenuLe)}
-                </p>
-                {formulaireDeCorrection(evenement)}
-              </div>
-            )}
-          </li>
-        ))}
+        {apres.map(ligne)}
       </ol>
     </section>
   );

@@ -32,6 +32,7 @@ export function FormulaireDUneCandidature({
   messageDEchec,
   aideDeLEnvoi,
   annuler,
+  quandModifie,
   children,
 }: {
   client: ClientDeLApi;
@@ -47,6 +48,8 @@ export function FormulaireDUneCandidature({
   aideDeLEnvoi?: string;
   /** Quitte le formulaire sans rien envoyer ; sans elle, pas de bouton « Annuler ». */
   annuler?: () => void;
+  /** Prévenu à chaque champ modifié. */
+  quandModifie?: () => void;
   /** Ce qui s'affiche après les champs, avant les boutons. */
   children?: ReactNode;
 }) {
@@ -94,6 +97,7 @@ export function FormulaireDUneCandidature({
   // Modifier un champ efface ses refus, qui portaient sur l'ancienne valeur.
   const modifier = (champ: ChampDeLaSaisie, changer: (valeur: string) => void) => (valeur: string) => {
     changer(valeur);
+    quandModifie?.();
     setRefus((avant) => sansLeChamp(avant, champ));
   };
 
