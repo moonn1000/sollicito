@@ -367,7 +367,7 @@ La fiche d'une candidature (#12) mène à sa modification et à sa suppression (
 | --- | --- |
 | `entreprise` | celle de la saisie ; la candidature rejoint l'entreprise que reconnaît la clé du nom, ou une entreprise créée (voir « Reconnaître une entreprise ») |
 | `poste` | celle de la saisie |
-| `envoyeeLe` | celles de la saisie, et jamais après le premier événement de l'historique ; renvoyée inchangée, elle garde l'instant enregistré |
+| `envoyeeLe` | celles de la saisie, et jamais après le premier événement en vigueur de l'historique ; renvoyée inchangée, elle garde l'instant enregistré |
 
 - **L'historique en vigueur commence à l'envoi** : la date d'envoi corrigée ne passe pas après le premier événement en vigueur de l'historique, le plus ancien, quelle que soit sa sorte : étape, changement de statut ou correction. Un événement marqué comme corrigé ne compte plus. À l'instant même de ce premier événement, elle est admise. L'écran de modification rappelle cette date sous le champ. La modification relit l'historique dans la même écriture exclusive que les actions de la fiche : une étape notée en même temps ne passe jamais avant l'envoi.
 - **Une date inchangée** : renvoyée telle que l'écran la montre, c'est-à-dire la même minute dans le fuseau du poste, la date d'envoi garde l'instant enregistré, sans repasser par les règles. Corriger le seul poste n'est ainsi jamais refusé pour sa date, ni ne la déplace : ni l'heure qui existe deux fois, relue à l'heure d'hiver, ni une horloge reculée depuis l'envoi, ni les secondes que l'écran ne montre pas.
