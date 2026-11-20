@@ -25,12 +25,15 @@ export function NoterUneEtape({
   client,
   candidature,
   quandNotee,
+  autresActions = 0,
   maintenant = () => new Date(),
 }: {
   client: ClientDeLApi;
   candidature: number;
   /** Reçoit la fiche à jour, l'étape dans son historique. */
   quandNotee: (fiche: FicheDUneCandidature) => void;
+  /** Compte les autres actions de la fiche : chacune efface l'annonce de la dernière étape ajoutée, qui serait périmée. */
+  autresActions?: number;
   /** L'heure présente, qui remplit d'avance la date et l'heure. */
   maintenant?: () => Date;
 }) {
@@ -41,7 +44,9 @@ export function NoterUneEtape({
   // Compte les réponses de l'API qui portent des refus : chacune, et elle seule, déplace le focus.
   const [refusRecus, setRefusRecus] = useState(0);
   const [envoi, setEnvoi] = useState<Envoi>("pret");
-  const [annonce, setAnnonce] = useState<string>();
+  // L'annonce de la dernière étape ajoutée, et le nombre d'autres actions de la fiche à ce moment : elle ne s'affiche
+  // que tant qu'aucune autre action n'a suivi.
+  const [annonce, setAnnonce] = useState<{ texte: string; apres: number }>();
   const enCours = useRef(false);
   const champs = {
     type: useRef<HTMLSelectElement>(null),
@@ -79,7 +84,7 @@ export function NoterUneEtape({
         setNote("");
         setSurvenuLe(heureSaisieDe(maintenant()));
         setEnvoi("pret");
-        setAnnonce(`Étape ajoutée à l'historique : ${LIBELLES_DES_TYPES_D_ETAPE[type]}.`);
+        setAnnonce({ texte: `Étape ajoutée à l'historique : ${LIBELLES_DES_TYPES_D_ETAPE[type]}.`, apres: autresActions });
         quandNotee(resultat.fiche);
         return;
       }
@@ -144,9 +149,9 @@ export function NoterUneEtape({
             {envoi === "en-cours" ? "Ajout…" : "Ajouter à l'historique"}
           </button>
         </div>
-        {annonce !== undefined && (
+        {annonce !== undefined && annonce.apres === autresActions && (
           <p className="annonce" role="status">
-            {annonce}
+            {annonce.texte}
           </p>
         )}
         {envoi === "echec" && (

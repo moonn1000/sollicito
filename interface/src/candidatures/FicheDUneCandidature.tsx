@@ -228,6 +228,7 @@ export function FicheDUneCandidature({
             client={client}
             candidature={candidature}
             maintenant={maintenant}
+            autresActions={actionsTerminees}
             quandNotee={(fiche) => {
               setMessage(undefined);
               setChargement({ etape: "prete", fiche });

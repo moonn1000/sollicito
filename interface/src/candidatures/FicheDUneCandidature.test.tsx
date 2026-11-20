@@ -212,3 +212,15 @@ test("une étape notée entre dans l'historique sans changer le statut", async (
   expect(resume().Statut).toBe("Envoyée");
   expect(boutonsDePassage()).toEqual(["Entretien", "Refusée", "Retirée", "Sans réponse"]);
 });
+
+test("une action sur le statut efface l'annonce de la dernière étape ajoutée, et inversement", async () => {
+  afficher();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Ajouter à l'historique" }));
+  expect(await screen.findByText("Étape ajoutée à l'historique : Entretien.")).toBeDefined();
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+
+  expect(await screen.findByText("Statut changé : Refusée.")).toBeDefined();
+  expect(screen.queryByText("Étape ajoutée à l'historique : Entretien.")).toBeNull();
+  expect(screen.getAllByRole("status")).toHaveLength(1);
+});
