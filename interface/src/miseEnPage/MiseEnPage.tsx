@@ -2,9 +2,14 @@ import type { ReactNode } from "react";
 
 /**
  * Les écrans de l'interface. La navigation propose les deux premiers ; la fiche d'une candidature s'ouvre depuis le
- * tableau de bord, et désigne sa candidature par son identifiant.
+ * tableau de bord, et sa modification depuis la fiche (#25) : toutes deux désignent leur candidature par son
+ * identifiant.
  */
-export type Ecran = { nom: "tableau" } | { nom: "saisie" } | { nom: "fiche"; candidature: number };
+export type Ecran =
+  | { nom: "tableau" }
+  | { nom: "saisie" }
+  | { nom: "fiche"; candidature: number }
+  | { nom: "modification"; candidature: number };
 
 const ENTREES: readonly { ecran: "tableau" | "saisie"; libelle: string }[] = [
   { ecran: "tableau", libelle: "Tableau de bord" },

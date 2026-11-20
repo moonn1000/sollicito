@@ -51,6 +51,11 @@ export type ResultatDeLEnregistrement =
   | { enregistree: true; candidature: Candidature }
   | { enregistree: false; refus: RefusDeLaSaisie };
 
+/** Ce que rend la modification d'une candidature : sa fiche à jour, ou les refus de ses champs. */
+export type ResultatDeLaModification =
+  | { modifiee: true; fiche: FicheDUneCandidature }
+  | { modifiee: false; refus: RefusDeLaSaisie };
+
 /** Le type d'une étape de l'historique, tel que l'API l'écrit (modèle de domaine, « Types énumérés »). */
 export type TypeDEtape = "Appel" | "Entretien" | "Echange" | "Autre";
 
@@ -153,6 +158,13 @@ export interface ClientDeLApi {
   corrigerLeDernierChangement(candidature: number, changement: number): Promise<ResultatDUneAction>;
   /** Ajoute une étape à l'historique, ou rend les refus de ses champs. */
   noterUneEtape(candidature: number, saisie: SaisieDUneEtape): Promise<ResultatDeLEtape>;
+  /**
+   * Corrige l'entreprise, le poste et la date d'envoi d'une candidature, ou rend les refus de ses champs ; une
+   * `ErreurDeLApi` 404 si elle n'existe pas.
+   */
+  modifierUneCandidature(candidature: number, saisie: SaisieDUneCandidature): Promise<ResultatDeLaModification>;
+  /** Supprime une candidature et tout son historique, définitivement ; une `ErreurDeLApi` 404 si elle n'existe pas. */
+  supprimerUneCandidature(candidature: number): Promise<void>;
 }
 
 /**
@@ -179,12 +191,12 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
     return reponse.json();
   };
 
-  // Une écriture en JSON, ou sans corps.
-  const ecrire = (chemin: string, corps?: unknown) =>
+  // Une écriture en JSON, ou sans corps : un envoi (POST), sauf mention d'une autre méthode.
+  const ecrire = (chemin: string, corps?: unknown, method: "POST" | "PUT" | "DELETE" = "POST") =>
     appeler(
       chemin,
       corps === undefined ? {} : { "Content-Type": "application/json" },
-      corps === undefined ? { method: "POST" } : { method: "POST", body: JSON.stringify(corps) },
+      corps === undefined ? { method } : { method, body: JSON.stringify(corps) },
     );
 
   // La fiche à jour (200), ou le motif d'un refus que l'état de la candidature explique (409).
@@ -242,6 +254,27 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
       }
 
       throw new ErreurDeLApi(reponse.status);
+    },
+    modifierUneCandidature: async (candidature, saisie) => {
+      const reponse = await ecrire(adresseDeLaFiche(candidature), saisie, "PUT");
+      if (reponse.status === 200) {
+        return { modifiee: true, fiche: (await reponse.json()) as FicheDUneCandidature };
+      }
+
+      if (reponse.status === 400) {
+        const refus = lireLesRefus(await reponse.json().catch(() => undefined), CHAMPS);
+        if (refus !== undefined && Object.keys(refus).length > 0) {
+          return { modifiee: false, refus };
+        }
+      }
+
+      throw new ErreurDeLApi(reponse.status);
+    },
+    supprimerUneCandidature: async (candidature) => {
+      const reponse = await ecrire(adresseDeLaFiche(candidature), undefined, "DELETE");
+      if (reponse.status !== 204) {
+        throw new ErreurDeLApi(reponse.status);
+      }
     },
   };
 }

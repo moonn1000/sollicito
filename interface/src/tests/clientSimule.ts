@@ -87,6 +87,11 @@ export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
       notee: true,
       fiche: ficheFictive({ id: candidature }),
     })),
+    modifierUneCandidature: vi.fn<ClientDeLApi["modifierUneCandidature"]>(async (candidature, saisie) => ({
+      modifiee: true,
+      fiche: ficheFictive({ id: candidature, entreprise: { id: 9, nom: saisie.entreprise.trim() }, poste: saisie.poste.trim() }),
+    })),
+    supprimerUneCandidature: vi.fn<ClientDeLApi["supprimerUneCandidature"]>(async () => undefined),
     ...modifications,
   } satisfies ClientDeLApi;
 }

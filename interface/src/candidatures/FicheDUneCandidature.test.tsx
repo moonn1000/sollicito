@@ -7,9 +7,26 @@ import { FicheDUneCandidature } from "./FicheDUneCandidature.tsx";
 // Le 18/11/2026 à 14:30, heure de Bruxelles (le fuseau des tests).
 const maintenant = () => new Date("2026-11-18T13:30:00Z");
 
-function afficher(client = clientSimule(), revenir = vi.fn()) {
-  const { container } = render(<FicheDUneCandidature client={client} candidature={7} revenir={revenir} maintenant={maintenant} />);
-  return { client, revenir, container };
+function afficher(client = clientSimule(), revenir = vi.fn(), annonce?: string) {
+  const modifier = vi.fn();
+  const quandSupprimee = vi.fn();
+  const { container } = render(
+    <FicheDUneCandidature
+      client={client}
+      candidature={7}
+      revenir={revenir}
+      modifier={modifier}
+      quandSupprimee={quandSupprimee}
+      annonce={annonce}
+      maintenant={maintenant}
+    />,
+  );
+  return { client, revenir, modifier, quandSupprimee, container };
+}
+
+// La confirmation de la suppression, affichée dans la fiche.
+function confirmation() {
+  return screen.queryByRole("region", { name: "Supprimer cette candidature ?" });
 }
 
 // Le résumé de la candidature : chaque terme et sa définition.
@@ -269,4 +286,103 @@ test("si la fiche ne peut être relue après un refus, la fiche le dit avec le m
   expect((await screen.findByRole("alert")).textContent).toBe(
     "La candidature est déjà au statut Refusée. La fiche n'a pas pu être relue : fermez Sollicito, puis relancez-le.",
   );
+});
+
+test("« Modifier la candidature » mène à l'écran de modification", async () => {
+  const { modifier } = afficher();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Modifier la candidature" }));
+
+  expect(modifier).toHaveBeenCalledOnce();
+});
+
+test("« Supprimer la candidature » demande une confirmation dans la fiche, sans boîte du navigateur ; « Annuler » ne supprime rien", async () => {
+  const boiteDuNavigateur = vi.spyOn(window, "confirm").mockReturnValue(true);
+  const { client, quandSupprimee } = afficher();
+  const supprimer = await screen.findByRole("button", { name: "Supprimer la candidature" });
+  expect(confirmation()).toBeNull();
+
+  fireEvent.click(supprimer);
+
+  const question = confirmation()!;
+  expect(within(question).getByText("La suppression est définitive : elle emporte tout l'historique de la candidature.")).toBeDefined();
+  expect(supprimer.getAttribute("aria-expanded")).toBe("true");
+  // La question reçoit le focus : on lit ce qu'on s'apprête à faire avant de choisir.
+  await waitFor(() => expect(document.activeElement).toBe(within(question).getByRole("heading", { level: 3, name: "Supprimer cette candidature ?" })));
+
+  fireEvent.click(within(question).getByRole("button", { name: "Annuler" }));
+
+  expect(confirmation()).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(supprimer));
+  expect(client.supprimerUneCandidature).not.toHaveBeenCalled();
+  expect(quandSupprimee).not.toHaveBeenCalled();
+  expect(boiteDuNavigateur).not.toHaveBeenCalled();
+  boiteDuNavigateur.mockRestore();
+});
+
+test("Échap ferme la confirmation sans rien supprimer", async () => {
+  const { client } = afficher();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.keyDown(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }), { key: "Escape" });
+
+  expect(confirmation()).toBeNull();
+  expect(client.supprimerUneCandidature).not.toHaveBeenCalled();
+});
+
+test("confirmée, la suppression part vers l'API, puis la fiche passe la main avec la candidature supprimée", async () => {
+  const fiche = ficheFictive({ id: 7, poste: "Brasseuse", entreprise: { id: 4, nom: "Brasserie Lune Rousse" } });
+  const { client, quandSupprimee } = afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.click(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }));
+
+  await waitFor(() => expect(quandSupprimee).toHaveBeenCalledExactlyOnceWith(fiche));
+  expect(client.supprimerUneCandidature).toHaveBeenCalledExactlyOnceWith(7);
+});
+
+test("pendant la suppression, les boutons attendent la réponse ; un échec se signale, et la confirmation reste ouverte", async () => {
+  let repondre: (erreur: Error) => void = () => {};
+  const supprimerUneCandidature = vi.fn(() => new Promise<void>((_, rejeter) => (repondre = rejeter)));
+  const { quandSupprimee } = afficher(clientSimule({ supprimerUneCandidature }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.click(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }));
+
+  const enCours = await within(confirmation()!).findByRole("button", { name: "Suppression…" });
+  expect(enCours.hasAttribute("disabled")).toBe(true);
+  expect(screen.getByRole("button", { name: "Modifier la candidature" }).hasAttribute("disabled")).toBe(true);
+  fireEvent.click(enCours);
+  fireEvent.keyDown(enCours, { key: "Escape" });
+  expect(supprimerUneCandidature).toHaveBeenCalledOnce();
+  expect(confirmation()).not.toBeNull();
+
+  repondre(new Error("panne"));
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "La candidature n'a pas pu être supprimée. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.",
+  );
+  expect(quandSupprimee).not.toHaveBeenCalled();
+  expect(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }).hasAttribute("disabled")).toBe(false);
+});
+
+test("une candidature déjà supprimée ailleurs le dit, au lieu de la fiche", async () => {
+  const { quandSupprimee } = afficher(clientSimule({ supprimerUneCandidature: () => Promise.reject(new ErreurDeLApi(404)) }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.click(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe("Cette candidature n'existe pas, ou plus.");
+  expect(screen.queryByRole("button", { name: "Modifier la candidature" })).toBeNull();
+  expect(quandSupprimee).not.toHaveBeenCalled();
+});
+
+test("l'annonce d'une modification s'affiche sur la fiche, jusqu'à la prochaine action", async () => {
+  afficher(clientSimule(), vi.fn(), "Candidature modifiée : Comptable, chez Lumière Verte SA.");
+
+  expect((await screen.findByRole("status")).textContent).toBe("Candidature modifiée : Comptable, chez Lumière Verte SA.");
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
+
+  expect(await screen.findByText("Statut changé : Entretien.")).toBeDefined();
+  expect(screen.queryByText("Candidature modifiée : Comptable, chez Lumière Verte SA.")).toBeNull();
+  expect(screen.getAllByRole("status")).toHaveLength(1);
 });

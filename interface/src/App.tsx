@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import type { Candidature, ClientDeLApi } from "./api/clientDeLApi.ts";
+import type { Candidature, ClientDeLApi, FicheDUneCandidature as Fiche } from "./api/clientDeLApi.ts";
 import { FicheDUneCandidature } from "./candidatures/FicheDUneCandidature.tsx";
+import { ModificationDUneCandidature } from "./candidatures/ModificationDUneCandidature.tsx";
 import { SaisieDUneCandidature } from "./candidatures/SaisieDUneCandidature.tsx";
 import { TableauDeBord } from "./candidatures/TableauDeBord.tsx";
 import { HorsDeLaFenetre } from "./connexion.ts";
@@ -20,8 +21,8 @@ const MESSAGES: Record<Connexion["etat"], string> = {
 };
 
 /**
- * L'interface : la connexion à l'API locale, puis le tableau de bord, l'écran de saisie et la fiche d'une candidature,
- * dans la mise en page commune.
+ * L'interface : la connexion à l'API locale, puis le tableau de bord, l'écran de saisie, la fiche d'une candidature et
+ * sa modification, dans la mise en page commune.
  */
 export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
   const [connexion, setConnexion] = useState<Connexion>({ etat: "connexion" });
@@ -57,11 +58,22 @@ export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
     setEcran(vers);
   };
 
-  const quandEnregistree = (candidature: Candidature) => {
-    setAnnonce(`Candidature enregistrée : ${candidature.poste}, chez ${candidature.entreprise.nom}.`);
+  // Mène à un écran en y annonçant ce qui vient de se passer.
+  const annoncer = (texte: string, vers: Ecran) => {
+    setAnnonce(texte);
     setNavigue(true);
-    setEcran({ nom: "tableau" });
+    setEcran(vers);
   };
+
+  const quandEnregistree = (candidature: Candidature) =>
+    annoncer(`Candidature enregistrée : ${candidature.poste}, chez ${candidature.entreprise.nom}.`, { nom: "tableau" });
+
+  // L'annonce nomme l'entreprise rattachée, celle que l'API a reconnue : son nom est celui de sa première saisie.
+  const quandModifiee = (fiche: Fiche) =>
+    annoncer(`Candidature modifiée : ${fiche.poste}, chez ${fiche.entreprise.nom}.`, { nom: "fiche", candidature: fiche.id });
+
+  const quandSupprimee = (fiche: Fiche) =>
+    annoncer(`Candidature supprimée : ${fiche.poste}, chez ${fiche.entreprise.nom}.`, { nom: "tableau" });
 
   const ecranOuvert = () => {
     if (connexion.etat !== "prete") {
@@ -87,7 +99,20 @@ export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
             key={ecran.candidature}
             client={connexion.client}
             candidature={ecran.candidature}
+            annonce={annonce}
             revenir={() => naviguer({ nom: "tableau" })}
+            modifier={() => naviguer({ nom: "modification", candidature: ecran.candidature })}
+            quandSupprimee={quandSupprimee}
+          />
+        );
+      case "modification":
+        return (
+          <ModificationDUneCandidature
+            key={ecran.candidature}
+            client={connexion.client}
+            candidature={ecran.candidature}
+            revenir={() => naviguer({ nom: "fiche", candidature: ecran.candidature })}
+            quandModifiee={quandModifiee}
           />
         );
     }

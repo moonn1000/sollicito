@@ -19,32 +19,50 @@ const REESSAYER = "Réessayez ; si l'erreur revient, fermez Sollicito, puis rela
 
 const PAS_RELUE = "La fiche n'a pas pu être relue : fermez Sollicito, puis relancez-le.";
 
+/** La confirmation de la suppression : ouverte, ou fermée, après une annulation qui rend le focus au bouton. */
+type Confirmation = "fermee" | "ouverte" | "annulee";
+
 /**
  * La fiche d'une candidature (#12), ouverte depuis le tableau de bord : son résumé, son statut et les seuls passages
  * que le diagramme d'états permet, que l'API donne avec la fiche ; la correction du dernier changement ; une note
- * d'entretien ou d'échange ; l'historique, du plus ancien au plus récent. Les textes s'affichent comme du texte,
- * jamais comme du HTML : React les échappe.
+ * d'entretien ou d'échange ; l'historique, du plus ancien au plus récent. Elle mène à la modification de la
+ * candidature, et la supprime après une confirmation affichée dans l'interface, jamais par une boîte du navigateur
+ * (#25). Les textes s'affichent comme du texte, jamais comme du HTML : React les échappe.
  */
 export function FicheDUneCandidature({
   client,
   candidature,
   revenir,
+  modifier,
+  quandSupprimee,
+  annonce,
   maintenant,
 }: {
   client: ClientDeLApi;
   candidature: number;
   /** Mène au tableau de bord. */
   revenir: () => void;
+  /** Mène à l'écran de modification de la candidature. */
+  modifier: () => void;
+  /** Reçoit la fiche de la candidature que l'API vient de supprimer. */
+  quandSupprimee: (fiche: Fiche) => void;
+  /** Ce qui vient de se passer, par exemple une modification enregistrée ; jusqu'à la prochaine action. */
+  annonce?: string;
   /** L'heure présente, qui remplit d'avance la date et l'heure d'une note. */
   maintenant?: () => Date;
 }) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
   const [enCours, setEnCours] = useState(false);
   const [message, setMessage] = useState<Message>();
+  const [annonceDeDepart, setAnnonceDeDepart] = useState(annonce);
+  const [confirmation, setConfirmation] = useState<Confirmation>("fermee");
+  const [suppression, setSuppression] = useState<"pret" | "en-cours" | "echec">("pret");
   // Compte les actions terminées : chacune ramène le focus sur le titre du statut, car le bouton cliqué a pu disparaître.
   const [actionsTerminees, setActionsTerminees] = useState(0);
   const titre = useRef<HTMLHeadingElement>(null);
   const titreDuStatut = useRef<HTMLHeadingElement>(null);
+  const titreDeLaConfirmation = useRef<HTMLHeadingElement>(null);
+  const boutonSupprimer = useRef<HTMLButtonElement>(null);
   const enCoursDAction = useRef(false);
   const affichee = useRef(true);
 
@@ -61,6 +79,15 @@ export function FicheDUneCandidature({
       titreDuStatut.current?.focus();
     }
   }, [actionsTerminees]);
+
+  // Ouverte, la confirmation prend le focus sur sa question ; annulée, elle le rend au bouton qui l'a ouverte.
+  useEffect(() => {
+    if (confirmation === "ouverte") {
+      titreDeLaConfirmation.current?.focus();
+    } else if (confirmation === "annulee") {
+      boutonSupprimer.current?.focus();
+    }
+  }, [confirmation]);
 
   // Une fiche reçue ne remplace la fiche montrée que si elle n'est pas plus ancienne. L'historique se fait par ajouts
   // seulement : une note et un changement de statut lancés ensemble peuvent répondre dans le désordre, et la réponse la
@@ -97,6 +124,7 @@ export function FicheDUneCandidature({
     enCoursDAction.current = true;
     setEnCours(true);
     setMessage(undefined);
+    setAnnonceDeDepart(undefined);
     try {
       const resultat = await faire();
       if (!affichee.current) {
@@ -160,6 +188,51 @@ export function FicheDUneCandidature({
       "Le changement n'a pas pu être corrigé.",
     );
 
+  const demanderLaSuppression = () => {
+    setMessage(undefined);
+    setAnnonceDeDepart(undefined);
+    setSuppression("pret");
+    setConfirmation("ouverte");
+  };
+
+  const annulerLaSuppression = () => {
+    if (!enCoursDAction.current) {
+      setConfirmation("annulee");
+    }
+  };
+
+  // Supprime la candidature, une fois la suppression confirmée : la fiche passe la main au tableau de bord.
+  async function supprimer(supprimee: Fiche) {
+    if (enCoursDAction.current) {
+      return;
+    }
+
+    enCoursDAction.current = true;
+    setEnCours(true);
+    setSuppression("en-cours");
+    try {
+      await client.supprimerUneCandidature(candidature);
+      if (affichee.current) {
+        quandSupprimee(supprimee);
+      }
+    } catch (erreur) {
+      if (!affichee.current) {
+        return;
+      }
+
+      if (estIntrouvable(erreur)) {
+        setChargement({ etape: "introuvable" });
+      } else {
+        setSuppression("echec");
+      }
+    } finally {
+      enCoursDAction.current = false;
+      if (affichee.current) {
+        setEnCours(false);
+      }
+    }
+  }
+
   const fiche = chargement.etape === "prete" ? chargement.fiche : undefined;
   const correction = fiche?.correction ?? null;
 
@@ -168,6 +241,11 @@ export function FicheDUneCandidature({
       <h2 id="titre-de-la-fiche" ref={titre} tabIndex={-1}>
         Fiche de la candidature
       </h2>
+      {annonceDeDepart !== undefined && chargement.etape === "prete" && (
+        <p className="annonce" role="status">
+          {annonceDeDepart}
+        </p>
+      )}
       <p>
         <button type="button" className="lien" onClick={revenir}>
           Revenir au tableau de bord
@@ -198,6 +276,54 @@ export function FicheDUneCandidature({
             <dt>Statut</dt>
             <dd>{LIBELLES_DES_STATUTS[fiche.statut] ?? fiche.statut}</dd>
           </dl>
+          <div className="actions-de-la-fiche">
+            <button type="button" className="secondaire" disabled={enCours} onClick={modifier}>
+              Modifier la candidature
+            </button>
+            <button
+              type="button"
+              ref={boutonSupprimer}
+              className="secondaire danger"
+              disabled={enCours}
+              aria-expanded={confirmation === "ouverte"}
+              aria-controls={confirmation === "ouverte" ? "confirmation-de-la-suppression" : undefined}
+              onClick={demanderLaSuppression}
+            >
+              Supprimer la candidature
+            </button>
+          </div>
+          {confirmation === "ouverte" && (
+            <section
+              id="confirmation-de-la-suppression"
+              className="confirmation"
+              aria-labelledby="titre-de-la-suppression"
+              aria-describedby="texte-de-la-suppression"
+              onKeyDown={(evenement) => {
+                if (evenement.key === "Escape") {
+                  annulerLaSuppression();
+                }
+              }}
+            >
+              <h3 id="titre-de-la-suppression" ref={titreDeLaConfirmation} tabIndex={-1}>
+                Supprimer cette candidature ?
+              </h3>
+              <p id="texte-de-la-suppression">La suppression est définitive : elle emporte tout l'historique de la candidature.</p>
+              <div className="actions">
+                <button type="button" className="danger" disabled={enCours} onClick={() => void supprimer(fiche)}>
+                  {suppression === "en-cours" ? "Suppression…" : "Supprimer définitivement"}
+                </button>
+                <button type="button" className="secondaire" disabled={enCours} onClick={annulerLaSuppression}>
+                  Annuler
+                </button>
+              </div>
+              {suppression === "echec" && (
+                <p className="alerte" role="alert">
+                  La candidature n'a pas pu être supprimée. Réessayez ; si l'erreur revient, fermez Sollicito, puis
+                  relancez-le.
+                </p>
+              )}
+            </section>
+          )}
           <section aria-labelledby="titre-du-statut">
             <h3 id="titre-du-statut" ref={titreDuStatut} tabIndex={-1}>
               Faire avancer la candidature
@@ -244,6 +370,7 @@ export function FicheDUneCandidature({
             autresActions={actionsTerminees}
             quandNotee={(fiche) => {
               setMessage(undefined);
+              setAnnonceDeDepart(undefined);
               montrer(fiche);
             }}
           />

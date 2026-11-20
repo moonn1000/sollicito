@@ -309,6 +309,41 @@ test("la fiche de la candidature fait avancer son statut et note un échange, pu
   expect(await page.getByRole("row").nth(1).getByRole("cell").allTextContents()).toEqual([entreprise, "Comptable", "27/03/2026 23:30", "Entretien"]);
 });
 
+test("la candidature se corrige depuis sa fiche, puis se supprime après une confirmation affichée dans la page", async () => {
+  const { page } = fenetre;
+  const entreprise = '<img src="x" onerror="alert(1)"> Lumière Verte SA';
+  let boites = 0;
+  page.on("dialog", (boite) => {
+    boites++;
+    void boite.dismiss();
+  });
+
+  await page.getByRole("button", { name: `Comptable, chez ${entreprise} : ouvrir la fiche` }).click();
+  await page.getByRole("button", { name: "Modifier la candidature" }).click();
+  await page.getByRole("heading", { level: 2, name: "Modifier la candidature" }).waitFor();
+  // L'échange du 28/03 ouvre l'historique : l'écran le rappelle, et l'API refuse un envoi plus tardif.
+  await page.getByText("Au plus tard le 28/03/2026 10:00, date du premier événement de l'historique.").waitFor();
+  await page.getByLabel("Date et heure d'envoi").fill("2026-03-28T10:01");
+  await page.getByRole("button", { name: "Enregistrer les modifications" }).click();
+  await page.getByText("La date et l'heure d'envoi ne peuvent pas suivre le premier événement de l'historique : l'historique commence à l'envoi.").waitFor();
+  // Deux écritures de plus, passées par le contrôle de l'origine : la modification (PUT), puis la suppression (DELETE).
+  await page.getByLabel("Date et heure d'envoi").fill("2026-03-27T23:30");
+  await page.getByLabel("Poste").fill("Comptable senior");
+  await page.getByRole("button", { name: "Enregistrer les modifications" }).click();
+  await page.getByText(`Candidature modifiée : Comptable senior, chez ${entreprise}.`).waitFor();
+  expect(await page.locator("dl.resume dd").allTextContents()).toEqual([entreprise, "Comptable senior", "27/03/2026 23:30", "Entretien"]);
+  // Le nom, prérempli puis renvoyé, s'affiche toujours comme du texte : aucune image ne s'est créée.
+  expect(await page.locator("main img").count()).toBe(0);
+
+  await page.getByRole("button", { name: "Supprimer la candidature" }).click();
+  await page.getByRole("region", { name: "Supprimer cette candidature ?" }).getByRole("button", { name: "Supprimer définitivement" }).click();
+  await page.getByText(`Candidature supprimée : Comptable senior, chez ${entreprise}.`).waitFor();
+  await page.getByText("Aucune candidature enregistrée pour l'instant.").waitFor();
+  // La confirmation vit dans la page : le navigateur intégré n'a ouvert aucune boîte.
+  expect(boites).toBe(0);
+  expect(await page.locator("main img").count()).toBe(0);
+});
+
 test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fichier", async () => {
   const { origineDeLApi, dossierDeDonnees } = fenetre;
 

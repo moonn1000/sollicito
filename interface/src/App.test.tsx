@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
 import { App } from "./App.tsx";
 import { ErreurDeLApi } from "./api/clientDeLApi.ts";
 import { HorsDeLaFenetre } from "./connexion.ts";
@@ -102,4 +102,66 @@ test("depuis le tableau de bord, on ouvre la fiche, on fait avancer la candidatu
   await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(2));
   expect(within(screen.getAllByRole("row")[1]!).getAllByRole("cell")[3]!.textContent).toBe("Entretien");
   expect(within(navigation).getByRole("button", { name: "Tableau de bord" }).getAttribute("aria-current")).toBe("page");
+});
+
+test("depuis la fiche, on modifie la candidature, puis la fiche l'annonce avec l'entreprise rattachée, et le tableau de bord la montre à jour", async () => {
+  let fiche = ficheFictive({ id: 7, poste: "Brasseuse", entreprise: { id: 4, nom: "Brasserie Lune Rousse" } });
+  const client = clientSimule({
+    listerLesCandidatures: async () => [candidatureFictive({ id: fiche.id, poste: fiche.poste, entreprise: fiche.entreprise, envoyeeLe: fiche.envoyeeLe })],
+    lireLaFiche: async () => fiche,
+    // L'API reconnaît l'entreprise par sa clé : la fiche rendue porte le nom de sa première saisie.
+    modifierUneCandidature: async (_, saisie) => {
+      fiche = ficheFictive({ ...fiche, poste: saisie.poste.trim(), entreprise: { id: 1, nom: "Lumière Verte SA" } });
+      return { modifiee: true, fiche };
+    },
+  });
+  render(<App connecter={async () => client} />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "Brasseuse, chez Brasserie Lune Rousse : ouvrir la fiche" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Modifier la candidature" }));
+  const titre = await screen.findByRole("heading", { level: 2, name: "Modifier la candidature" });
+  await waitFor(() => expect(document.activeElement).toBe(titre));
+  // « Annuler » ramène à la fiche, puis on y revient.
+  fireEvent.click(await screen.findByRole("button", { name: "Annuler" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Modifier la candidature" }));
+  fireEvent.change(await screen.findByLabelText("Entreprise"), { target: { value: "LUMIÈRE VERTE S.A." } });
+  fireEvent.change(screen.getByLabelText("Poste"), { target: { value: "Comptable" } });
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
+
+  expect(await screen.findByText("Candidature modifiée : Comptable, chez Lumière Verte SA.")).toBeDefined();
+  const ficheTitre = screen.getByRole("heading", { level: 2, name: "Fiche de la candidature" });
+  await waitFor(() => expect(document.activeElement).toBe(ficheTitre));
+  await waitFor(() => expect(document.querySelector("dl.resume dd")?.textContent).toBe("Lumière Verte SA"));
+
+  fireEvent.click(screen.getByRole("button", { name: "Revenir au tableau de bord" }));
+  await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(2));
+  expect(within(screen.getAllByRole("row")[1]!).getAllByRole("cell").map((cellule) => cellule.textContent).slice(0, 2)).toEqual([
+    "Lumière Verte SA",
+    "Comptable",
+  ]);
+  // Revenu au tableau de bord par la navigation, l'annonce de la modification n'y est plus.
+  expect(screen.queryByText("Candidature modifiée : Comptable, chez Lumière Verte SA.")).toBeNull();
+});
+
+test("depuis la fiche, on supprime la candidature après confirmation, puis le tableau de bord l'annonce, sans elle", async () => {
+  const fiche = ficheFictive({ id: 7, poste: "Brasseuse", entreprise: { id: 4, nom: "Brasserie Lune Rousse" } });
+  let supprimee = false;
+  const client = clientSimule({
+    listerLesCandidatures: async () =>
+      supprimee ? [] : [candidatureFictive({ id: fiche.id, poste: fiche.poste, entreprise: fiche.entreprise })],
+    lireLaFiche: async () => fiche,
+    supprimerUneCandidature: vi.fn(async () => {
+      supprimee = true;
+    }),
+  });
+  render(<App connecter={async () => client} />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "Brasseuse, chez Brasserie Lune Rousse : ouvrir la fiche" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.click(within(screen.getByRole("region", { name: "Supprimer cette candidature ?" })).getByRole("button", { name: "Supprimer définitivement" }));
+
+  expect(await screen.findByText("Candidature supprimée : Brasseuse, chez Brasserie Lune Rousse.")).toBeDefined();
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "Tableau de bord" })));
+  expect(await screen.findByText("Aucune candidature enregistrée pour l'instant.")).toBeDefined();
+  expect(client.supprimerUneCandidature).toHaveBeenCalledExactlyOnceWith(7);
 });
