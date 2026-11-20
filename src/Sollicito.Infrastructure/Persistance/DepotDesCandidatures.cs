@@ -37,10 +37,35 @@ internal sealed class DepotDesCandidatures(BaseDeSollicito baseDeSollicito) : ID
             .Select(entreprise => new EntrepriseConnue(entreprise.Id, entreprise.Nom))
             .ToListAsync(annulation);
 
+    public Task<CandidatureSuivie?> TrouverAsync(int id, CancellationToken annulation) => ChargerAsync(baseDeSollicito, id, annulation);
+
+    // La candidature et tous ses événements, suivis par le contexte : la correction relue retrouve ainsi le changement
+    // qu'elle désigne, et ce qui change est gardé à la validation. Les événements arrivent dans l'ordre de leur
+    // enregistrement, celui de leur identifiant, sur lequel le domaine compte pour trouver le dernier changement.
+    private static async Task<CandidatureSuivie?> ChargerAsync(BaseDeSollicito baseDeSollicito, int id, CancellationToken annulation)
+    {
+        var candidature = await baseDeSollicito.Candidatures
+            .Include(c => c.Evenements.OrderBy(evenement => evenement.Id))
+            .SingleOrDefaultAsync(c => c.Id == id, annulation);
+        if (candidature is null)
+        {
+            return null;
+        }
+
+        var entreprise = await baseDeSollicito.Entreprises.AsNoTracking()
+            .Where(e => e.Id == candidature.EntrepriseId)
+            .Select(e => new EntrepriseConnue(e.Id, e.Nom))
+            .SingleAsync(annulation);
+        return new CandidatureSuivie(candidature, entreprise);
+    }
+
     private sealed class Ecriture(BaseDeSollicito baseDeSollicito, IDbContextTransaction transaction) : IEcritureDesCandidatures
     {
         public Task<Entreprise?> TrouverLEntrepriseAsync(string cle, CancellationToken annulation) =>
             baseDeSollicito.Entreprises.SingleOrDefaultAsync(entreprise => entreprise.Cle == cle, annulation);
+
+        public Task<CandidatureSuivie?> TrouverLaCandidatureAsync(int id, CancellationToken annulation) =>
+            ChargerAsync(baseDeSollicito, id, annulation);
 
         public async Task AjouterAsync(Entreprise entreprise, CancellationToken annulation)
         {
@@ -54,7 +79,11 @@ internal sealed class DepotDesCandidatures(BaseDeSollicito baseDeSollicito) : ID
             await baseDeSollicito.SaveChangesAsync(annulation);
         }
 
-        public Task ValiderAsync(CancellationToken annulation) => transaction.CommitAsync(annulation);
+        public async Task ValiderAsync(CancellationToken annulation)
+        {
+            await baseDeSollicito.SaveChangesAsync(annulation);
+            await transaction.CommitAsync(annulation);
+        }
 
         public ValueTask DisposeAsync() => transaction.DisposeAsync();
     }

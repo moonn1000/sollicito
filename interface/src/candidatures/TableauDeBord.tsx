@@ -6,19 +6,22 @@ type Chargement = { etape: "chargement" } | { etape: "pret"; candidatures: Candi
 
 /**
  * Le tableau de bord : les candidatures, les plus récentes d'abord, dans l'ordre que rend l'API, avec leur
- * entreprise, leur poste, leur date d'envoi et leur statut. Les textes s'affichent comme du texte, jamais comme du
- * HTML : React les échappe.
+ * entreprise, leur poste, leur date d'envoi et leur statut. Le poste ouvre la fiche de la candidature (#12). Les
+ * textes s'affichent comme du texte, jamais comme du HTML : React les échappe.
  */
 export function TableauDeBord({
   client,
   annonce,
   nouvelleCandidature,
+  ouvrirLaFiche,
   prendreLeFocus = false,
 }: {
   client: ClientDeLApi;
   /** Ce qui vient de se passer, par exemple une candidature enregistrée. */
   annonce?: string;
   nouvelleCandidature: () => void;
+  /** Ouvre la fiche de la candidature de cet identifiant. */
+  ouvrirLaFiche: (candidature: number) => void;
   /** Vrai quand l'utilisateur vient d'y être mené : son titre reçoit alors le focus, pas au premier affichage. */
   prendreLeFocus?: boolean;
 }) {
@@ -77,7 +80,7 @@ export function TableauDeBord({
       )}
       {chargement.etape === "pret" && chargement.candidatures.length > 0 && (
         <table className="candidatures">
-          <caption>Vos candidatures, les plus récentes d'abord</caption>
+          <caption>Vos candidatures, les plus récentes d'abord. Choisissez un poste pour ouvrir sa fiche.</caption>
           <thead>
             <tr>
               <th scope="col">Entreprise</th>
@@ -90,7 +93,16 @@ export function TableauDeBord({
             {chargement.candidatures.map((candidature) => (
               <tr key={candidature.id}>
                 <td>{candidature.entreprise.nom}</td>
-                <td>{candidature.poste}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="lien"
+                    aria-label={`${candidature.poste}, chez ${candidature.entreprise.nom} : ouvrir la fiche`}
+                    onClick={() => ouvrirLaFiche(candidature.id)}
+                  >
+                    {candidature.poste}
+                  </button>
+                </td>
                 <td>
                   <time dateTime={candidature.envoyeeLe}>{afficherLInstant(candidature.envoyeeLe)}</time>
                 </td>

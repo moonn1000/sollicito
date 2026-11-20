@@ -1,4 +1,4 @@
-import type { EntrepriseConnue, StatutDeCandidature } from "../api/clientDeLApi.ts";
+import type { EntrepriseConnue, EvenementDeLHistorique, StatutDeCandidature, TypeDEtape } from "../api/clientDeLApi.ts";
 
 /** Les statuts, en toutes lettres. */
 export const LIBELLES_DES_STATUTS: Record<StatutDeCandidature, string> = {
@@ -10,6 +10,35 @@ export const LIBELLES_DES_STATUTS: Record<StatutDeCandidature, string> = {
   Retiree: "Retirée",
   SansReponse: "Sans réponse",
 };
+
+/** Les types d'étape, en toutes lettres, dans l'ordre où la fiche les propose. */
+export const LIBELLES_DES_TYPES_D_ETAPE: Record<TypeDEtape, string> = {
+  Appel: "Appel",
+  Entretien: "Entretien",
+  Echange: "Échange (courriel, message)",
+  Autre: "Autre",
+};
+
+/** « d'Envoyée », « de Refusée » : la préposition, élidée devant une voyelle, suivie du statut. */
+export function deStatut(statut: StatutDeCandidature): string {
+  const libelle = LIBELLES_DES_STATUTS[statut];
+  return /^[AEIOUÉ]/u.test(libelle) ? `d'${libelle}` : `de ${libelle}`;
+}
+
+/**
+ * Ce que dit un événement de l'historique, en une phrase : « Statut passé d'Envoyée à Entretien », « Correction :
+ * retour de Refusée à Entretien », « Entretien ». La note d'une étape s'affiche à part.
+ */
+export function decrireLEvenement(evenement: EvenementDeLHistorique): string {
+  if (evenement.sorte === "etape") {
+    return LIBELLES_DES_TYPES_D_ETAPE[evenement.type] ?? evenement.type;
+  }
+
+  const vers = LIBELLES_DES_STATUTS[evenement.nouveau];
+  return evenement.corrige === null
+    ? `Statut passé ${deStatut(evenement.ancien)} à ${vers}`
+    : `Correction : retour ${deStatut(evenement.ancien)} à ${vers}`;
+}
 
 const FORMAT_DE_L_INSTANT = new Intl.DateTimeFormat("fr-BE", {
   day: "2-digit",

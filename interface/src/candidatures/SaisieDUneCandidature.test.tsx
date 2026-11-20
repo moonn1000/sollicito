@@ -75,6 +75,66 @@ test("les refus de l'API s'affichent à côté du champ concerné, et le premier
   expect(screen.getByLabelText<HTMLInputElement>("Entreprise").value).toBe("Lumière Verte SA");
 });
 
+test("après un refus puis un échec de l'API, le champ corrigé ne garde ni son refus ni son message (#80, point 3)", async () => {
+  const enregistrerUneCandidature = vi
+    .fn<ReturnType<typeof clientSimule>["enregistrerUneCandidature"]>()
+    .mockResolvedValueOnce({ enregistree: false, refus: { poste: ["Indiquez le poste."] } })
+    .mockRejectedValueOnce(new Error("panne"));
+  afficher(clientSimule({ enregistrerUneCandidature }));
+
+  remplir("Entreprise", "Lumière Verte SA");
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer la candidature" }));
+  const poste = screen.getByLabelText("Poste");
+  await waitFor(() => expect(poste.getAttribute("aria-invalid")).toBe("true"));
+  remplir("Poste", "Comptable");
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer la candidature" }));
+
+  expect((await screen.findByRole("alert")).textContent).toContain("La candidature n'a pas pu être enregistrée.");
+  expect(poste.getAttribute("aria-invalid")).toBeNull();
+  expect(poste.getAttribute("aria-describedby")).toBeNull();
+  expect(screen.queryByText("Indiquez le poste.")).toBeNull();
+  expect(screen.getByLabelText<HTMLInputElement>("Poste").value).toBe("Comptable");
+});
+
+test("un échec de l'API efface aussi les refus d'un champ qu'on n'a pas modifié : ils venaient de l'envoi précédent", async () => {
+  const enregistrerUneCandidature = vi
+    .fn<ReturnType<typeof clientSimule>["enregistrerUneCandidature"]>()
+    .mockResolvedValueOnce({ enregistree: false, refus: { poste: ["Indiquez le poste."] } })
+    .mockRejectedValueOnce(new Error("panne"));
+  afficher(clientSimule({ enregistrerUneCandidature }));
+
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer la candidature" }));
+  const poste = screen.getByLabelText("Poste");
+  await waitFor(() => expect(poste.getAttribute("aria-invalid")).toBe("true"));
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer la candidature" }));
+
+  expect((await screen.findByRole("alert")).textContent).toContain("La candidature n'a pas pu être enregistrée.");
+  expect(poste.getAttribute("aria-invalid")).toBeNull();
+  expect(screen.queryByText("Indiquez le poste.")).toBeNull();
+});
+
+test("corriger un champ refusé efface son refus sans déplacer le focus vers un autre champ refusé", async () => {
+  const client = clientSimule({
+    enregistrerUneCandidature: async () => ({
+      enregistree: false,
+      refus: { poste: ["Indiquez le poste."], envoyeeLe: ["La date et l'heure d'envoi ne peuvent pas être dans le futur."] },
+    }),
+  });
+  afficher(client);
+
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer la candidature" }));
+  const poste = screen.getByLabelText("Poste");
+  await waitFor(() => expect(document.activeElement).toBe(poste));
+  remplir("Poste", "Comptable");
+
+  expect(poste.getAttribute("aria-invalid")).toBeNull();
+  expect(screen.queryByText("Indiquez le poste.")).toBeNull();
+  // L'envoi, qu'on n'a pas touché, garde son refus ; le focus reste où l'on tape.
+  expect(screen.getByLabelText("Date et heure d'envoi").getAttribute("aria-invalid")).toBe("true");
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(document.activeElement).toBe(poste);
+});
+
 test("pendant qu'on tape, l'écran propose les entreprises déjà enregistrées, sans tenir compte des accents", async () => {
   afficher();
 

@@ -1,0 +1,272 @@
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { expect, test, vi } from "vitest";
+import { ErreurDeLApi, type FicheDUneCandidature as Fiche } from "../api/clientDeLApi.ts";
+import { changementFictif, clientSimule, etapeFictive, ficheFictive } from "../tests/clientSimule.ts";
+import { FicheDUneCandidature } from "./FicheDUneCandidature.tsx";
+
+// Le 18/11/2026 à 14:30, heure de Bruxelles (le fuseau des tests).
+const maintenant = () => new Date("2026-11-18T13:30:00Z");
+
+function afficher(client = clientSimule(), revenir = vi.fn()) {
+  const { container } = render(<FicheDUneCandidature client={client} candidature={7} revenir={revenir} maintenant={maintenant} />);
+  return { client, revenir, container };
+}
+
+// Le résumé de la candidature : chaque terme et sa définition.
+function resume() {
+  const liste = document.querySelector<HTMLElement>("dl.resume")!;
+  const termes = within(liste).getAllByRole("term").map((terme) => terme.textContent);
+  const definitions = within(liste).getAllByRole("definition").map((definition) => definition.textContent);
+  return Object.fromEntries(termes.map((terme, rang) => [terme, definitions[rang]]));
+}
+
+function boutonsDePassage() {
+  return within(screen.getByRole("group", { name: "Passer au statut :" }))
+    .getAllByRole("button")
+    .map((bouton) => bouton.textContent);
+}
+
+test("la fiche montre la candidature, son statut, et ne propose que les passages que l'API permet", async () => {
+  const fiche = ficheFictive({ statut: "Entretien", passagesPermis: ["Proposition", "Refusee", "Retiree", "SansReponse"] });
+  const { client } = afficher(clientSimule({ lireLaFiche: vi.fn(async () => fiche) }));
+
+  expect(await screen.findByRole("group", { name: "Passer au statut :" })).toBeDefined();
+  expect(client.lireLaFiche).toHaveBeenCalledWith(7);
+  expect(resume()).toEqual({
+    Entreprise: "Lumière Verte SA",
+    Poste: "Comptable",
+    "Envoyée le": "27/03/2026 23:30",
+    Statut: "Entretien",
+  });
+  expect(boutonsDePassage()).toEqual(["Proposition", "Refusée", "Retirée", "Sans réponse"]);
+  // Ouverte depuis le tableau de bord, la fiche prend le focus sur son titre.
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "Fiche de la candidature" })));
+});
+
+test("une candidature close ne propose aucun passage, seulement la correction de son dernier changement", async () => {
+  const fiche = ficheFictive({
+    statut: "Refusee",
+    passagesPermis: [],
+    correction: { changement: 4, de: "Refusee", retourA: "Entretien" },
+  });
+  afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  expect(await screen.findByText("La candidature est close : son statut ne change plus.")).toBeDefined();
+  expect(screen.queryByRole("group", { name: "Passer au statut :" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Corriger le dernier changement : revenir à Entretien" })).toBeDefined();
+});
+
+test("sans changement à corriger, la fiche ne propose pas de correction", async () => {
+  afficher();
+
+  expect(await screen.findByRole("group", { name: "Passer au statut :" })).toBeDefined();
+  expect(boutonsDePassage()).toEqual(["Entretien", "Refusée", "Retirée", "Sans réponse"]);
+  expect(screen.queryByRole("button", { name: /Corriger le dernier changement/u })).toBeNull();
+});
+
+test("l'historique commence à l'envoi, puis suit l'ordre de l'API, et marque le changement corrigé", async () => {
+  const fiche = ficheFictive({
+    statut: "Entretien",
+    historique: [
+      etapeFictive({ id: 5, survenuLe: "2026-11-10T09:00:00Z", type: "Appel", note: "Rappel de la responsable\nmardi matin" }),
+      changementFictif({ id: 1, survenuLe: "2026-11-18T13:30:00Z" }),
+      changementFictif({ id: 2, survenuLe: "2026-11-18T14:30:00Z", ancien: "Entretien", nouveau: "Refusee", estCorrige: true }),
+      changementFictif({ id: 3, survenuLe: "2026-11-18T14:35:00Z", ancien: "Refusee", nouveau: "Entretien", corrige: 2 }),
+      etapeFictive({ id: 6, survenuLe: "2026-12-01T08:30:00Z", type: "Entretien", note: null }),
+    ],
+  });
+  afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  const historique = await screen.findByRole("heading", { level: 3, name: "Historique" });
+  const lignes = within(historique.closest("section")!).getAllByRole("listitem");
+  expect(lignes.map((ligne) => ligne.textContent)).toEqual([
+    "27/03/2026 23:30Candidature envoyée",
+    "10/11/2026 10:00AppelRappel de la responsable\nmardi matin",
+    "18/11/2026 14:30Statut passé d'Envoyée à Entretien",
+    "18/11/2026 15:30Statut passé d'Entretien à Refuséecorrigé",
+    "18/11/2026 15:35Correction : retour de Refusée à Entretien",
+    "01/12/2026 09:30Entretien",
+  ]);
+  expect(within(lignes[3]!).getByText("corrigé").className).toBe("marque");
+  expect(lignes[1]!.querySelector("time")?.getAttribute("dateTime")).toBe("2026-11-10T09:00:00Z");
+});
+
+test("la note d'une étape s'affiche échappée, jamais comme du HTML", async () => {
+  const fiche = ficheFictive({
+    entreprise: { id: 1, nom: '<img src="x" onerror="alert(1)"> & Fils' },
+    historique: [etapeFictive({ note: '<b>gras</b><script>alert(2)</script><img src="x">' })],
+  });
+  const { container } = afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  expect(await screen.findByText('<b>gras</b><script>alert(2)</script><img src="x">')).toBeDefined();
+  expect(screen.getByText('<img src="x" onerror="alert(1)"> & Fils')).toBeDefined();
+  expect(container.querySelector("img, b, script")).toBeNull();
+});
+
+test("choisir un passage change le statut, montre la fiche à jour, l'annonce et ramène le focus sur le statut", async () => {
+  const apres = ficheFictive({
+    statut: "Entretien",
+    passagesPermis: ["Proposition", "Refusee", "Retiree", "SansReponse"],
+    correction: { changement: 1, de: "Entretien", retourA: "Envoyee" },
+    historique: [changementFictif()],
+  });
+  const { client } = afficher(clientSimule({ changerLeStatut: vi.fn(async () => ({ faite: true as const, fiche: apres })) }));
+
+  fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
+
+  expect((await screen.findByRole("status")).textContent).toBe("Statut changé : Entretien.");
+  expect(client.changerLeStatut).toHaveBeenCalledExactlyOnceWith(7, "Entretien");
+  expect(resume().Statut).toBe("Entretien");
+  expect(boutonsDePassage()).toEqual(["Proposition", "Refusée", "Retirée", "Sans réponse"]);
+  expect(screen.getByText("Statut passé d'Envoyée à Entretien")).toBeDefined();
+  // Le bouton cliqué a disparu : le focus revient sur le titre de la section.
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 3, name: "Faire avancer la candidature" })));
+});
+
+test("pendant une action, les boutons attendent la réponse, et un second clic n'envoie rien", async () => {
+  let repondre: (fiche: Fiche) => void = () => {};
+  const changerLeStatut = vi.fn(() => new Promise<{ faite: true; fiche: Fiche }>((resoudre) => (repondre = (fiche) => resoudre({ faite: true, fiche }))));
+  afficher(clientSimule({ changerLeStatut }));
+
+  const groupe = await screen.findByRole("group", { name: "Passer au statut :" });
+  fireEvent.click(within(groupe).getByRole("button", { name: "Refusée" }));
+  fireEvent.click(within(groupe).getByRole("button", { name: "Retirée" }));
+
+  await waitFor(() => expect(within(groupe).getByRole("button", { name: "Refusée" }).hasAttribute("disabled")).toBe(true));
+  expect(changerLeStatut).toHaveBeenCalledOnce();
+  repondre(ficheFictive({ statut: "Refusee", passagesPermis: [] }));
+  expect(await screen.findByText("La candidature est close : son statut ne change plus.")).toBeDefined();
+});
+
+test("un passage que l'API refuse affiche son motif, et la fiche est relue", async () => {
+  const lireLaFiche = vi
+    .fn<ReturnType<typeof clientSimule>["lireLaFiche"]>()
+    .mockResolvedValueOnce(ficheFictive())
+    .mockResolvedValueOnce(ficheFictive({ statut: "Refusee", passagesPermis: [] }));
+  const changerLeStatut = vi.fn(async () => ({ faite: false as const, motif: "La candidature est déjà au statut Refusée." }));
+  afficher(clientSimule({ lireLaFiche, changerLeStatut }));
+
+  fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe("La candidature est déjà au statut Refusée.");
+  await waitFor(() => expect(resume().Statut).toBe("Refusée"));
+  expect(lireLaFiche).toHaveBeenCalledTimes(2);
+});
+
+test("si l'API ne répond pas, la fiche le dit sans rien changer", async () => {
+  afficher(clientSimule({ changerLeStatut: () => Promise.reject(new Error("panne")) }));
+
+  fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "Le statut n'a pas pu être changé. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.",
+  );
+  expect(resume().Statut).toBe("Envoyée");
+  expect(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }).hasAttribute("disabled")).toBe(false);
+});
+
+test("la correction vise le changement que la fiche propose de corriger, et s'annonce", async () => {
+  const fiche = ficheFictive({
+    statut: "Entretien",
+    passagesPermis: ["Proposition", "Refusee", "Retiree", "SansReponse"],
+    correction: { changement: 12, de: "Entretien", retourA: "Envoyee" },
+    historique: [changementFictif({ id: 12 })],
+  });
+  // La correction s'ajoute à l'historique : la fiche rendue a un événement de plus.
+  const corrigee = ficheFictive({
+    historique: [changementFictif({ id: 12, estCorrige: true }), changementFictif({ id: 13, ancien: "Entretien", nouveau: "Envoyee", corrige: 12 })],
+  });
+  const { client } = afficher(
+    clientSimule({ lireLaFiche: async () => fiche, corrigerLeDernierChangement: vi.fn(async () => ({ faite: true as const, fiche: corrigee })) }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger le dernier changement : revenir à Envoyée" }));
+
+  expect((await screen.findByRole("status")).textContent).toBe("Dernier changement corrigé : retour à Envoyée.");
+  expect(client.corrigerLeDernierChangement).toHaveBeenCalledExactlyOnceWith(7, 12);
+  expect(resume().Statut).toBe("Envoyée");
+});
+
+test("une candidature introuvable le dit", async () => {
+  afficher(clientSimule({ lireLaFiche: () => Promise.reject(new ErreurDeLApi(404)) }));
+  expect((await screen.findByRole("alert")).textContent).toBe("Cette candidature n'existe pas, ou plus.");
+});
+
+test("une fiche qui ne se charge pas le dit", async () => {
+  afficher(clientSimule({ lireLaFiche: () => Promise.reject(new ErreurDeLApi(500)) }));
+  expect((await screen.findByRole("alert")).textContent).toBe("La fiche n'a pas pu être chargée. Fermez Sollicito, puis relancez-le.");
+});
+
+test("le bouton de retour mène au tableau de bord", async () => {
+  const { revenir } = afficher();
+
+  fireEvent.click(screen.getByRole("button", { name: "Revenir au tableau de bord" }));
+
+  expect(revenir).toHaveBeenCalledOnce();
+});
+
+test("une étape notée entre dans l'historique sans changer le statut", async () => {
+  const apres = ficheFictive({ historique: [etapeFictive({ type: "Echange", note: "Relance par courriel" })] });
+  const { client } = afficher(clientSimule({ noterUneEtape: vi.fn(async () => ({ notee: true as const, fiche: apres })) }));
+
+  fireEvent.change(await screen.findByLabelText("Type"), { target: { value: "Echange" } });
+  fireEvent.change(screen.getByLabelText("Note (facultative)"), { target: { value: "Relance par courriel" } });
+  fireEvent.click(screen.getByRole("button", { name: "Ajouter à l'historique" }));
+
+  expect(await screen.findByText("Relance par courriel", { selector: "p.note" })).toBeDefined();
+  expect(client.noterUneEtape).toHaveBeenCalledExactlyOnceWith(7, { type: "Echange", survenuLe: "2026-11-18T14:30", note: "Relance par courriel" });
+  expect(resume().Statut).toBe("Envoyée");
+  expect(boutonsDePassage()).toEqual(["Entretien", "Refusée", "Retirée", "Sans réponse"]);
+});
+
+test("une action sur le statut efface l'annonce de la dernière étape ajoutée, et inversement", async () => {
+  afficher();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Ajouter à l'historique" }));
+  expect(await screen.findByText("Étape ajoutée à l'historique : Entretien.")).toBeDefined();
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+
+  expect(await screen.findByText("Statut changé : Refusée.")).toBeDefined();
+  expect(screen.queryByText("Étape ajoutée à l'historique : Entretien.")).toBeNull();
+  expect(screen.getAllByRole("status")).toHaveLength(1);
+});
+
+test("une réponse plus ancienne, arrivée après une plus récente, ne remplace pas la fiche montrée", async () => {
+  let repondreALaNote: () => void = () => {};
+  const ancienne = ficheFictive({ historique: [etapeFictive({ id: 2 })] });
+  const recente = ficheFictive({
+    statut: "Refusee",
+    passagesPermis: [],
+    historique: [etapeFictive({ id: 2 }), changementFictif({ id: 3, nouveau: "Refusee" })],
+  });
+  afficher(
+    clientSimule({
+      noterUneEtape: () => new Promise((resoudre) => (repondreALaNote = () => resoudre({ notee: true, fiche: ancienne }))),
+      changerLeStatut: async () => ({ faite: true, fiche: recente }),
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Ajouter à l'historique" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+  expect(await screen.findByText("Statut changé : Refusée.")).toBeDefined();
+  repondreALaNote();
+
+  await waitFor(() => expect(screen.getByRole("button", { name: "Ajouter à l'historique" })).toBeDefined());
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(resume().Statut).toBe("Refusée");
+  expect(screen.getByText("La candidature est close : son statut ne change plus.")).toBeDefined();
+});
+
+test("si la fiche ne peut être relue après un refus, la fiche le dit avec le motif", async () => {
+  const lireLaFiche = vi
+    .fn<ReturnType<typeof clientSimule>["lireLaFiche"]>()
+    .mockResolvedValueOnce(ficheFictive())
+    .mockRejectedValueOnce(new ErreurDeLApi(500));
+  afficher(clientSimule({ lireLaFiche, changerLeStatut: async () => ({ faite: false, motif: "La candidature est déjà au statut Refusée." }) }));
+
+  fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "La candidature est déjà au statut Refusée. La fiche n'a pas pu être relue : fermez Sollicito, puis relancez-le.",
+  );
+});

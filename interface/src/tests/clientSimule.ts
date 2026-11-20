@@ -1,5 +1,12 @@
 import { vi } from "vitest";
-import type { Candidature, ClientDeLApi, EntrepriseConnue } from "../api/clientDeLApi.ts";
+import type {
+  Candidature,
+  ChangementDeStatutLu,
+  ClientDeLApi,
+  EntrepriseConnue,
+  EtapeLue,
+  FicheDUneCandidature,
+} from "../api/clientDeLApi.ts";
 
 /** Une candidature fictive. */
 export function candidatureFictive(modifications: Partial<Candidature> = {}): Candidature {
@@ -9,6 +16,43 @@ export function candidatureFictive(modifications: Partial<Candidature> = {}): Ca
     poste: "Comptable",
     envoyeeLe: "2026-03-27T22:30:00Z",
     statut: "Envoyee",
+    ...modifications,
+  };
+}
+
+/** La fiche fictive d'une candidature neuve, au statut Envoyée, sans historique. */
+export function ficheFictive(modifications: Partial<FicheDUneCandidature> = {}): FicheDUneCandidature {
+  return {
+    ...candidatureFictive(),
+    passagesPermis: ["Entretien", "Refusee", "Retiree", "SansReponse"],
+    correction: null,
+    historique: [],
+    ...modifications,
+  };
+}
+
+/** Un changement de statut fictif : un passage d'Envoyée à Entretien, le 18/11/2026 à 14:30 à Bruxelles. */
+export function changementFictif(modifications: Partial<ChangementDeStatutLu> = {}): ChangementDeStatutLu {
+  return {
+    sorte: "changementDeStatut",
+    id: 1,
+    survenuLe: "2026-11-18T13:30:00Z",
+    ancien: "Envoyee",
+    nouveau: "Entretien",
+    corrige: null,
+    estCorrige: false,
+    ...modifications,
+  };
+}
+
+/** Une étape fictive : un appel, le 10/11/2026 à 10:00 à Bruxelles, sans note. */
+export function etapeFictive(modifications: Partial<EtapeLue> = {}): EtapeLue {
+  return {
+    sorte: "etape",
+    id: 2,
+    survenuLe: "2026-11-10T09:00:00Z",
+    type: "Appel",
+    note: null,
     ...modifications,
   };
 }
@@ -29,6 +73,19 @@ export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
     enregistrerUneCandidature: vi.fn<ClientDeLApi["enregistrerUneCandidature"]>(async (saisie) => ({
       enregistree: true,
       candidature: candidatureFictive({ entreprise: { id: 9, nom: saisie.entreprise }, poste: saisie.poste }),
+    })),
+    lireLaFiche: vi.fn<ClientDeLApi["lireLaFiche"]>(async (candidature) => ficheFictive({ id: candidature })),
+    changerLeStatut: vi.fn<ClientDeLApi["changerLeStatut"]>(async (candidature, statut) => ({
+      faite: true,
+      fiche: ficheFictive({ id: candidature, statut, passagesPermis: [] }),
+    })),
+    corrigerLeDernierChangement: vi.fn<ClientDeLApi["corrigerLeDernierChangement"]>(async (candidature) => ({
+      faite: true,
+      fiche: ficheFictive({ id: candidature }),
+    })),
+    noterUneEtape: vi.fn<ClientDeLApi["noterUneEtape"]>(async (candidature) => ({
+      notee: true,
+      fiche: ficheFictive({ id: candidature }),
     })),
     ...modifications,
   } satisfies ClientDeLApi;

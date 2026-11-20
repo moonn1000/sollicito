@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
 
-/** Les écrans de l'interface : la navigation n'en propose pas d'autres. */
-export type Ecran = "tableau" | "saisie";
+/**
+ * Les écrans de l'interface. La navigation propose les deux premiers ; la fiche d'une candidature s'ouvre depuis le
+ * tableau de bord, et désigne sa candidature par son identifiant.
+ */
+export type Ecran = { nom: "tableau" } | { nom: "saisie" } | { nom: "fiche"; candidature: number };
 
-const ENTREES: readonly { ecran: Ecran; libelle: string }[] = [
+const ENTREES: readonly { ecran: "tableau" | "saisie"; libelle: string }[] = [
   { ecran: "tableau", libelle: "Tableau de bord" },
   { ecran: "saisie", libelle: "Nouvelle candidature" },
 ];
@@ -36,8 +39,8 @@ export function MiseEnPage({
                 <li key={entree.ecran}>
                   <button
                     type="button"
-                    aria-current={entree.ecran === ecran ? "page" : undefined}
-                    onClick={() => naviguer(entree.ecran)}
+                    aria-current={entree.ecran === ecran.nom ? "page" : undefined}
+                    onClick={() => naviguer({ nom: entree.ecran })}
                   >
                     {entree.libelle}
                   </button>

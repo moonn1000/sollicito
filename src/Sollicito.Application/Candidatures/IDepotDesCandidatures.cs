@@ -8,7 +8,7 @@ public interface IDepotDesCandidatures
 {
     /// <summary>
     /// Commence une écriture exclusive : jusqu'à sa fin, aucune autre écriture ne touche la base, même d'un autre
-    /// processus. Ce qu'elle ajoute n'est gardé que si elle est validée.
+    /// processus. Ce qu'elle ajoute ou change n'est gardé que si elle est validée.
     /// </summary>
     Task<IEcritureDesCandidatures> CommencerUneEcritureAsync(CancellationToken annulation);
 
@@ -17,6 +17,9 @@ public interface IDepotDesCandidatures
 
     /// <summary>Les entreprises enregistrées, dans l'ordre de leur clé.</summary>
     Task<IReadOnlyList<EntrepriseConnue>> ListerLesEntreprisesAsync(CancellationToken annulation);
+
+    /// <summary>La candidature de cet identifiant, avec tout son historique et son entreprise, pour la lire ; rien si elle n'existe pas.</summary>
+    Task<CandidatureSuivie?> TrouverAsync(int id, CancellationToken annulation);
 }
 
 /// <summary>Une écriture exclusive dans la base. La quitter sans l'avoir validée l'annule.</summary>
@@ -25,12 +28,26 @@ public interface IEcritureDesCandidatures : IAsyncDisposable
     /// <summary>L'entreprise de cette clé, si elle est enregistrée.</summary>
     Task<Entreprise?> TrouverLEntrepriseAsync(string cle, CancellationToken annulation);
 
+    /// <summary>
+    /// La candidature de cet identifiant, avec tout son historique et son entreprise, pour la faire avancer : ce qui
+    /// change en elle, statut et événements ajoutés, est gardé à la validation. Rien si elle n'existe pas.
+    /// </summary>
+    Task<CandidatureSuivie?> TrouverLaCandidatureAsync(int id, CancellationToken annulation);
+
     /// <summary>Ajoute une entreprise, qui reçoit aussitôt son identifiant.</summary>
     Task AjouterAsync(Entreprise entreprise, CancellationToken annulation);
 
     /// <summary>Ajoute une candidature, qui reçoit aussitôt son identifiant.</summary>
     Task AjouterAsync(Candidature candidature, CancellationToken annulation);
 
-    /// <summary>Garde tout ce que l'écriture a ajouté.</summary>
+    /// <summary>
+    /// Garde tout ce que l'écriture a ajouté, et ce qui a changé dans les candidatures qu'elle a trouvées. Les
+    /// événements ajoutés reçoivent leur identifiant.
+    /// </summary>
     Task ValiderAsync(CancellationToken annulation);
 }
+
+/// <summary>Une candidature, son historique compris, et son entreprise.</summary>
+/// <param name="Candidature">La candidature, avec tous ses événements, dans l'ordre de leur enregistrement.</param>
+/// <param name="Entreprise">Son entreprise.</param>
+public sealed record CandidatureSuivie(Candidature Candidature, EntrepriseConnue Entreprise);

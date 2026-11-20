@@ -62,12 +62,23 @@ public static class TexteDUneLigne
     /// points de code de chaque plan, U+FFFE et U+FFFF à U+10FFFE et U+10FFFF). Un texte admis se normalise toujours :
     /// la clé d'une entreprise se calcule (<see cref="Entreprises.CleDEntreprise"/>).
     /// </summary>
-    public static bool EstAdmis(string texte)
+    public static bool EstAdmis(string texte) => SansCaractereInterdit(texte, sautsDeLigneEtTabulationsAdmis: false);
+
+    /// <summary>
+    /// La règle de <see cref="EstAdmis"/>, qui peut admettre en plus les sauts de ligne (U+000A) et les tabulations
+    /// (U+0009), seuls caractères de contrôle d'un texte sur plusieurs lignes (<see cref="TexteSurPlusieursLignes"/>).
+    /// </summary>
+    internal static bool SansCaractereInterdit(string texte, bool sautsDeLigneEtTabulationsAdmis)
     {
         ArgumentNullException.ThrowIfNull(texte);
         for (var i = 0; i < texte.Length; i++)
         {
             var caractere = texte[i];
+            if (sautsDeLigneEtTabulationsAdmis && caractere is '\n' or '\t')
+            {
+                continue;
+            }
+
             if (char.IsControl(caractere) || caractere is (>= '‪' and <= '‮') or (>= '⁦' and <= '⁩'))
             {
                 return false;

@@ -48,6 +48,34 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                     b.ToTable("Candidatures", (string)null);
                 });
 
+            modelBuilder.Entity("Sollicito.Domain.Candidatures.EvenementDeCandidature", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CandidatureId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Sorte")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SurvenuLe")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CandidatureId");
+
+                    b.ToTable("EvenementsDeCandidature", (string)null);
+
+                    b.HasDiscriminator<string>("Sorte").HasValue("EvenementDeCandidature");
+
+                    b.UseTphMappingStrategy();
+                });
+
             modelBuilder.Entity("Sollicito.Domain.Entreprises.Entreprise", b =>
                 {
                     b.Property<int>("Id")
@@ -71,6 +99,45 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                     b.ToTable("Entreprises", (string)null);
                 });
 
+            modelBuilder.Entity("Sollicito.Domain.Candidatures.ChangementDeStatut", b =>
+                {
+                    b.HasBaseType("Sollicito.Domain.Candidatures.EvenementDeCandidature");
+
+                    b.Property<string>("Ancien")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CorrigeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Nouveau")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasIndex("CorrigeId")
+                        .IsUnique();
+
+                    b.HasDiscriminator().HasValue("ChangementDeStatut");
+                });
+
+            modelBuilder.Entity("Sollicito.Domain.Candidatures.Etape", b =>
+                {
+                    b.HasBaseType("Sollicito.Domain.Candidatures.EvenementDeCandidature");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasDiscriminator().HasValue("Etape");
+                });
+
             modelBuilder.Entity("Sollicito.Domain.Candidatures.Candidature", b =>
                 {
                     b.HasOne("Sollicito.Domain.Entreprises.Entreprise", null)
@@ -78,6 +145,30 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                         .HasForeignKey("EntrepriseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Sollicito.Domain.Candidatures.EvenementDeCandidature", b =>
+                {
+                    b.HasOne("Sollicito.Domain.Candidatures.Candidature", null)
+                        .WithMany("Evenements")
+                        .HasForeignKey("CandidatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sollicito.Domain.Candidatures.ChangementDeStatut", b =>
+                {
+                    b.HasOne("Sollicito.Domain.Candidatures.ChangementDeStatut", "Corrige")
+                        .WithOne()
+                        .HasForeignKey("Sollicito.Domain.Candidatures.ChangementDeStatut", "CorrigeId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Corrige");
+                });
+
+            modelBuilder.Entity("Sollicito.Domain.Candidatures.Candidature", b =>
+                {
+                    b.Navigation("Evenements");
                 });
 #pragma warning restore 612, 618
         }

@@ -3,7 +3,7 @@ namespace Sollicito.Domain.Candidatures;
 /// <summary>
 /// Le statut d'une candidature (modèle de domaine, « Statuts d'une candidature »). Envoyée, Entretien et Proposition
 /// sont en cours ; les quatre autres closent la candidature. Une candidature part toujours d'Envoyée ; les passages
-/// viennent avec #12.
+/// permis sont ceux de <see cref="PassagesDeStatut"/>.
 /// </summary>
 public enum StatutDeCandidature
 {

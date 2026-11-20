@@ -278,6 +278,37 @@ test("une candidature saisie dans la fenêtre s'enregistre dans la base du dossi
   expect(await page.locator("main img").count()).toBe(0);
 });
 
+test("la fiche de la candidature fait avancer son statut et note un échange, puis le tableau de bord montre le statut à jour", async () => {
+  const { page } = fenetre;
+  const entreprise = '<img src="x" onerror="alert(1)"> Lumière Verte SA';
+  const note = "<b>Relance</b> envoyée\npar courriel";
+
+  await page.getByRole("button", { name: `Comptable, chez ${entreprise} : ouvrir la fiche` }).click();
+  await page.getByRole("heading", { level: 2, name: "Fiche de la candidature" }).waitFor();
+  // Deux écritures de plus, passées par le contrôle de l'origine : le changement de statut, puis l'étape.
+  await page.getByRole("group", { name: "Passer au statut :" }).getByRole("button", { name: "Entretien" }).click();
+  await page.getByText("Statut changé : Entretien.").waitFor();
+  await page.getByLabel("Type").selectOption("Echange");
+  await page.getByLabel("Date et heure").fill("2026-03-28T10:00");
+  await page.getByLabel("Note (facultative)").fill(note);
+  await page.getByRole("button", { name: "Ajouter à l'historique" }).click();
+  await page.getByText("Étape ajoutée à l'historique : Échange (courriel, message).").waitFor();
+
+  // L'historique commence à l'envoi ; l'étape, datée par l'utilisateur, précède le changement, daté du jour.
+  const lignes = await page.locator("ol.historique > li").allTextContents();
+  expect(lignes).toHaveLength(3);
+  expect(lignes[0]).toBe("27/03/2026 23:30Candidature envoyée");
+  expect(lignes[1]).toBe(`28/03/2026 10:00Échange (courriel, message)${note}`);
+  expect(lignes[2]).toMatch(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}Statut passé d'Envoyée à Entretien$/u);
+  // La note s'affiche comme du texte : aucune balise ne s'est créée.
+  expect(await page.locator("main b, main img").count()).toBe(0);
+
+  await page.getByRole("button", { name: "Revenir au tableau de bord" }).click();
+  await page.getByRole("heading", { level: 2, name: "Tableau de bord" }).waitFor();
+  await page.getByRole("row").nth(1).waitFor();
+  expect(await page.getByRole("row").nth(1).getByRole("cell").allTextContents()).toEqual([entreprise, "Comptable", "27/03/2026 23:30", "Entretien"]);
+});
+
 test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fichier", async () => {
   const { origineDeLApi, dossierDeDonnees } = fenetre;
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type {
   Candidature,
   ChampDeLaSaisie,
@@ -6,6 +6,7 @@ import type {
   EntrepriseConnue,
   RefusDeLaSaisie,
 } from "../api/clientDeLApi.ts";
+import { Champ, sansLeChamp } from "../formulaires/Champ.tsx";
 import { heureSaisieDe, LIBELLES_DES_STATUTS, proposerDesEntreprises } from "./affichage.ts";
 
 type Envoi = "pret" | "en-cours" | "echec";
@@ -15,7 +16,8 @@ const ORDRE_DES_CHAMPS: readonly ChampDeLaSaisie[] = ["entreprise", "poste", "en
 /**
  * L'écran de saisie d'une candidature : entreprise, poste, date et heure d'envoi ; le statut de départ est toujours
  * Envoyée. L'API valide chaque champ : l'écran envoie la saisie telle quelle et affiche ses refus à côté du champ
- * concerné. Pendant qu'on tape le nom de l'entreprise, il propose celles déjà enregistrées (ADR-0005).
+ * concerné. Un refus disparaît dès qu'on modifie son champ, ou quand l'envoi suivant échoue : il ne décrit plus ce qui
+ * est saisi (#80, point 3). Pendant qu'on tape le nom de l'entreprise, il propose celles déjà enregistrées (ADR-0005).
  */
 export function SaisieDUneCandidature({
   client,
@@ -31,6 +33,8 @@ export function SaisieDUneCandidature({
   const [poste, setPoste] = useState("");
   const [envoyeeLe, setEnvoyeeLe] = useState(() => heureSaisieDe(maintenant()));
   const [refus, setRefus] = useState<RefusDeLaSaisie>({});
+  // Compte les réponses de l'API qui portent des refus : chacune, et elle seule, déplace le focus.
+  const [refusRecus, setRefusRecus] = useState(0);
   const [envoi, setEnvoi] = useState<Envoi>("pret");
   const [connues, setConnues] = useState<EntrepriseConnue[]>([]);
   const titre = useRef<HTMLHeadingElement>(null);
@@ -60,14 +64,20 @@ export function SaisieDUneCandidature({
     };
   }, [client]);
 
-  // Après un refus, le premier champ refusé reçoit le focus. Les références des champs ne changent pas d'un rendu à
-  // l'autre : seuls les refus déclenchent ce déplacement.
+  // Après une réponse qui porte des refus, le premier champ refusé reçoit le focus. Effacer le refus d'un champ qu'on
+  // corrige ne le déplace pas : seules les réponses de l'API le font.
   useEffect(() => {
     const premier = ORDRE_DES_CHAMPS.find((champ) => (refus[champ]?.length ?? 0) > 0);
     if (premier !== undefined) {
       champs[premier].current?.focus();
     }
-  }, [refus]);
+  }, [refusRecus]);
+
+  // Modifier un champ efface ses refus, qui portaient sur l'ancienne valeur.
+  const modifier = (champ: ChampDeLaSaisie, changer: (valeur: string) => void) => (valeur: string) => {
+    changer(valeur);
+    setRefus((avant) => sansLeChamp(avant, champ));
+  };
 
   const propositions = useMemo(() => proposerDesEntreprises(connues, entreprise), [connues, entreprise]);
 
@@ -86,8 +96,11 @@ export function SaisieDUneCandidature({
       }
 
       setRefus(resultat.refus);
+      setRefusRecus((nombre) => nombre + 1);
       setEnvoi("pret");
     } catch {
+      // Les refus venaient d'un envoi précédent : ils ne disent rien de celui qui vient d'échouer.
+      setRefus({});
       setEnvoi("echec");
     }
   }
@@ -106,7 +119,7 @@ export function SaisieDUneCandidature({
               type="text"
               autoComplete="off"
               value={entreprise}
-              onChange={(evenement) => setEntreprise(evenement.target.value)}
+              onChange={(evenement) => modifier("entreprise", setEntreprise)(evenement.target.value)}
             />
           )}
         </Champ>
@@ -116,7 +129,7 @@ export function SaisieDUneCandidature({
             <ul aria-labelledby="propositions-titre">
               {propositions.map((proposition) => (
                 <li key={proposition.id}>
-                  <button type="button" onClick={() => setEntreprise(proposition.nom)}>
+                  <button type="button" onClick={() => modifier("entreprise", setEntreprise)(proposition.nom)}>
                     {proposition.nom}
                   </button>
                 </li>
@@ -132,7 +145,7 @@ export function SaisieDUneCandidature({
               type="text"
               autoComplete="off"
               value={poste}
-              onChange={(evenement) => setPoste(evenement.target.value)}
+              onChange={(evenement) => modifier("poste", setPoste)(evenement.target.value)}
             />
           )}
         </Champ>
@@ -143,7 +156,7 @@ export function SaisieDUneCandidature({
               ref={champs.envoyeeLe}
               type="datetime-local"
               value={envoyeeLe}
-              onChange={(evenement) => setEnvoyeeLe(evenement.target.value)}
+              onChange={(evenement) => modifier("envoyeeLe", setEnvoyeeLe)(evenement.target.value)}
             />
           )}
         </Champ>
@@ -163,36 +176,5 @@ export function SaisieDUneCandidature({
         )}
       </form>
     </section>
-  );
-}
-
-/** Un champ, son libellé et ses refus, que le champ désigne comme sa description. */
-function Champ({
-  id,
-  libelle,
-  refus,
-  children,
-}: {
-  id: ChampDeLaSaisie;
-  libelle: string;
-  refus: string[] | undefined;
-  children: (attributs: { id: string; name: string; "aria-invalid"?: true; "aria-describedby"?: string }) => ReactNode;
-}) {
-  const refuse = refus !== undefined && refus.length > 0;
-  const idDuRefus = `${id}-refus`;
-  return (
-    <div className={refuse ? "champ champ-refuse" : "champ"}>
-      <label htmlFor={id}>{libelle}</label>
-      {children({
-        id,
-        name: id,
-        ...(refuse ? { "aria-invalid": true, "aria-describedby": idDuRefus } : {}),
-      })}
-      {refuse && (
-        <p className="refus" id={idDuRefus}>
-          {refus.join(" ")}
-        </p>
-      )}
-    </div>
   );
 }

@@ -112,6 +112,22 @@ public sealed class ReglesDesJournauxTests
                 await EnregistrerAsync(api, $$"""{"poste":"{{Donnee}}"}""", "text/" + Donnee),
                 await StatutAsync(api, HttpMethod.Post, "/api/candidatures", jeton: true, requete =>
                     requete.Content = new StringContent($$"""{"poste":"{{Donnee}}"}""", System.Text.Encoding.UTF8, "application/json")),
+
+                // La fiche de la candidature enregistrée (#12), la première de la base : son statut change, puis la
+                // donnée part dans la note d'une étape admise, relue par la fiche, et dans un statut, une étape et
+                // des corps refusés ; une correction refusée, puis admise ; une candidature inconnue.
+                await StatutAsync(api, HttpMethod.Get, "/api/candidatures/1", jeton: true),
+                await EcrireAsync(api, "/api/candidatures/1/statut", """{"statut":"Entretien"}"""),
+                await EcrireAsync(api, "/api/candidatures/1/statut", $$"""{"statut":"{{Donnee}}"}"""),
+                await EcrireAsync(api, "/api/candidatures/1/statut", """{"statut":"Envoyee"}"""),
+                await EcrireAsync(api, "/api/candidatures/1/etapes", $$"""{"type":"Entretien","survenuLe":"2026-11-10T10:00","note":"Entretien avec {{Donnee}}"}"""),
+                await EcrireAsync(api, "/api/candidatures/1/etapes", $$"""{"type":"{{Donnee}}","survenuLe":"{{Donnee}}","note":"{{new string('x', 2001)}}{{Donnee}}"}"""),
+                await EcrireAsync(api, "/api/candidatures/1/etapes", $$"""{"note":{{Donnee}}"""),
+                await EcrireAsync(api, "/api/candidatures/1/etapes", $$"""{"{{Donnee}}":"x"}"""),
+                await StatutAsync(api, HttpMethod.Get, "/api/candidatures/1", jeton: true),
+                await EcrireAsync(api, "/api/candidatures/1/changements/999/correction", corps: null),
+                await EcrireAsync(api, "/api/candidatures/1/changements/1/correction", corps: null),
+                await EcrireAsync(api, "/api/candidatures/999/statut", """{"statut":"Entretien"}"""),
             ];
 
             // Mal formées, que Kestrel rejette lui-même : ligne de requête (méthode invalide), ligne d'en-tête sans
@@ -135,6 +151,9 @@ public sealed class ReglesDesJournauxTests
                     HttpStatusCode.Created, HttpStatusCode.OK, HttpStatusCode.OK,
                     HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest,
                     HttpStatusCode.UnsupportedMediaType, HttpStatusCode.Forbidden,
+                    HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.BadRequest, HttpStatusCode.Conflict,
+                    HttpStatusCode.OK, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest,
+                    HttpStatusCode.OK, HttpStatusCode.Conflict, HttpStatusCode.OK, HttpStatusCode.NotFound,
                 ],
                 statuts);
             Assert.All(lignesDEtat, ligne => Assert.StartsWith("HTTP/1.1 400 ", ligne, StringComparison.Ordinal));
@@ -181,6 +200,17 @@ public sealed class ReglesDesJournauxTests
         using var reponse = await api.EnvoyerCorpsAsync(corps, typeDuCorps);
         return reponse.StatusCode;
     }
+
+    // Une écriture de la fiche, venue de l'interface, avec le corps donné ou sans corps.
+    private static Task<HttpStatusCode> EcrireAsync(ApiLancee api, string chemin, string? corps) =>
+        StatutAsync(api, HttpMethod.Post, chemin, jeton: true, requete =>
+        {
+            requete.Headers.Add("Origin", api.Origine);
+            if (corps is not null)
+            {
+                requete.Content = new StringContent(corps, System.Text.Encoding.UTF8, "application/json");
+            }
+        });
 
     private static async Task<HttpStatusCode> StatutAsync(
         ApiLancee api,
