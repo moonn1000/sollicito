@@ -20,6 +20,11 @@ internal sealed partial class SauvegardesAutomatiques(
     // lancement, ne copie rien en s'arrêtant.
     private volatile bool _demarre;
 
+    // La copie de la fermeture, lancée une seule fois. L'hôte peut appeler StopAsync deux fois : sous l'hôte des tests, deux
+    // appels pour un seul hôte, dont un seul est attendu par la fermeture (relevé du 2026-11-20). Chaque appel attend la
+    // même copie, sans quoi elle pourrait finir après l'arrêt.
+    private Lazy<Task>? _fermeture;
+
     public override Task StartAsync(CancellationToken cancellationToken)
     {
         _demarre = true;
@@ -57,9 +62,15 @@ internal sealed partial class SauvegardesAutomatiques(
             return;
         }
 
+        var nouvelle = new Lazy<Task>(FermerAsync);
+        await (Interlocked.CompareExchange(ref _fermeture, nouvelle, null) ?? nouvelle).Value;
+    }
+
+    private async Task FermerAsync()
+    {
         try
         {
-            await sauvegardes.FaireLaCopieDeFermetureAsync(cancellationToken);
+            await sauvegardes.FaireLaCopieDeFermetureAsync();
         }
         catch (Exception erreur)
         {

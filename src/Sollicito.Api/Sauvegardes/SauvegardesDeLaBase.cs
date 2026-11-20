@@ -118,20 +118,22 @@ public sealed partial class SauvegardesDeLaBase
     }
 
     /// <summary>
-    /// La copie de la fermeture : la copie du jour refaite, pour qu'elle garde la fin de la séance. Elle est abandonnée
-    /// au-delà de <see cref="DelaiDeLaCopieDeFermeture"/>, et la copie d'avant reste : rend faux dans ce cas.
+    /// La copie de la fermeture : la copie du jour refaite, pour qu'elle garde la fin de la séance. Seul
+    /// <see cref="DelaiDeLaCopieDeFermeture"/> la borne : au-delà, elle est abandonnée, la copie d'avant reste, et la
+    /// méthode rend faux. Le jeton d'arrêt de l'hôte ne l'écourte pas : déjà annulé, il laisserait la copie finir après
+    /// la fermeture.
     /// </summary>
-    public async Task<bool> FaireLaCopieDeFermetureAsync(CancellationToken annulation)
+    public async Task<bool> FaireLaCopieDeFermetureAsync()
     {
         try
         {
             // Sur un autre fil : les appels de SQLite ne rendent la main qu'une fois finis, et une base occupée les
             // retient jusqu'au délai de ses commandes. Le délai de la fermeture court ainsi dès le début de la copie.
             await Task.Run(() => RefaireLaCopieDuJourAsync(CancellationToken.None), CancellationToken.None)
-                .WaitAsync(DelaiDeLaCopieDeFermeture, _horloge, annulation);
+                .WaitAsync(DelaiDeLaCopieDeFermeture, _horloge);
             return true;
         }
-        catch (Exception erreur) when (erreur is TimeoutException or OperationCanceledException)
+        catch (TimeoutException)
         {
             CopieDeFermetureAbandonnee(_journal);
             return false;

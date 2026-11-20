@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
 using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Tests.Outils;
@@ -112,6 +114,29 @@ public sealed class CopiesDuJourTests : IAsyncLifetime
         }
 
         Assert.True(File.GetLastWriteTimeUtc(copie) > apresLePremier);
+    }
+
+    [Fact]
+    public async Task Une_fermeture_ne_fait_qu_une_copie_finie_avant_la_fin_de_l_arret()
+    {
+        // Sous l'hôte des tests, l'arrêt des services s'appelle deux fois pour un seul hôte, et la fermeture n'attend que
+        // l'un des deux appels : une seconde copie finissait après l'arrêt (relevé du 2026-11-20).
+        var capture = new CaptureDesJournaux();
+        int CopiesFaites() => capture.Entrees.Count(entree => entree.Contains("Copie du jour faite", StringComparison.Ordinal));
+        for (var lancement = 1; lancement <= 3; lancement++)
+        {
+            await using (var api = await LancerSurAsync(_dossier, new HorlogeDeTest(), builder => builder.ConfigureLogging(journaux => journaux.AddProvider(capture))))
+            {
+                await api.AttendreLaPremiereVerificationAsync();
+            }
+
+            var apresLArret = CopiesFaites();
+            await Task.Delay(300, TestContext.Current.CancellationToken);
+
+            // Le premier lancement copie au départ et à la fermeture ; les suivants, le même jour, à la fermeture seulement.
+            Assert.Equal(lancement + 1, apresLArret);
+            Assert.Equal(apresLArret, CopiesFaites());
+        }
     }
 
     [Fact]
@@ -246,14 +271,17 @@ public sealed class CopiesDuJourTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Une_base_neuve_se_cree_en_mode_WAL_et_une_base_restee_en_mode_delete_y_passe_au_lancement()
+    public async Task Une_base_neuve_se_cree_en_mode_WAL_et_une_base_restee_en_mode_delete_y_passe_au_lancement_sans_rien_perdre()
     {
         await using (var api = await LancerSurAsync(_dossier, new HorlogeDeTest()))
         {
             await api.AttendreLaPremiereVerificationAsync();
+            await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", "Comptable", "2026-11-02T10:00");
         }
 
         Assert.Equal("wal", ModeDuJournal(Base));
+        // Une base créée avant #26, restée dans le mode par défaut : #79 ouvrait la base avant les migrations, qui ne la
+        // créaient donc plus elles-mêmes.
         using (var connexion = Ouvrir(Base))
         {
             connexion.Executer("PRAGMA journal_mode = DELETE");
@@ -263,9 +291,14 @@ public sealed class CopiesDuJourTests : IAsyncLifetime
         await using (var relancee = await LancerSurAsync(_dossier, new HorlogeDeTest()))
         {
             await relancee.AttendreLaPremiereVerificationAsync();
+
+            var liste = await relancee.ListerAsync();
+            var candidature = Assert.Single(liste)!;
+            Assert.Equal(("Lumière Verte SA", "Comptable", "2026-11-02T09:00:00Z"), (candidature["entreprise"]!["nom"]!.GetValue<string>(), candidature["poste"]!.GetValue<string>(), candidature["envoyeeLe"]!.GetValue<string>()));
         }
 
         Assert.Equal("wal", ModeDuJournal(Base));
+        Assert.True(EstSaine(Base));
     }
 
     private static async Task AttendreAsync(Func<bool> condition)

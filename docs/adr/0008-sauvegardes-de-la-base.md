@@ -19,7 +19,7 @@ Trois faits, relevés le 2026-11-20, pèsent sur la façon de faire :
 ### Une copie par jour d'utilisation, qui suit la base jusqu'au soir
 
 - **Au lancement**, une fois la base prête, en arrière-plan : la copie du jour, si le dossier n'en a pas encore.
-- **À la fermeture**, la copie du jour est refaite : elle garde l'état de la base à la fin de la dernière séance. Elle ne retient pas la fermeture plus de dix secondes ; au-delà, elle est abandonnée, et celle d'avant reste.
+- **À la fermeture**, la copie du jour est refaite : elle garde l'état de la base à la fin de la dernière séance. Elle ne retient pas la fermeture plus de dix secondes ; au-delà, elle est abandonnée, et celle d'avant reste. Elle ne se fait qu'une fois, même quand l'hôte arrête deux fois ses services (relevé sous l'hôte des tests), et chaque arrêt l'attend.
 - **Chaque heure**, par une minuterie dans le processus de l'API, sans autre processus : la copie du nouveau jour d'une séance restée ouverte après minuit, et un nouvel essai après un échec.
 - **« Sauvegarder maintenant »**, et « Réessayer » dans l'alerte du tableau de bord, refont la copie du jour.
 - Le dossier garde **les sept dernières copies du jour**, soit les sept derniers jours d'utilisation.
