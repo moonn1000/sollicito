@@ -5,9 +5,9 @@ using Sollicito.Application.Candidatures;
 namespace Sollicito.Api.Candidatures;
 
 /// <summary>
-/// Les routes des candidatures (#11, #12), derrière les contrôles de l'API comme toutes les autres. Aucune ne porte de
-/// donnée dans son adresse, seulement des identifiants : les textes saisis voyagent dans le corps, et l'écran de saisie
-/// filtre lui-même les entreprises qu'il propose.
+/// Les routes des candidatures (#11, #12, #25), derrière les contrôles de l'API comme toutes les autres. Aucune ne porte
+/// de donnée dans son adresse, seulement des identifiants : les textes saisis voyagent dans le corps, et l'écran de
+/// saisie filtre lui-même les entreprises qu'il propose.
 /// </summary>
 internal static class RoutesDesCandidatures
 {
@@ -25,6 +25,9 @@ internal static class RoutesDesCandidatures
 
     /// <summary>Le titre d'une étape refusée ; le détail suit, champ par champ.</summary>
     public const string TitreDeLEtapeRefusee = "L'étape n'est pas ajoutée à l'historique : corrigez les champs signalés.";
+
+    /// <summary>Le titre d'une modification refusée ; le détail suit, champ par champ.</summary>
+    public const string TitreDeLaModificationRefusee = "La candidature n'est pas modifiée : corrigez les champs signalés.";
 
     public static void Declarer(IEndpointRouteBuilder routes)
     {
@@ -44,6 +47,22 @@ internal static class RoutesDesCandidatures
         routes.MapGet("/api/candidatures/{id:int}", LireLaFicheAsync)
             .WithName("LireLaFicheDUneCandidature")
             .WithSummary("La fiche d'une candidature : son statut, les passages permis et son historique")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithTags("Candidatures");
+
+        routes.MapPut("/api/candidatures/{id:int}", ModifierAsync)
+            .WithName("ModifierUneCandidature")
+            .WithSummary("Corriger l'entreprise, le poste et la date d'envoi d'une candidature, sans toucher à son statut")
+            .WithDescription(
+                "Les champs suivent les règles de l'enregistrement, et l'entreprise est reconnue de nouveau par la clé de "
+                + "son nom. La date d'envoi ne suit pas le premier événement de l'historique ; renvoyée inchangée, à la "
+                + "minute près, elle garde l'instant enregistré. Ni le statut ni l'historique ne changent.")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithTags("Candidatures");
+
+        routes.MapDelete("/api/candidatures/{id:int}", SupprimerAsync)
+            .WithName("SupprimerUneCandidature")
+            .WithSummary("Supprimer une candidature et tout son historique, définitivement ; son entreprise reste")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithTags("Candidatures");
 
@@ -101,6 +120,19 @@ internal static class RoutesDesCandidatures
         SuiviDesCandidatures suivi,
         CancellationToken annulation) =>
         await suivi.LireLaFicheAsync(id, annulation) is { } fiche ? TypedResults.Ok(fiche) : Introuvable();
+
+    private static async Task<Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult>> ModifierAsync(
+        int id,
+        SaisieDUneCandidature saisie,
+        ModificationDesCandidatures modification,
+        CancellationToken annulation) =>
+        Repondre(await modification.ModifierAsync(id, saisie, annulation), TitreDeLaModificationRefusee);
+
+    private static async Task<Results<NoContent, ProblemHttpResult>> SupprimerAsync(
+        int id,
+        ModificationDesCandidatures modification,
+        CancellationToken annulation) =>
+        await modification.SupprimerAsync(id, annulation) ? TypedResults.NoContent() : Introuvable();
 
     private static async Task<Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult>> ChangerLeStatutAsync(
         int id,

@@ -29,10 +29,17 @@ public interface IEcritureDesCandidatures : IAsyncDisposable
     Task<Entreprise?> TrouverLEntrepriseAsync(string cle, CancellationToken annulation);
 
     /// <summary>
-    /// La candidature de cet identifiant, avec tout son historique et son entreprise, pour la faire avancer : ce qui
-    /// change en elle, statut et événements ajoutés, est gardé à la validation. Rien si elle n'existe pas.
+    /// La candidature de cet identifiant, avec tout son historique et son entreprise, pour la faire avancer ou la
+    /// modifier : ce qui change en elle (statut, événements ajoutés, entreprise, poste, date d'envoi) est gardé à la
+    /// validation. Rien si elle n'existe pas.
     /// </summary>
     Task<CandidatureSuivie?> TrouverLaCandidatureAsync(int id, CancellationToken annulation);
+
+    /// <summary>
+    /// Supprime la candidature de cet identifiant et tous ses événements, corrections comprises ; son entreprise reste.
+    /// La suppression n'est gardée qu'à la validation. Rend faux si la candidature n'existe pas.
+    /// </summary>
+    Task<bool> SupprimerLaCandidatureAsync(int id, CancellationToken annulation);
 
     /// <summary>Ajoute une entreprise, qui reçoit aussitôt son identifiant.</summary>
     Task AjouterAsync(Entreprise entreprise, CancellationToken annulation);

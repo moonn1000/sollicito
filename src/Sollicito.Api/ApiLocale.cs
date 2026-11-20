@@ -96,6 +96,7 @@ public static class ApiLocale
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddScoped<EnregistrementDesCandidatures>();
         builder.Services.AddScoped<SuiviDesCandidatures>();
+        builder.Services.AddScoped<ModificationDesCandidatures>();
 
         // Les statuts s'écrivent en toutes lettres. Un champ inconnu du corps rend la requête illisible plutôt que
         // d'être ignoré : le statut, par exemple, ne vient jamais de l'interface.

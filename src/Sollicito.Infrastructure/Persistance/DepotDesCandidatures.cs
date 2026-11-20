@@ -67,6 +67,11 @@ internal sealed class DepotDesCandidatures(BaseDeSollicito baseDeSollicito) : ID
         public Task<CandidatureSuivie?> TrouverLaCandidatureAsync(int id, CancellationToken annulation) =>
             ChargerAsync(baseDeSollicito, id, annulation);
 
+        // Une seule instruction, dans la transaction de l'écriture : la base emporte les événements en cascade, et ne
+        // vérifie l'auto-référence des corrections (NO ACTION) qu'en fin d'instruction, quand tous sont partis.
+        public async Task<bool> SupprimerLaCandidatureAsync(int id, CancellationToken annulation) =>
+            await baseDeSollicito.Candidatures.Where(candidature => candidature.Id == id).ExecuteDeleteAsync(annulation) == 1;
+
         public async Task AjouterAsync(Entreprise entreprise, CancellationToken annulation)
         {
             baseDeSollicito.Entreprises.Add(entreprise);

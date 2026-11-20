@@ -64,6 +64,7 @@ public sealed class BaseDeSollicito(DbContextOptions<BaseDeSollicito> options) :
             candidature.Ignore(c => c.Historique);
             candidature.Ignore(c => c.PassagesPermis);
             candidature.Ignore(c => c.ChangementACorriger);
+            candidature.Ignore(c => c.PremierEvenement);
         });
 
         modelBuilder.Entity<EvenementDeCandidature>(evenement =>

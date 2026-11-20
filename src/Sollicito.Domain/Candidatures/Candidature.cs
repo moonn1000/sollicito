@@ -12,6 +12,10 @@ namespace Sollicito.Domain.Candidatures;
 /// ne change que par un passage du diagramme d'états ou par la correction du dernier changement, et chaque changement
 /// entre dans l'historique. L'historique se fait par ajouts seulement.
 /// </para>
+/// <para>
+/// Son entreprise, son poste et sa date d'envoi se corrigent (#25), sans toucher ni au statut ni à l'historique. Comme
+/// l'historique commence à l'envoi, la date d'envoi ne passe jamais après son premier événement.
+/// </para>
 /// </summary>
 public sealed class Candidature
 {
@@ -70,6 +74,12 @@ public sealed class Candidature
     /// </summary>
     public ChangementDeStatut? ChangementACorriger =>
         _evenements.OfType<ChangementDeStatut>().LastOrDefault(changement => !changement.EstUneCorrection && !EstCorrige(changement));
+
+    /// <summary>
+    /// L'instant du premier événement de l'historique, quelle que soit sa sorte ; rien s'il n'y en a aucun. L'historique
+    /// commence à l'envoi : une date d'envoi corrigée ne le suit pas (<see cref="PeutEtreEnvoyeeLe"/>).
+    /// </summary>
+    public DateTime? PremierEvenement => _evenements.Count == 0 ? null : _evenements.Min(evenement => evenement.SurvenuLe);
 
     /// <summary>Lit un poste saisi (<see cref="TexteDUneLigne"/>).</summary>
     public static bool EssayerDeLireLePoste(string? saisie, [NotNullWhen(true)] out string? poste, [NotNullWhen(false)] out string? erreur) =>
@@ -174,5 +184,78 @@ public sealed class Candidature
         var etape = Etape.Nouvelle(type, survenueLe, note);
         _evenements.Add(etape);
         return etape;
+    }
+
+    /// <summary>
+    /// Rattache la candidature à une entreprise déjà enregistrée : celle que reconnaît le nom saisi, par sa clé (#25).
+    /// L'entreprise quittée n'est ni renommée ni supprimée. Ni le statut ni l'historique ne changent.
+    /// </summary>
+    /// <param name="entrepriseId">L'identifiant de l'entreprise, déjà enregistrée.</param>
+    public void RattacherA(int entrepriseId)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(entrepriseId);
+        EntrepriseId = entrepriseId;
+    }
+
+    /// <summary>
+    /// Change le poste (#25), qui doit être admis par <see cref="EssayerDeLireLePoste"/>. Ni le statut ni l'historique ne
+    /// changent.
+    /// </summary>
+    /// <param name="poste">Le poste saisi.</param>
+    public void ChangerDePoste(string? poste)
+    {
+        if (!EssayerDeLireLePoste(poste, out var posteLu, out var erreur))
+        {
+            throw new ArgumentException(erreur, nameof(poste));
+        }
+
+        Poste = posteLu;
+    }
+
+    /// <summary>
+    /// Vrai si la date d'envoi peut être corrigée à cet instant (#25) : jamais dans le futur, et jamais après le premier
+    /// événement de l'historique, qui commence à l'envoi ; à l'instant même de ce premier événement, elle est admise.
+    /// Sinon, <paramref name="refus"/> dit pourquoi.
+    /// </summary>
+    /// <param name="envoyeeLe">L'instant d'envoi voulu, en UTC.</param>
+    /// <param name="maintenant">L'instant présent, en UTC.</param>
+    /// <param name="refus">Le motif du refus, lisible.</param>
+    public bool PeutEtreEnvoyeeLe(DateTime envoyeeLe, DateTime maintenant, [NotNullWhen(false)] out string? refus)
+    {
+        if (envoyeeLe.Kind != DateTimeKind.Utc || maintenant.Kind != DateTimeKind.Utc)
+        {
+            throw new ArgumentException("L'envoi et l'instant présent se donnent en UTC.", nameof(envoyeeLe));
+        }
+
+        if (envoyeeLe > maintenant)
+        {
+            refus = DateDEnvoi.DansLeFutur;
+            return false;
+        }
+
+        if (PremierEvenement is { } premier && envoyeeLe > premier)
+        {
+            refus = DateDEnvoi.ApresLePremierEvenement;
+            return false;
+        }
+
+        refus = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Corrige l'instant de l'envoi (#25), qui doit être admis par <see cref="PeutEtreEnvoyeeLe"/>. Ni le statut ni
+    /// l'historique ne changent : chaque événement garde sa date.
+    /// </summary>
+    /// <param name="envoyeeLe">Le nouvel instant de l'envoi, en UTC.</param>
+    /// <param name="maintenant">L'instant présent, en UTC.</param>
+    public void CorrigerLEnvoi(DateTime envoyeeLe, DateTime maintenant)
+    {
+        if (!PeutEtreEnvoyeeLe(envoyeeLe, maintenant, out var refus))
+        {
+            throw new ArgumentException(refus, nameof(envoyeeLe));
+        }
+
+        EnvoyeeLe = envoyeeLe;
     }
 }

@@ -15,6 +15,31 @@ public static class DateDEnvoi
     /// <summary>Le message d'une date d'envoi dans le futur.</summary>
     public const string DansLeFutur = "La date et l'heure d'envoi ne peuvent pas être dans le futur.";
 
+    /// <summary>Le message d'une date d'envoi corrigée qui suivrait le premier événement de l'historique (#25).</summary>
+    public const string ApresLePremierEvenement =
+        "La date et l'heure d'envoi ne peuvent pas suivre le premier événement de l'historique : l'historique commence à l'envoi.";
+
+    /// <summary>
+    /// Vrai si l'heure saisie est celle de l'envoi enregistré, telle que l'écran la montre : la même minute, dans le
+    /// fuseau du poste. Renvoyée inchangée, la date d'envoi garde son instant enregistré (#25), sans repasser par les
+    /// règles : ni l'heure qui existe deux fois, relue à l'heure d'hiver, ni une horloge reculée depuis, ni les secondes
+    /// que l'écran ne montre pas, ne changent alors l'envoi ou ne le font refuser.
+    /// </summary>
+    /// <param name="heureSaisie">L'heure saisie, sans fuseau (<see cref="DateTimeKind.Unspecified"/>).</param>
+    /// <param name="fuseau">Le fuseau du poste.</param>
+    /// <param name="envoyeeLe">L'instant de l'envoi enregistré, en UTC.</param>
+    public static bool EstLEnvoiEnregistre(DateTime heureSaisie, TimeZoneInfo fuseau, DateTime envoyeeLe)
+    {
+        ArgumentNullException.ThrowIfNull(fuseau);
+        if (heureSaisie.Kind != DateTimeKind.Unspecified || envoyeeLe.Kind != DateTimeKind.Utc)
+        {
+            throw new ArgumentException("L'heure saisie n'a pas de fuseau, et l'envoi enregistré se donne en UTC.", nameof(heureSaisie));
+        }
+
+        var montree = TimeZoneInfo.ConvertTimeFromUtc(envoyeeLe, fuseau);
+        return heureSaisie.Ticks / TimeSpan.TicksPerMinute == montree.Ticks / TimeSpan.TicksPerMinute;
+    }
+
     /// <summary>
     /// Lit une date et une heure d'envoi saisies. Rend vrai et l'instant UTC, ou faux et le motif du refus : une date
     /// avant le <see cref="Plancher"/>, une heure qui n'existe pas (passage à l'heure d'été), un instant après

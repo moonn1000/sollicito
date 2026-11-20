@@ -598,7 +598,8 @@ public sealed class SuiviDesCandidaturesTests
         await api.NoterUneEtapeAvecSuccesAsync(id, "Appel", "2026-11-10T10:00", null);
         await api.ChangerLeStatutAvecSuccesAsync(autre, "Refusee");
 
-        // La suppression d'une candidature (#25) n'a pas encore de route : on supprime la ligne dans la base.
+        // La base elle-même emporte l'historique : la ligne supprimée sans passer par la route de #25 (voir
+        // ModificationDesCandidaturesTests) ne laisse aucun événement, corrections comprises.
         await using (var portee = api.Services.CreateAsyncScope())
         {
             var baseDeSollicito = portee.ServiceProvider.GetRequiredService<BaseDeSollicito>();
