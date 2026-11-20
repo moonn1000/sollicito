@@ -215,6 +215,8 @@ public sealed class ReglesDesJournauxTests
                 await StatutAsync(api.ModifierAsync(id, $"{Donnee} SA", $"Poste de {Donnee}", "2026-11-10T10:01")),
                 // Un nom de même clé qu'une entreprise enregistrée, écrit autrement, sans l'accord de le corriger (409).
                 await StatutAsync(api.ModifierAsync(id, $"{Donnee.ToUpperInvariant()} S.A.", $"Poste de {Donnee}", "2026-11-02T10:00")),
+                // Puis avec l'accord : l'entreprise est renommée, la donnée dans l'ancien nom comme dans le nouveau.
+                await StatutAsync(api.ModifierAsync(id, $"{Donnee.ToUpperInvariant()} S.A.", $"Poste de {Donnee}", "2026-11-02T10:00", corrigerLeNom: true)),
                 await StatutAsync(api.EnvoyerALaModificationAsync(id, $$"""{"entreprise":{{Donnee}}""")),
                 await StatutAsync(api.EnvoyerALaModificationAsync(id, $$"""{"{{Donnee}}":"x"}""")),
                 await StatutAsync(api.EnvoyerALaModificationAsync(id, $$"""{"entreprise":"{{Donnee}}","poste":"{{Donnee}}","envoyeeLe":"2026-11-02T10:00","statut":"{{Donnee}}"}""")),
@@ -231,7 +233,7 @@ public sealed class ReglesDesJournauxTests
 
             Assert.Equal(
                 [
-                    HttpStatusCode.OK, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.Conflict,
+                    HttpStatusCode.OK, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.Conflict, HttpStatusCode.OK,
                     HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest,
                     HttpStatusCode.UnsupportedMediaType, HttpStatusCode.Forbidden, HttpStatusCode.NotFound,
                     HttpStatusCode.Forbidden, HttpStatusCode.NotFound, HttpStatusCode.NoContent, HttpStatusCode.NotFound,

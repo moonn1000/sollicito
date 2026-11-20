@@ -76,7 +76,7 @@ public sealed class CorrectionDesEtapesTests
         var (id, etape) = await CandidatureAvecUneEtapeAsync(api);
         var changement = (await api.ChangerLeStatutAvecSuccesAsync(id, "Entretien"))["correction"]!["changement"]!.GetValue<int>();
         var autre = IdDe(await api.EnregistrerAvecSuccesAsync("Brasserie Lune Rousse", "Brasseuse", "2026-11-03T10:00"));
-        var avant = await CompterLesEvenementsAsync(api);
+        var avant = await api.CompterLesEvenementsAsync();
 
         // Un changement de statut, une étape inconnue, une étape d'une autre candidature : aucune n'est une étape en vigueur ici.
         foreach (var (candidature, cible) in new[] { (id, changement), (id, etape + 100), (autre, etape) })
@@ -89,7 +89,7 @@ public sealed class CorrectionDesEtapesTests
         using var introuvable = await api.CorrigerUneEtapeAsync(autre + 100, etape, "Appel", "2026-11-12T10:00", null);
         Assert.Equal(HttpStatusCode.NotFound, introuvable.StatusCode);
         Assert.Equal("Cette candidature n'existe pas.", (await AppelsDesCandidatures.LireAsync(introuvable))["title"]!.GetValue<string>());
-        Assert.Equal(avant, await CompterLesEvenementsAsync(api));
+        Assert.Equal(avant, await api.CompterLesEvenementsAsync());
     }
 
     [Theory]
@@ -181,7 +181,7 @@ public sealed class CorrectionDesEtapesTests
 
         Assert.Equal(1, reponses.Count(reponse => reponse.StatusCode == HttpStatusCode.OK));
         Assert.Equal(5, reponses.Count(reponse => reponse.StatusCode == HttpStatusCode.Conflict));
-        Assert.Equal(2, await CompterLesEvenementsAsync(api));
+        Assert.Equal(2, await api.CompterLesEvenementsAsync());
         foreach (var reponse in reponses)
         {
             reponse.Dispose();
@@ -195,12 +195,12 @@ public sealed class CorrectionDesEtapesTests
         var (id, etape) = await CandidatureAvecUneEtapeAsync(api);
         var premiere = IdDeLaCorrection(await api.CorrigerUneEtapeAvecSuccesAsync(id, etape, "Appel", "2026-11-11T10:00", null), etape);
         await api.CorrigerUneEtapeAvecSuccesAsync(id, premiere, "Appel", "2026-11-12T10:00", null);
-        Assert.Equal(3, await CompterLesEvenementsAsync(api));
+        Assert.Equal(3, await api.CompterLesEvenementsAsync());
 
         using var suppression = await api.SupprimerAsync(id);
 
         Assert.Equal(HttpStatusCode.NoContent, suppression.StatusCode);
-        Assert.Equal(0, await CompterLesEvenementsAsync(api));
+        Assert.Equal(0, await api.CompterLesEvenementsAsync());
     }
 
     [Fact]
@@ -243,10 +243,4 @@ public sealed class CorrectionDesEtapesTests
     // L'identifiant de la correction qui désigne l'étape, dans la fiche rendue.
     private static int IdDeLaCorrection(JsonObject fiche, int etape) =>
         fiche["historique"]!.AsArray().Single(evenement => evenement!["corrige"]?.GetValue<int>() == etape)!["id"]!.GetValue<int>();
-
-    private static async Task<int> CompterLesEvenementsAsync(ApiLancee api)
-    {
-        await using var portee = api.Services.CreateAsyncScope();
-        return await portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().EvenementsDeCandidature.CountAsync(TestContext.Current.CancellationToken);
-    }
 }

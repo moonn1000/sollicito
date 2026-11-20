@@ -61,7 +61,7 @@ public sealed class SuiviDesCandidaturesTests
 
         // Rien ne s'est écrit, ni dans l'autre candidature, ni ailleurs.
         Assert.Empty((await api.FicheAsync(id))["historique"]!.AsArray());
-        Assert.Equal(0, await CompterLesEvenementsAsync(api));
+        Assert.Equal(0, await api.CompterLesEvenementsAsync());
     }
 
     [Fact]
@@ -187,7 +187,7 @@ public sealed class SuiviDesCandidaturesTests
 
         Assert.Equal(HttpStatusCode.BadRequest, reponse.StatusCode);
         Assert.Equal("La requête est illisible.", (await AppelsDesCandidatures.LireAsync(reponse))["title"]!.GetValue<string>());
-        Assert.Equal(0, await CompterLesEvenementsAsync(api));
+        Assert.Equal(0, await api.CompterLesEvenementsAsync());
     }
 
     [Fact]
@@ -201,7 +201,7 @@ public sealed class SuiviDesCandidaturesTests
 
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, statut.StatusCode);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, etape.StatusCode);
-        Assert.Equal(0, await CompterLesEvenementsAsync(api));
+        Assert.Equal(0, await api.CompterLesEvenementsAsync());
     }
 
     [Fact]
@@ -501,7 +501,7 @@ public sealed class SuiviDesCandidaturesTests
         var refus = probleme["errors"]!.AsObject();
         Assert.Equal([champ], refus.Select(paire => paire.Key));
         Assert.Equal([message], Textes(refus[champ]));
-        Assert.Equal(0, await CompterLesEvenementsAsync(api));
+        Assert.Equal(0, await api.CompterLesEvenementsAsync());
     }
 
     [Fact]
@@ -533,7 +533,7 @@ public sealed class SuiviDesCandidaturesTests
 
         Assert.Equal(HttpStatusCode.BadRequest, reponse.StatusCode);
         Assert.Equal("La requête est illisible.", (await AppelsDesCandidatures.LireAsync(reponse))["title"]!.GetValue<string>());
-        Assert.Equal(0, await CompterLesEvenementsAsync(api));
+        Assert.Equal(0, await api.CompterLesEvenementsAsync());
     }
 
     [Fact]
@@ -606,7 +606,7 @@ public sealed class SuiviDesCandidaturesTests
             Assert.Equal(1, await baseDeSollicito.Candidatures.Where(c => c.Id == id).ExecuteDeleteAsync(TestContext.Current.CancellationToken));
         }
 
-        Assert.Equal(1, await CompterLesEvenementsAsync(api));
+        Assert.Equal(1, await api.CompterLesEvenementsAsync());
         Assert.Single((await api.FicheAsync(autre))["historique"]!.AsArray());
     }
 
@@ -632,12 +632,6 @@ public sealed class SuiviDesCandidaturesTests
 
     // L'API, sur l'horloge du test, qu'il fait avancer.
     private Task<ApiLancee> LancerAsync() => ApiLancee.LancerAsync(_horloge.Utiliser);
-
-    private static async Task<int> CompterLesEvenementsAsync(ApiLancee api)
-    {
-        await using var portee = api.Services.CreateAsyncScope();
-        return await portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().EvenementsDeCandidature.CountAsync(TestContext.Current.CancellationToken);
-    }
 
     private static string[] Textes(JsonNode? tableau) => [.. tableau!.AsArray().Select(texte => texte!.GetValue<string>())];
 

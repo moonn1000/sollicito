@@ -167,13 +167,15 @@ test("pendant qu'on tape une autre entreprise, l'écran propose celles déjà en
   expect(screen.getByLabelText<HTMLInputElement>("Entreprise").value).toBe("Brasserie Lune Rousse S.R.L.");
 });
 
-test("un premier événement à venir ne borne pas l'envoi : l'écran n'en dit rien, l'envoi futur étant déjà refusé", async () => {
+test("un premier événement à venir se rappelle aussi, avec ce qui borne alors l'envoi : l'instant présent", async () => {
   const fiche = ficheFictive({ historique: [etapeFictive({ type: "Entretien", survenuLe: "2026-12-01T08:30:00Z" })] });
   afficher(clientSimule({ lireLaFiche: async () => fiche }));
 
   await screen.findByLabelText("Date et heure d'envoi");
 
-  expect(description("Date et heure d'envoi")).toEqual([]);
+  expect(description("Date et heure d'envoi")).toEqual([
+    "Le premier événement de l'historique, le 01/12/2026 09:30, est à venir : l'envoi ne peut pas être dans le futur.",
+  ]);
 });
 
 test("deux envois rapprochés, avant le rendu suivant, ne font qu'une modification", async () => {

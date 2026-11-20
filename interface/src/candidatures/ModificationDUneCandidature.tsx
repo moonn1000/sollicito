@@ -78,7 +78,6 @@ export function ModificationDUneCandidature({
 
   const fiche = chargement.etape === "prete" ? chargement.fiche : undefined;
   const premier = fiche === undefined ? undefined : premierEvenement(fiche);
-  const borne = premier !== undefined && Date.parse(premier) <= maintenant().getTime() ? premier : undefined;
 
   return (
     <section aria-labelledby="titre-de-la-modification">
@@ -137,9 +136,7 @@ export function ModificationDUneCandidature({
           libelleDuBouton="Enregistrer les modifications"
           libelleEnCours="Enregistrement…"
           messageDEchec="La candidature n'a pas pu être modifiée. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le."
-          aideDeLEnvoi={
-            borne === undefined ? undefined : `Au plus tard le ${afficherLInstant(borne)}, date du premier événement de l'historique.`
-          }
+          aideDeLEnvoi={premier === undefined ? undefined : aideDeLaDate(premier, maintenant())}
           annuler={revenir}
           quandModifie={() => setAvertissement(undefined)}
         >
@@ -180,6 +177,14 @@ export function ModificationDUneCandidature({
       )}
     </section>
   );
+}
+
+// Ce que l'écran rappelle sous la date d'envoi : le premier événement en vigueur la borne ; à venir, c'est l'instant
+// présent qui la borne, l'API refusant un envoi dans le futur.
+function aideDeLaDate(premier: string, maintenant: Date): string {
+  return Date.parse(premier) <= maintenant.getTime()
+    ? `Au plus tard le ${afficherLInstant(premier)}, date du premier événement de l'historique.`
+    : `Le premier événement de l'historique, le ${afficherLInstant(premier)}, est à venir : l'envoi ne peut pas être dans le futur.`;
 }
 
 // Ce que dit l'avertissement : si la candidature change d'entreprise, quel nom serait corrigé, en quoi, et pour combien

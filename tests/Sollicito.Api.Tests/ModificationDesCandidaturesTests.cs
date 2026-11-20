@@ -69,7 +69,7 @@ public sealed class ModificationDesCandidaturesTests
         Assert.Equal("Lumière Verte SA", fiche["entreprise"]!["nom"]!.GetValue<string>());
         // L'entreprise quittée n'a plus de candidature : elle reste en base, mais n'est plus proposée.
         Assert.Equal(["Lumière Verte SA"], Noms(await api.ListerLesEntreprisesAsync()));
-        Assert.Equal(["Brasserie Lune Rousse", "Lumière Verte SA"], await EntreprisesEnBaseAsync(api));
+        Assert.Equal(["Brasserie Lune Rousse", "Lumière Verte SA"], await api.EntreprisesEnBaseAsync());
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public sealed class ModificationDesCandidaturesTests
         }
 
         Assert.Equal(avant, (await api.FicheAsync(id)).ToJsonString());
-        Assert.Equal(["Lumiere Verte"], Noms(await api.ListerLesEntreprisesAsync()));
+        Assert.Equal(["Lumiere Verte"], await api.EntreprisesEnBaseAsync());
 
         // Avec l'accord : le nom affiché se corrige pour toutes les candidatures de l'entreprise.
         var fiche = await api.ModifierAvecSuccesAsync(id, "Lumière Verte SA", "Comptable senior", "2026-11-02T10:00", corrigerLeNom: true);
@@ -197,7 +197,7 @@ public sealed class ModificationDesCandidaturesTests
         Assert.Equal("Lumière Verte SA", fiche["entreprise"]!["nom"]!.GetValue<string>());
         // L'entreprise fautive reste en base, mais aucune candidature ne la porte plus : elle n'est plus proposée.
         Assert.Equal(["Lumière Verte SA"], Noms(await api.ListerLesEntreprisesAsync()));
-        Assert.Equal(["Lumière Vert SA", "Lumière Verte SA"], await EntreprisesEnBaseAsync(api));
+        Assert.Equal(["Lumière Vert SA", "Lumière Verte SA"], await api.EntreprisesEnBaseAsync());
     }
 
     [Theory]
@@ -226,7 +226,8 @@ public sealed class ModificationDesCandidaturesTests
         Assert.Equal([champ], refus.Select(paire => paire.Key));
         Assert.Equal([message], refus[champ]!.AsArray().Select(texte => texte!.GetValue<string>()));
         Assert.Equal(avant, (await api.FicheAsync(id)).ToJsonString());
-        Assert.Equal(["Lumière Verte SA"], Noms(await api.ListerLesEntreprisesAsync()));
+        // Aucune entreprise créée, pas même hors des propositions.
+        Assert.Equal(["Lumière Verte SA"], await api.EntreprisesEnBaseAsync());
     }
 
     [Fact]
@@ -416,7 +417,7 @@ public sealed class ModificationDesCandidaturesTests
             Assert.Equal(avant[champ]?.ToJsonString(), apres[champ]?.ToJsonString());
         }
 
-        Assert.Equal(4, await CompterLesEvenementsAsync(api));
+        Assert.Equal(4, await api.CompterLesEvenementsAsync());
     }
 
     [Fact]
@@ -453,9 +454,9 @@ public sealed class ModificationDesCandidaturesTests
             Assert.Equal("Cette candidature n'existe pas.", (await AppelsDesCandidatures.LireAsync(reponse))["title"]!.GetValue<string>());
         }
 
-        // Rien ne s'est écrit : ni l'autre candidature, ni une entreprise.
+        // Rien ne s'est écrit : ni l'autre candidature, ni une entreprise, pas même hors des propositions.
         Assert.Equal(avant, (await api.FicheAsync(id)).ToJsonString());
-        Assert.Equal(["Lumière Verte SA"], Noms(await api.ListerLesEntreprisesAsync()));
+        Assert.Equal(["Lumière Verte SA"], await api.EntreprisesEnBaseAsync());
     }
 
     [Fact]
@@ -484,11 +485,11 @@ public sealed class ModificationDesCandidaturesTests
 
         Assert.Equal([autre], (await api.ListerAsync()).Select(candidature => candidature!["id"]!.GetValue<int>()));
         // Ses trois événements sont partis, correction et changement corrigé compris ; ceux de l'autre restent.
-        Assert.Equal(1, await CompterLesEvenementsAsync(api));
+        Assert.Equal(1, await api.CompterLesEvenementsAsync());
         Assert.Equal(autreAvant, (await api.FicheAsync(autre)).ToJsonString());
         // Son entreprise reste en base ; sans candidature, elle n'est plus proposée.
         Assert.Equal(["Brasserie Lune Rousse"], Noms(await api.ListerLesEntreprisesAsync()));
-        Assert.Equal(["Brasserie Lune Rousse", "Lumière Verte SA"], await EntreprisesEnBaseAsync(api));
+        Assert.Equal(["Brasserie Lune Rousse", "Lumière Verte SA"], await api.EntreprisesEnBaseAsync());
 
         using var encore = await api.SupprimerAsync(id);
         Assert.Equal(HttpStatusCode.NotFound, encore.StatusCode);
@@ -508,7 +509,7 @@ public sealed class ModificationDesCandidaturesTests
 
         Assert.All(reponses, reponse => Assert.Equal(HttpStatusCode.OK, reponse.StatusCode));
         // Une seule entreprise de plus, et toutes les candidatures y vont.
-        Assert.Equal(2, (await EntreprisesEnBaseAsync(api)).Length);
+        Assert.Equal(2, (await api.EntreprisesEnBaseAsync()).Length);
         Assert.Single(await api.ListerLesEntreprisesAsync());
         var entreprises = new HashSet<int>();
         foreach (var id in ids)
@@ -554,22 +555,6 @@ public sealed class ModificationDesCandidaturesTests
 
     // L'API, sur l'horloge du test, qu'il fait avancer.
     private Task<ApiLancee> LancerAsync() => ApiLancee.LancerAsync(_horloge.Utiliser);
-
-    private static async Task<int> CompterLesEvenementsAsync(ApiLancee api)
-    {
-        await using var portee = api.Services.CreateAsyncScope();
-        return await portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().EvenementsDeCandidature.CountAsync(TestContext.Current.CancellationToken);
-    }
-
-    // Toutes les entreprises de la base, proposées ou non, dans l'ordre de leur nom.
-    private static async Task<string[]> EntreprisesEnBaseAsync(ApiLancee api)
-    {
-        await using var portee = api.Services.CreateAsyncScope();
-        var noms = await portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().Entreprises
-            .Select(entreprise => entreprise.Nom)
-            .ToListAsync(TestContext.Current.CancellationToken);
-        return [.. noms.Order(StringComparer.Ordinal)];
-    }
 
     private static string[] Postes(JsonArray candidatures) => [.. candidatures.Select(candidature => candidature!["poste"]!.GetValue<string>())];
 
