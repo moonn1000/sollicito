@@ -36,6 +36,35 @@ public static class AppelsDeLaModification
             requete.Content = new StringContent(corps, Encoding.UTF8, typeDuCorps);
         });
 
+    /// <summary>L'adresse de la correction d'une étape de la candidature.</summary>
+    public static string AdresseDeLaCorrection(int id, int etape) =>
+        AdresseDeLaFiche(id) + "/etapes/" + etape.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/correction";
+
+    /// <summary>Corrige une étape, champ par champ, comme le formulaire de correction de la fiche l'envoie.</summary>
+    public static Task<HttpResponseMessage> CorrigerUneEtapeAsync(this ApiLancee api, int id, int etape, string? type, string? survenuLe, string? note) =>
+        api.EnvoyerALaCorrectionDEtapeAsync(id, etape, new JsonObject
+        {
+            ["type"] = type,
+            ["survenuLe"] = survenuLe,
+            ["note"] = note,
+        }.ToJsonString());
+
+    /// <summary>Corrige une étape, ce qui doit être admis, et rend la fiche à jour.</summary>
+    public static async Task<JsonObject> CorrigerUneEtapeAvecSuccesAsync(this ApiLancee api, int id, int etape, string type, string survenuLe, string? note)
+    {
+        using var reponse = await api.CorrigerUneEtapeAsync(id, etape, type, survenuLe, note);
+        Assert.Equal(HttpStatusCode.OK, reponse.StatusCode);
+        return (await AppelsDesCandidatures.LireAsync(reponse)).AsObject();
+    }
+
+    /// <summary>Envoie un corps écrit à la main vers la route de correction d'une étape.</summary>
+    public static Task<HttpResponseMessage> EnvoyerALaCorrectionDEtapeAsync(this ApiLancee api, int id, int etape, string corps, string typeDuCorps = "application/json") =>
+        api.EnvoyerAsync(HttpMethod.Post, AdresseDeLaCorrection(id, etape), jeton: true, requete =>
+        {
+            requete.Headers.Add("Origin", api.Origine);
+            requete.Content = new StringContent(corps, Encoding.UTF8, typeDuCorps);
+        });
+
     /// <summary>Demande la suppression d'une candidature, comme la fiche après sa confirmation.</summary>
     public static Task<HttpResponseMessage> SupprimerAsync(this ApiLancee api, int id) =>
         api.EnvoyerAsync(HttpMethod.Delete, AdresseDeLaFiche(id), jeton: true, requete => requete.Headers.Add("Origin", api.Origine));

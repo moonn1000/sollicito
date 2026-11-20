@@ -14,7 +14,8 @@ namespace Sollicito.Domain.Candidatures;
 /// </para>
 /// <para>
 /// Son entreprise, son poste et sa date d'envoi se corrigent (#25), sans toucher ni au statut ni à l'historique. Comme
-/// l'historique commence à l'envoi, la date d'envoi ne passe jamais après son premier événement.
+/// l'historique en vigueur commence à l'envoi, la date d'envoi ne passe jamais après son premier événement en vigueur.
+/// Une étape se corrige aussi, par ajout : sa correction la désigne, et la remplace comme version en vigueur.
 /// </para>
 /// </summary>
 public sealed class Candidature
@@ -76,10 +77,12 @@ public sealed class Candidature
         _evenements.OfType<ChangementDeStatut>().LastOrDefault(changement => !changement.EstUneCorrection && !EstCorrige(changement));
 
     /// <summary>
-    /// L'instant du premier événement de l'historique, quelle que soit sa sorte ; rien s'il n'y en a aucun. L'historique
-    /// commence à l'envoi : une date d'envoi corrigée ne le suit pas (<see cref="PeutEtreEnvoyeeLe"/>).
+    /// L'instant du premier événement en vigueur de l'historique, quelle que soit sa sorte : un événement marqué comme
+    /// corrigé ne compte plus. Rien s'il n'y en a aucun. L'historique en vigueur commence à l'envoi : une date d'envoi
+    /// corrigée ne suit pas ce premier événement (<see cref="PeutEtreEnvoyeeLe"/>).
     /// </summary>
-    public DateTime? PremierEvenement => _evenements.Count == 0 ? null : _evenements.Min(evenement => evenement.SurvenuLe);
+    public DateTime? PremierEvenement =>
+        _evenements.Where(EstEnVigueur).Select(evenement => (DateTime?)evenement.SurvenuLe).Min();
 
     /// <summary>Lit un poste saisi (<see cref="TexteDUneLigne"/>).</summary>
     public static bool EssayerDeLireLePoste(string? saisie, [NotNullWhen(true)] out string? poste, [NotNullWhen(false)] out string? erreur) =>
@@ -117,6 +120,21 @@ public sealed class Candidature
     /// <summary>Vrai si une correction désigne ce changement : il reste dans l'historique, marqué comme corrigé.</summary>
     public bool EstCorrige(ChangementDeStatut changement) =>
         _evenements.OfType<ChangementDeStatut>().Any(correction => ReferenceEquals(correction.Corrige, changement));
+
+    /// <summary>Vrai si une correction désigne cette étape (#25) : elle reste dans l'historique, marquée comme corrigée.</summary>
+    public bool EstCorrigee(Etape etape) =>
+        _evenements.OfType<Etape>().Any(correction => ReferenceEquals(correction.Corrige, etape));
+
+    /// <summary>Vrai pour un événement en vigueur : aucune correction ne le désigne.</summary>
+    public bool EstEnVigueur(EvenementDeCandidature evenement) => evenement switch
+    {
+        ChangementDeStatut changement => !EstCorrige(changement),
+        Etape etape => !EstCorrigee(etape),
+        _ => true,
+    };
+
+    /// <summary>L'étape de cet identifiant, si elle est la version en vigueur : rien si elle est corrigée, ou absente.</summary>
+    public Etape? EtapeEnVigueur(int id) => _evenements.OfType<Etape>().FirstOrDefault(etape => etape.Id == id && !EstCorrigee(etape));
 
     /// <summary>
     /// Fait passer la candidature à un nouveau statut, si le diagramme d'états le permet : le changement entre dans
@@ -187,6 +205,33 @@ public sealed class Candidature
     }
 
     /// <summary>
+    /// Corrige une étape en vigueur (#25) : la correction, une étape aux mêmes règles, s'ajoute à l'historique et désigne
+    /// l'étape corrigée, qui y reste, marquée comme corrigée. Le statut ne change pas. La date doit être lue par
+    /// <see cref="DateDUneEtape.EssayerDeLire"/>, et la note admise par <see cref="Etape.EssayerDeLireLaNote"/>.
+    /// </summary>
+    /// <param name="corrigee">L'étape à corriger, de cette candidature et en vigueur (<see cref="EtapeEnVigueur"/>).</param>
+    /// <param name="type">Le type corrigé.</param>
+    /// <param name="survenueLe">L'instant corrigé, en UTC : jamais avant l'envoi.</param>
+    /// <param name="note">La note corrigée, ou rien.</param>
+    public Etape CorrigerUneEtape(Etape corrigee, TypeDEtape type, DateTime survenueLe, string? note)
+    {
+        ArgumentNullException.ThrowIfNull(corrigee);
+        if (!_evenements.Contains(corrigee) || EstCorrigee(corrigee))
+        {
+            throw new InvalidOperationException("Seule une étape en vigueur de cette candidature se corrige.");
+        }
+
+        if (survenueLe < EnvoyeeLe)
+        {
+            throw new ArgumentException(DateDUneEtape.AvantLEnvoi, nameof(survenueLe));
+        }
+
+        var correction = Etape.Correction(corrigee, type, survenueLe, note);
+        _evenements.Add(correction);
+        return correction;
+    }
+
+    /// <summary>
     /// Rattache la candidature à une entreprise déjà enregistrée : celle que reconnaît le nom saisi, par sa clé (#25).
     /// L'entreprise quittée n'est ni renommée ni supprimée. Ni le statut ni l'historique ne changent.
     /// </summary>
@@ -214,8 +259,8 @@ public sealed class Candidature
 
     /// <summary>
     /// Vrai si la date d'envoi peut être corrigée à cet instant (#25) : jamais dans le futur, et jamais après le premier
-    /// événement de l'historique, qui commence à l'envoi ; à l'instant même de ce premier événement, elle est admise.
-    /// Sinon, <paramref name="refus"/> dit pourquoi.
+    /// événement en vigueur de l'historique (<see cref="PremierEvenement"/>) ; à l'instant même de ce premier événement,
+    /// elle est admise. Sinon, <paramref name="refus"/> dit pourquoi.
     /// </summary>
     /// <param name="envoyeeLe">L'instant d'envoi voulu, en UTC.</param>
     /// <param name="maintenant">L'instant présent, en UTC.</param>

@@ -126,6 +126,9 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                 {
                     b.HasBaseType("Sollicito.Domain.Candidatures.EvenementDeCandidature");
 
+                    b.Property<int?>("EtapeCorrigeeId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Note")
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
@@ -134,6 +137,9 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");
+
+                    b.HasIndex("EtapeCorrigeeId")
+                        .IsUnique();
 
                     b.HasDiscriminator().HasValue("Etape");
                 });
@@ -161,6 +167,16 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                     b.HasOne("Sollicito.Domain.Candidatures.ChangementDeStatut", "Corrige")
                         .WithOne()
                         .HasForeignKey("Sollicito.Domain.Candidatures.ChangementDeStatut", "CorrigeId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.Navigation("Corrige");
+                });
+
+            modelBuilder.Entity("Sollicito.Domain.Candidatures.Etape", b =>
+                {
+                    b.HasOne("Sollicito.Domain.Candidatures.Etape", "Corrige")
+                        .WithOne()
+                        .HasForeignKey("Sollicito.Domain.Candidatures.Etape", "EtapeCorrigeeId")
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Corrige");

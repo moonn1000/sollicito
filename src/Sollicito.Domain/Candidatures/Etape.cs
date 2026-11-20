@@ -29,6 +29,15 @@ public sealed class Etape : EvenementDeCandidature
     /// <summary>La note, facultative : un texte libre, sur plusieurs lignes.</summary>
     public string? Note { get; private set; }
 
+    /// <summary>
+    /// Pour une correction (#25), l'étape qu'elle corrige, qui reste dans l'historique, marquée comme corrigée ; rien pour
+    /// une étape notée. Une correction se corrige à son tour : la dernière de la chaîne est la version en vigueur.
+    /// </summary>
+    public Etape? Corrige { get; private set; }
+
+    /// <summary>Vrai pour la correction d'une autre étape.</summary>
+    public bool EstUneCorrection => Corrige is not null;
+
     /// <summary>Lit une note saisie (<see cref="TexteSurPlusieursLignes"/>) : vide, elle ne fait aucune note.</summary>
     public static bool EssayerDeLireLaNote(string? saisie, out string? note, [NotNullWhen(false)] out string? erreur) =>
         TexteSurPlusieursLignes.EssayerDeLire(saisie, SujetDeLaNote, LongueurMaximaleDeLaNote, out note, out erreur);
@@ -47,5 +56,16 @@ public sealed class Etape : EvenementDeCandidature
         }
 
         return new Etape(survenuLe, type, noteLue);
+    }
+
+    /// <summary>
+    /// La correction de <paramref name="corrigee"/>, dont la candidature a déjà vérifié qu'elle est en vigueur, et la
+    /// date : une étape à son tour, aux mêmes règles, qui désigne l'étape qu'elle corrige.
+    /// </summary>
+    internal static Etape Correction(Etape corrigee, TypeDEtape type, DateTime survenuLe, string? note)
+    {
+        var correction = Nouvelle(type, survenuLe, note);
+        correction.Corrige = corrigee;
+        return correction;
     }
 }

@@ -15,7 +15,10 @@ public interface IDepotDesCandidatures
     /// <summary>Les candidatures, les plus récentes d'abord : par date d'envoi, puis par ordre d'enregistrement.</summary>
     Task<IReadOnlyList<CandidatureListee>> ListerAsync(CancellationToken annulation);
 
-    /// <summary>Les entreprises enregistrées, dans l'ordre de leur clé.</summary>
+    /// <summary>
+    /// Les entreprises que l'écran de saisie et celui de modification proposent, dans l'ordre de leur clé : celles qu'une
+    /// candidature porte encore. Une entreprise sans candidature reste en base, et sa clé la reconnaît toujours.
+    /// </summary>
     Task<IReadOnlyList<EntrepriseConnue>> ListerLesEntreprisesAsync(CancellationToken annulation);
 
     /// <summary>La candidature de cet identifiant, avec tout son historique et son entreprise, pour la lire ; rien si elle n'existe pas.</summary>

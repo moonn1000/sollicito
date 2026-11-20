@@ -26,6 +26,12 @@ internal static class RoutesDesCandidatures
     /// <summary>Le titre d'une étape refusée ; le détail suit, champ par champ.</summary>
     public const string TitreDeLEtapeRefusee = "L'étape n'est pas ajoutée à l'historique : corrigez les champs signalés.";
 
+    /// <summary>Le titre d'une correction d'étape refusée par ses champs ; le détail suit, champ par champ.</summary>
+    public const string TitreDeLaCorrectionDEtapeRefusee = "La correction de l'étape n'est pas ajoutée à l'historique : corrigez les champs signalés.";
+
+    /// <summary>Le titre d'une correction d'étape refusée parce que l'étape n'est pas en vigueur ; son motif suit, en détail.</summary>
+    public const string TitreDeLEtapeNonCorrigee = "L'étape n'est pas corrigée.";
+
     /// <summary>Le titre d'une modification refusée ; le détail suit, champ par champ.</summary>
     public const string TitreDeLaModificationRefusee = "La candidature n'est pas modifiée : corrigez les champs signalés.";
 
@@ -95,9 +101,19 @@ internal static class RoutesDesCandidatures
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithTags("Candidatures");
 
+        routes.MapPost("/api/candidatures/{id:int}/etapes/{etape:int}/correction", CorrigerUneEtapeAsync)
+            .WithName("CorrigerUneEtape")
+            .WithSummary("Corriger une étape de l'historique : sa correction s'y ajoute et la désigne, sans changer le statut")
+            .WithDescription(
+                "La correction suit les règles d'une étape. L'étape corrigée reste dans l'historique, marquée comme "
+                + "corrigée. Refusée (409) si l'étape n'est pas la version en vigueur : déjà corrigée, ou inconnue.")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithTags("Candidatures");
+
         routes.MapGet("/api/entreprises", ListerLesEntreprisesAsync)
             .WithName("ListerLesEntreprises")
-            .WithSummary("Les entreprises déjà enregistrées, que l'écran de saisie propose")
+            .WithSummary("Les entreprises qu'une candidature porte encore, que les écrans de saisie et de modification proposent")
             .WithTags("Entreprises");
     }
 
@@ -155,12 +171,24 @@ internal static class RoutesDesCandidatures
         CancellationToken annulation) =>
         Repondre(await suivi.NoterUneEtapeAsync(id, saisie, annulation), TitreDeLEtapeRefusee);
 
+    private static async Task<Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult>> CorrigerUneEtapeAsync(
+        int id,
+        int etape,
+        SaisieDUneEtape saisie,
+        SuiviDesCandidatures suivi,
+        CancellationToken annulation) =>
+        Repondre(await suivi.CorrigerUneEtapeAsync(id, etape, saisie, annulation), TitreDeLaCorrectionDEtapeRefusee, TitreDeLEtapeNonCorrigee);
+
     private static async Task<Ok<IReadOnlyList<EntrepriseConnue>>> ListerLesEntreprisesAsync(IDepotDesCandidatures depot, CancellationToken annulation) =>
         TypedResults.Ok(await depot.ListerLesEntreprisesAsync(annulation));
 
     // La fiche à jour (200), les refus d'une saisie (400), une candidature introuvable (404), une action que l'état de
-    // la candidature ne permet pas (409, avec son motif en détail). Le titre est celui du refus, 400 ou 409.
-    private static Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult> Repondre(ResultatDuSuivi resultat, string titreDuRefus) =>
+    // la candidature ne permet pas (409, avec son motif en détail). Le titre est celui du refus, 400 ou 409, sauf titre
+    // propre au 409.
+    private static Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult> Repondre(
+        ResultatDuSuivi resultat,
+        string titreDuRefus,
+        string? titreDuConflit = null) =>
         resultat switch
         {
             ResultatDuSuivi.Fait fait => TypedResults.Ok(fait.Fiche),
@@ -168,7 +196,7 @@ internal static class RoutesDesCandidatures
             ResultatDuSuivi.Introuvable => Introuvable(),
             ResultatDuSuivi.NonPermis nonPermis => TypedResults.Problem(
                 statusCode: StatusCodes.Status409Conflict,
-                title: titreDuRefus,
+                title: titreDuConflit ?? titreDuRefus,
                 detail: nonPermis.Motif),
             _ => throw new UnreachableException(),
         };

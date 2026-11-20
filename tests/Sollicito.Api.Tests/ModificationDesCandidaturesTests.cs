@@ -56,7 +56,7 @@ public sealed class ModificationDesCandidaturesTests
     }
 
     [Fact]
-    public async Task Le_nom_saisi_est_reconnu_de_nouveau_par_sa_cle_et_l_entreprise_quittee_reste_proposee()
+    public async Task Le_nom_saisi_est_reconnu_de_nouveau_par_sa_cle_et_l_entreprise_quittee_reste_en_base_sans_etre_proposee()
     {
         await using var api = await LancerAsync();
         var lumiere = await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", "Comptable", "2026-11-02T10:00");
@@ -67,8 +67,9 @@ public sealed class ModificationDesCandidaturesTests
         // La candidature rejoint l'entreprise de même clé, qui garde le nom de sa première saisie.
         Assert.Equal(lumiere["entreprise"]!["id"]!.GetValue<int>(), fiche["entreprise"]!["id"]!.GetValue<int>());
         Assert.Equal("Lumière Verte SA", fiche["entreprise"]!["nom"]!.GetValue<string>());
-        // L'entreprise quittée n'a plus de candidature, mais elle reste enregistrée, et la saisie la propose toujours.
-        Assert.Equal(["Brasserie Lune Rousse", "Lumière Verte SA"], Noms(await api.ListerLesEntreprisesAsync()));
+        // L'entreprise quittée n'a plus de candidature : elle reste en base, mais n'est plus proposée.
+        Assert.Equal(["Lumière Verte SA"], Noms(await api.ListerLesEntreprisesAsync()));
+        Assert.Equal(["Brasserie Lune Rousse", "Lumière Verte SA"], await EntreprisesEnBaseAsync(api));
     }
 
     [Fact]
@@ -85,7 +86,7 @@ public sealed class ModificationDesCandidaturesTests
     }
 
     [Fact]
-    public async Task Une_faute_corrigee_qui_change_la_cle_cree_une_entreprise_et_laisse_la_fautive_proposee()
+    public async Task Une_faute_corrigee_qui_change_la_cle_cree_une_entreprise_et_la_fautive_n_est_plus_proposee()
     {
         await using var api = await LancerAsync();
         var id = IdDe(await api.EnregistrerAvecSuccesAsync("Lumière Vert SA", "Comptable", "2026-11-02T10:00"));
@@ -95,8 +96,9 @@ public sealed class ModificationDesCandidaturesTests
 
         Assert.NotEqual(fautive, fiche["entreprise"]!["id"]!.GetValue<int>());
         Assert.Equal("Lumière Verte SA", fiche["entreprise"]!["nom"]!.GetValue<string>());
-        // La limite que voit l'utilisateur : l'entreprise fautive reste en base, parmi les propositions de la saisie.
-        Assert.Equal(["Lumière Vert SA", "Lumière Verte SA"], Noms(await api.ListerLesEntreprisesAsync()));
+        // L'entreprise fautive reste en base, mais aucune candidature ne la porte plus : elle n'est plus proposée.
+        Assert.Equal(["Lumière Verte SA"], Noms(await api.ListerLesEntreprisesAsync()));
+        Assert.Equal(["Lumière Vert SA", "Lumière Verte SA"], await EntreprisesEnBaseAsync(api));
     }
 
     [Theory]
@@ -202,14 +204,13 @@ public sealed class ModificationDesCandidaturesTests
     }
 
     [Fact]
-    public async Task La_date_d_envoi_corrigee_ne_suit_pas_un_changement_de_statut_ni_sa_correction()
+    public async Task La_date_d_envoi_corrigee_ne_suit_pas_un_changement_de_statut_en_vigueur()
     {
         await using var api = await LancerAsync();
         var id = IdDe(await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", "Comptable", "2026-11-02T10:00"));
-        // Le passage est daté par l'horloge, le 18/11 à 14:30 ; sa correction, une heure plus tard.
+        // Le passage est daté par l'horloge, le 18/11 à 14:30.
         await api.ChangerLeStatutAvecSuccesAsync(id, "Entretien");
-        _horloge.Avancer(TimeSpan.FromHours(1));
-        await api.CorrigerAvecSuccesAsync(id);
+        _horloge.Avancer(TimeSpan.FromHours(2));
 
         using (var refusee = await api.ModifierAsync(id, "Lumière Verte SA", "Comptable", "2026-11-18T14:31"))
         {
@@ -220,6 +221,26 @@ public sealed class ModificationDesCandidaturesTests
 
         var fiche = await api.ModifierAvecSuccesAsync(id, "Lumière Verte SA", "Comptable", "2026-11-18T14:30");
         Assert.Equal("2026-11-18T13:30:00Z", fiche["envoyeeLe"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Un_changement_corrige_ne_borne_plus_la_date_d_envoi_mais_sa_correction_la_borne()
+    {
+        await using var api = await LancerAsync();
+        var id = IdDe(await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", "Comptable", "2026-11-02T10:00"));
+        // Le passage, le 18/11 à 14:30, puis sa correction, à 15:30 : seule la correction est en vigueur.
+        await api.ChangerLeStatutAvecSuccesAsync(id, "Entretien");
+        _horloge.Avancer(TimeSpan.FromHours(1));
+        await api.CorrigerAvecSuccesAsync(id);
+        _horloge.Avancer(TimeSpan.FromHours(1));
+
+        Assert.Equal("2026-11-18T13:31:00Z", (await api.ModifierAvecSuccesAsync(id, "Lumière Verte SA", "Comptable", "2026-11-18T14:31"))["envoyeeLe"]!.GetValue<string>());
+        using (var refusee = await api.ModifierAsync(id, "Lumière Verte SA", "Comptable", "2026-11-18T15:31"))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, refusee.StatusCode);
+        }
+
+        Assert.Equal("2026-11-18T14:30:00Z", (await api.ModifierAvecSuccesAsync(id, "Lumière Verte SA", "Comptable", "2026-11-18T15:30"))["envoyeeLe"]!.GetValue<string>());
     }
 
     [Fact]
@@ -366,8 +387,9 @@ public sealed class ModificationDesCandidaturesTests
         // Ses trois événements sont partis, correction et changement corrigé compris ; ceux de l'autre restent.
         Assert.Equal(1, await CompterLesEvenementsAsync(api));
         Assert.Equal(autreAvant, (await api.FicheAsync(autre)).ToJsonString());
-        // Son entreprise reste, et la saisie la propose toujours.
-        Assert.Equal(["Brasserie Lune Rousse", "Lumière Verte SA"], Noms(await api.ListerLesEntreprisesAsync()));
+        // Son entreprise reste en base ; sans candidature, elle n'est plus proposée.
+        Assert.Equal(["Brasserie Lune Rousse"], Noms(await api.ListerLesEntreprisesAsync()));
+        Assert.Equal(["Brasserie Lune Rousse", "Lumière Verte SA"], await EntreprisesEnBaseAsync(api));
 
         using var encore = await api.SupprimerAsync(id);
         Assert.Equal(HttpStatusCode.NotFound, encore.StatusCode);
@@ -388,7 +410,8 @@ public sealed class ModificationDesCandidaturesTests
 
         Assert.All(reponses, reponse => Assert.Equal(HttpStatusCode.OK, reponse.StatusCode));
         // Une seule entreprise de plus, sous le nom de la première modification passée, et toutes les candidatures y vont.
-        Assert.Equal(2, (await api.ListerLesEntreprisesAsync()).Count);
+        Assert.Equal(2, (await EntreprisesEnBaseAsync(api)).Length);
+        Assert.Single(await api.ListerLesEntreprisesAsync());
         var entreprises = new HashSet<int>();
         foreach (var id in ids)
         {
@@ -438,6 +461,16 @@ public sealed class ModificationDesCandidaturesTests
     {
         await using var portee = api.Services.CreateAsyncScope();
         return await portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().EvenementsDeCandidature.CountAsync(TestContext.Current.CancellationToken);
+    }
+
+    // Toutes les entreprises de la base, proposées ou non, dans l'ordre de leur nom.
+    private static async Task<string[]> EntreprisesEnBaseAsync(ApiLancee api)
+    {
+        await using var portee = api.Services.CreateAsyncScope();
+        var noms = await portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().Entreprises
+            .Select(entreprise => entreprise.Nom)
+            .ToListAsync(TestContext.Current.CancellationToken);
+        return [.. noms.Order(StringComparer.Ordinal)];
     }
 
     private static string[] Postes(JsonArray candidatures) => [.. candidatures.Select(candidature => candidature!["poste"]!.GetValue<string>())];

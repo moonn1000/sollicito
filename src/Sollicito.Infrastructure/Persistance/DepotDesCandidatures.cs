@@ -30,8 +30,11 @@ internal sealed class DepotDesCandidatures(BaseDeSollicito baseDeSollicito) : ID
                 candidature.Statut))
             .ToListAsync(annulation);
 
+    // Seules celles qu'une candidature porte encore : une entreprise quittée ou dont la dernière candidature est
+    // supprimée reste en base, mais n'est plus proposée (#25).
     public async Task<IReadOnlyList<EntrepriseConnue>> ListerLesEntreprisesAsync(CancellationToken annulation) =>
         await baseDeSollicito.Entreprises.AsNoTracking()
+            .Where(entreprise => baseDeSollicito.Candidatures.Any(candidature => candidature.EntrepriseId == entreprise.Id))
             .OrderBy(entreprise => entreprise.Cle)
             .ThenBy(entreprise => entreprise.Id)
             .Select(entreprise => new EntrepriseConnue(entreprise.Id, entreprise.Nom))

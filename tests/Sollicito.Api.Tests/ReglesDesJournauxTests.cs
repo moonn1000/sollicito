@@ -193,17 +193,18 @@ public sealed class ReglesDesJournauxTests
     }
 
     [Fact]
-    public async Task Modifier_ou_supprimer_une_candidature_n_ecrit_ni_l_entreprise_ni_le_poste_meme_en_erreur()
+    public async Task Modifier_supprimer_ou_corriger_une_etape_n_ecrit_ni_l_entreprise_ni_le_poste_ni_la_note_meme_en_erreur()
     {
-        // Les deux routes de #25, sur tous leurs chemins : admis, refusés par la validation, par la lecture du corps,
-        // par son type ou par l'origine, candidature introuvable. Les identifiants viennent des réponses.
+        // Les trois routes de #25, sur tous leurs chemins : admis, refusés par la validation, par l'état de l'étape
+        // (409), par la lecture du corps, par son type ou par l'origine, candidature introuvable. Les identifiants
+        // viennent des réponses.
         var capture = new CaptureDesJournaux();
         string jeton;
         await using (var api = await ApiLancee.LancerAsync(builder => ToutJournaliser(builder, capture)))
         {
             jeton = api.Jeton;
             var id = AppelsDuSuivi.IdDe(await api.EnregistrerAvecSuccesAsync($"{Donnee} SA", $"Poste de {Donnee}", "2026-11-02T10:00"));
-            await api.NoterUneEtapeAvecSuccesAsync(id, "Appel", "2026-11-10T10:00", null);
+            var etape = Assert.Single((await api.NoterUneEtapeAvecSuccesAsync(id, "Appel", "2026-11-10T10:00", null))["historique"]!.AsArray())!["id"]!.GetValue<int>();
             var supprimee = AppelsDuSuivi.IdDe(await api.EnregistrerAvecSuccesAsync($"{Donnee} SA", $"Autre poste de {Donnee}", "2026-11-03T10:00"));
             var inconnue = supprimee + 1000;
 
@@ -234,6 +235,29 @@ public sealed class ReglesDesJournauxTests
                     HttpStatusCode.Forbidden, HttpStatusCode.NotFound, HttpStatusCode.NoContent, HttpStatusCode.NotFound,
                 ],
                 statuts);
+
+            // La correction d'une étape : admise, la note porte la donnée ; puis, sur l'étape corrigée et sur sa
+            // correction, en vigueur, chacun de ses refus.
+            var corrigee = await api.CorrigerUneEtapeAvecSuccesAsync(id, etape, "Entretien", "2026-11-10T10:00", $"Entretien avec {Donnee}");
+            var enVigueur = corrigee["historique"]!.AsArray().Single(evenement => evenement!["corrige"]?.GetValue<int>() == etape)!["id"]!.GetValue<int>();
+            HttpStatusCode[] statutsDesCorrections =
+            [
+                await StatutAsync(api.CorrigerUneEtapeAsync(id, etape, "Entretien", "2026-11-10T10:00", $"Encore {Donnee}")),
+                await StatutAsync(api.CorrigerUneEtapeAsync(id, enVigueur, Donnee, Donnee, new string('x', 2001) + Donnee)),
+                await StatutAsync(api.EnvoyerALaCorrectionDEtapeAsync(id, enVigueur, $$"""{"note":{{Donnee}}""")),
+                await StatutAsync(api.EnvoyerALaCorrectionDEtapeAsync(id, enVigueur, $$"""{"{{Donnee}}":"x"}""")),
+                await StatutAsync(api.EnvoyerALaCorrectionDEtapeAsync(id, enVigueur, $$"""{"note":"{{Donnee}}"}""", "text/" + Donnee)),
+                await StatutAsync(api.EnvoyerAsync(HttpMethod.Post, AppelsDeLaModification.AdresseDeLaCorrection(id, enVigueur), jeton: true, requete =>
+                    requete.Content = new StringContent($$"""{"note":"{{Donnee}}"}""", System.Text.Encoding.UTF8, "application/json"))),
+                await StatutAsync(api.CorrigerUneEtapeAsync(inconnue, enVigueur, "Appel", "2026-11-10T10:00", $"Note de {Donnee}")),
+            ];
+
+            Assert.Equal(
+                [
+                    HttpStatusCode.Conflict, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest,
+                    HttpStatusCode.UnsupportedMediaType, HttpStatusCode.Forbidden, HttpStatusCode.NotFound,
+                ],
+                statutsDesCorrections);
         }
 
         var entrees = capture.Entrees.ToArray();
@@ -245,9 +269,10 @@ public sealed class ReglesDesJournauxTests
     }
 
     [Theory]
-    [InlineData("PUT")]
-    [InlineData("DELETE")]
-    public async Task Une_exception_pendant_une_modification_ou_une_suppression_n_ecrit_que_son_type(string methode)
+    [InlineData("PUT", "/api/candidatures/1")]
+    [InlineData("DELETE", "/api/candidatures/1")]
+    [InlineData("POST", "/api/candidatures/1/etapes/1/correction")]
+    public async Task Une_exception_pendant_une_modification_une_suppression_ou_une_correction_d_etape_n_ecrit_que_son_type(string methode, string chemin)
     {
         var capture = new CaptureDesJournaux();
         await using (var api = await ApiLancee.LancerAsync(builder =>
@@ -257,15 +282,18 @@ public sealed class ReglesDesJournauxTests
         }))
         {
             // Le dépôt échoue dès le début de l'écriture : l'identifiant ne désigne aucune candidature de la base.
-            using var reponse = await api.EnvoyerAsync(new HttpMethod(methode), "/api/candidatures/1", jeton: true, requete =>
+            using var reponse = await api.EnvoyerAsync(new HttpMethod(methode), chemin, jeton: true, requete =>
             {
                 requete.Headers.Add("Origin", api.Origine);
-                if (methode == "PUT")
+                var corps = methode switch
                 {
-                    requete.Content = new StringContent(
-                        $$"""{"entreprise":"{{Donnee}} SA","poste":"Poste de {{Donnee}}","envoyeeLe":"2026-11-02T10:00"}""",
-                        System.Text.Encoding.UTF8,
-                        "application/json");
+                    "PUT" => $$"""{"entreprise":"{{Donnee}} SA","poste":"Poste de {{Donnee}}","envoyeeLe":"2026-11-02T10:00"}""",
+                    "POST" => $$"""{"type":"Appel","survenuLe":"2026-11-10T10:00","note":"Note de {{Donnee}}"}""",
+                    _ => null,
+                };
+                if (corps is not null)
+                {
+                    requete.Content = new StringContent(corps, System.Text.Encoding.UTF8, "application/json");
                 }
             });
             Assert.Equal(HttpStatusCode.InternalServerError, reponse.StatusCode);

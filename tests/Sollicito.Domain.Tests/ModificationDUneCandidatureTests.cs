@@ -59,17 +59,29 @@ public sealed class ModificationDUneCandidatureTests
     }
 
     [Fact]
-    public void La_date_d_envoi_ne_suit_pas_un_changement_de_statut_ni_sa_correction()
+    public void La_date_d_envoi_ne_suit_pas_un_changement_de_statut_en_vigueur()
+    {
+        var candidature = Nouvelle();
+        Assert.True(candidature.EssayerDeChangerDeStatut(S.Entretien, Premier, out _));
+
+        Assert.Equal(Premier, candidature.PremierEvenement);
+        Assert.False(candidature.PeutEtreEnvoyeeLe(Premier.AddMinutes(1), Maintenant, out var refus));
+        Assert.Equal(DateDEnvoi.ApresLePremierEvenement, refus);
+        Assert.True(candidature.PeutEtreEnvoyeeLe(Premier, Maintenant, out _));
+    }
+
+    [Fact]
+    public void Un_changement_corrige_ne_compte_plus_mais_sa_correction_borne_l_envoi()
     {
         var candidature = Nouvelle();
         Assert.True(candidature.EssayerDeChangerDeStatut(S.Entretien, Premier, out _));
         Assert.True(candidature.EssayerDeCorrigerLeDernierChangement(Deuxieme, out _));
 
-        // Le changement corrigé reste le premier événement : la correction, plus tardive, ne repousse pas la limite.
-        Assert.Equal(Premier, candidature.PremierEvenement);
-        Assert.False(candidature.PeutEtreEnvoyeeLe(Premier.AddMinutes(1), Maintenant, out var refus));
-        Assert.Equal(DateDEnvoi.ApresLePremierEvenement, refus);
-        Assert.True(candidature.PeutEtreEnvoyeeLe(Premier, Maintenant, out _));
+        // Le changement corrigé reste dans l'historique, mais n'est plus en vigueur : la correction, elle, l'est.
+        Assert.Equal(Deuxieme, candidature.PremierEvenement);
+        Assert.True(candidature.PeutEtreEnvoyeeLe(Premier.AddMinutes(1), Maintenant, out _));
+        Assert.False(candidature.PeutEtreEnvoyeeLe(Deuxieme.AddMinutes(1), Maintenant, out _));
+        Assert.True(candidature.PeutEtreEnvoyeeLe(Deuxieme, Maintenant, out _));
     }
 
     [Fact]
