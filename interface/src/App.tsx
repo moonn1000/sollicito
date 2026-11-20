@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Candidature, ClientDeLApi } from "./api/clientDeLApi.ts";
+import { FicheDUneCandidature } from "./candidatures/FicheDUneCandidature.tsx";
 import { SaisieDUneCandidature } from "./candidatures/SaisieDUneCandidature.tsx";
 import { TableauDeBord } from "./candidatures/TableauDeBord.tsx";
 import { HorsDeLaFenetre } from "./connexion.ts";
@@ -18,10 +19,13 @@ const MESSAGES: Record<Connexion["etat"], string> = {
   injoignable: "L'API locale ne répond pas. Fermez Sollicito, puis relancez-le.",
 };
 
-/** L'interface : la connexion à l'API locale, puis le tableau de bord et l'écran de saisie, dans la mise en page commune. */
+/**
+ * L'interface : la connexion à l'API locale, puis le tableau de bord, l'écran de saisie et la fiche d'une candidature,
+ * dans la mise en page commune.
+ */
 export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
   const [connexion, setConnexion] = useState<Connexion>({ etat: "connexion" });
-  const [ecran, setEcran] = useState<Ecran>("tableau");
+  const [ecran, setEcran] = useState<Ecran>({ nom: "tableau" });
   const [annonce, setAnnonce] = useState<string>();
   // Vrai dès que l'utilisateur a changé d'écran : le titre de l'écran atteint reçoit alors le focus.
   const [navigue, setNavigue] = useState(false);
@@ -56,7 +60,37 @@ export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
   const quandEnregistree = (candidature: Candidature) => {
     setAnnonce(`Candidature enregistrée : ${candidature.poste}, chez ${candidature.entreprise.nom}.`);
     setNavigue(true);
-    setEcran("tableau");
+    setEcran({ nom: "tableau" });
+  };
+
+  const ecranOuvert = () => {
+    if (connexion.etat !== "prete") {
+      return null;
+    }
+
+    switch (ecran.nom) {
+      case "tableau":
+        return (
+          <TableauDeBord
+            client={connexion.client}
+            annonce={annonce}
+            nouvelleCandidature={() => naviguer({ nom: "saisie" })}
+            ouvrirLaFiche={(candidature) => naviguer({ nom: "fiche", candidature })}
+            prendreLeFocus={navigue}
+          />
+        );
+      case "saisie":
+        return <SaisieDUneCandidature client={connexion.client} quandEnregistree={quandEnregistree} />;
+      case "fiche":
+        return (
+          <FicheDUneCandidature
+            key={ecran.candidature}
+            client={connexion.client}
+            candidature={ecran.candidature}
+            revenir={() => naviguer({ nom: "tableau" })}
+          />
+        );
+    }
   };
 
   return (
@@ -65,17 +99,7 @@ export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
       naviguer={connexion.etat === "prete" ? naviguer : undefined}
       etatDeLaConnexion={MESSAGES[connexion.etat]}
     >
-      {connexion.etat === "prete" &&
-        (ecran === "tableau" ? (
-          <TableauDeBord
-            client={connexion.client}
-            annonce={annonce}
-            nouvelleCandidature={() => naviguer("saisie")}
-            prendreLeFocus={navigue}
-          />
-        ) : (
-          <SaisieDUneCandidature client={connexion.client} quandEnregistree={quandEnregistree} />
-        ))}
+      {ecranOuvert()}
     </MiseEnPage>
   );
 }

@@ -51,7 +51,79 @@ export type ResultatDeLEnregistrement =
   | { enregistree: true; candidature: Candidature }
   | { enregistree: false; refus: RefusDeLaSaisie };
 
+/** Le type d'une étape de l'historique, tel que l'API l'écrit (modèle de domaine, « Types énumérés »). */
+export type TypeDEtape = "Appel" | "Entretien" | "Echange" | "Autre";
+
+/** Un changement de statut : un passage, ou la correction d'un changement précédent, qu'elle désigne. */
+export interface ChangementDeStatutLu {
+  sorte: "changementDeStatut";
+  id: number;
+  /** L'instant du changement, en UTC, donné par l'horloge. */
+  survenuLe: string;
+  ancien: StatutDeCandidature;
+  nouveau: StatutDeCandidature;
+  /** Pour une correction, l'identifiant du changement corrigé ; rien pour un passage. */
+  corrige: number | null;
+  /** Vrai si une correction l'a corrigé depuis : il reste dans l'historique, marqué comme tel. */
+  estCorrige: boolean;
+}
+
+/** Une étape, qui ne change pas le statut : un appel, un entretien, un échange. */
+export interface EtapeLue {
+  sorte: "etape";
+  id: number;
+  /** L'instant de l'étape, en UTC, donné par l'utilisateur. */
+  survenuLe: string;
+  type: TypeDEtape;
+  note: string | null;
+}
+
+/** Un événement de l'historique : sa sorte dit lequel. */
+export type EvenementDeLHistorique = ChangementDeStatutLu | EtapeLue;
+
+/** Ce que ferait la correction du dernier changement de statut. */
+export interface CorrectionPossible {
+  /** L'identifiant du changement qu'elle corrigerait. */
+  changement: number;
+  /** Le statut présent. */
+  de: StatutDeCandidature;
+  /** Le statut où elle ramènerait la candidature. */
+  retourA: StatutDeCandidature;
+}
+
+/** La fiche d'une candidature : son statut, ce qu'on peut en faire, et son historique. */
+export interface FicheDUneCandidature extends Candidature {
+  /** Les statuts où elle peut passer, dans l'ordre du modèle de domaine ; aucun si elle est close. */
+  passagesPermis: StatutDeCandidature[];
+  /** La correction du dernier changement, si un changement est à corriger. */
+  correction: CorrectionPossible | null;
+  /** Ses événements, du plus ancien au plus récent. */
+  historique: EvenementDeLHistorique[];
+}
+
+/** Ce que rend un changement de statut ou une correction : la fiche à jour, ou le motif d'un refus. */
+export type ResultatDUneAction = { faite: true; fiche: FicheDUneCandidature } | { faite: false; motif: string };
+
+/** Une étape telle que la fiche l'envoie, champ par champ, sans rien convertir. */
+export interface SaisieDUneEtape {
+  type: TypeDEtape;
+  /** La date et l'heure telles que l'utilisateur les a tapées, sans décalage : `2026-11-20T10:00`. */
+  survenuLe: string;
+  note: string;
+}
+
+/** Un champ de la saisie d'une étape. */
+export type ChampDeLEtape = keyof SaisieDUneEtape;
+
+/** Les messages de refus de l'API, champ par champ. */
+export type RefusDeLEtape = Partial<Record<ChampDeLEtape, string[]>>;
+
+/** Ce que rend une étape notée : la fiche à jour, ou les refus de ses champs. */
+export type ResultatDeLEtape = { notee: true; fiche: FicheDUneCandidature } | { notee: false; refus: RefusDeLEtape };
+
 const CHAMPS: readonly ChampDeLaSaisie[] = ["entreprise", "poste", "envoyeeLe"];
+
+const CHAMPS_DE_L_ETAPE: readonly ChampDeLEtape[] = ["type", "survenuLe", "note"];
 
 /** Une réponse de l'API en erreur : jeton refusé, origine refusée, route inconnue… */
 export class ErreurDeLApi extends Error {
@@ -73,6 +145,14 @@ export interface ClientDeLApi {
   listerLesEntreprises(): Promise<EntrepriseConnue[]>;
   /** Enregistre une candidature, ou rend les refus de ses champs. */
   enregistrerUneCandidature(saisie: SaisieDUneCandidature): Promise<ResultatDeLEnregistrement>;
+  /** La fiche d'une candidature ; une `ErreurDeLApi` 404 si elle n'existe pas. */
+  lireLaFiche(candidature: number): Promise<FicheDUneCandidature>;
+  /** Fait passer la candidature à un nouveau statut, ou rend le motif du refus. */
+  changerLeStatut(candidature: number, statut: StatutDeCandidature): Promise<ResultatDUneAction>;
+  /** Corrige le dernier changement de statut, désigné par son identifiant, ou rend le motif du refus. */
+  corrigerLeDernierChangement(candidature: number, changement: number): Promise<ResultatDUneAction>;
+  /** Ajoute une étape à l'historique, ou rend les refus de ses champs. */
+  noterUneEtape(candidature: number, saisie: SaisieDUneEtape): Promise<ResultatDeLEtape>;
 }
 
 /**
@@ -99,22 +179,43 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
     return reponse.json();
   };
 
+  // Une écriture en JSON, ou sans corps.
+  const ecrire = (chemin: string, corps?: unknown) =>
+    appeler(
+      chemin,
+      corps === undefined ? {} : { "Content-Type": "application/json" },
+      corps === undefined ? { method: "POST" } : { method: "POST", body: JSON.stringify(corps) },
+    );
+
+  // La fiche à jour (200), ou le motif d'un refus que l'état de la candidature explique (409).
+  const agir = async (chemin: string, corps?: unknown): Promise<ResultatDUneAction> => {
+    const reponse = await ecrire(chemin, corps);
+    if (reponse.status === 200) {
+      return { faite: true, fiche: (await reponse.json()) as FicheDUneCandidature };
+    }
+
+    if (reponse.status === 409) {
+      const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+      if (motif !== undefined) {
+        return { faite: false, motif };
+      }
+    }
+
+    throw new ErreurDeLApi(reponse.status);
+  };
+
   return {
     lireEtat: async () => (await lire("/api/etat")) as EtatDeLApplication,
     listerLesCandidatures: async () => (await lire("/api/candidatures")) as Candidature[],
     listerLesEntreprises: async () => (await lire("/api/entreprises")) as EntrepriseConnue[],
     enregistrerUneCandidature: async (saisie) => {
-      const reponse = await appeler(
-        "/api/candidatures",
-        { "Content-Type": "application/json" },
-        { method: "POST", body: JSON.stringify(saisie) },
-      );
+      const reponse = await ecrire("/api/candidatures", saisie);
       if (reponse.status === 201) {
         return { enregistree: true, candidature: (await reponse.json()) as Candidature };
       }
 
       if (reponse.status === 400) {
-        const refus = lireLesRefus(await reponse.json().catch(() => undefined));
+        const refus = lireLesRefus(await reponse.json().catch(() => undefined), CHAMPS);
         // Un refus qui ne désigne aucun champ connu ne dirait rien à l'écran : c'est une erreur.
         if (refus !== undefined && Object.keys(refus).length > 0) {
           return { enregistree: false, refus };
@@ -123,11 +224,56 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
 
       throw new ErreurDeLApi(reponse.status);
     },
+    lireLaFiche: async (candidature) => (await lire(adresseDeLaFiche(candidature))) as FicheDUneCandidature,
+    changerLeStatut: async (candidature, statut) => agir(`${adresseDeLaFiche(candidature)}/statut`, { statut }),
+    corrigerLeDernierChangement: async (candidature, changement) =>
+      agir(`${adresseDeLaFiche(candidature)}/changements/${identifiant(changement)}/correction`),
+    noterUneEtape: async (candidature, saisie) => {
+      const reponse = await ecrire(`${adresseDeLaFiche(candidature)}/etapes`, saisie);
+      if (reponse.status === 200) {
+        return { notee: true, fiche: (await reponse.json()) as FicheDUneCandidature };
+      }
+
+      if (reponse.status === 400) {
+        const refus = lireLesRefus(await reponse.json().catch(() => undefined), CHAMPS_DE_L_ETAPE);
+        if (refus !== undefined && Object.keys(refus).length > 0) {
+          return { notee: false, refus };
+        }
+      }
+
+      throw new ErreurDeLApi(reponse.status);
+    },
   };
 }
 
-// Les refus d'un problème de validation (`errors`), pour les seuls champs de la saisie ; rien si le problème n'en a pas.
-function lireLesRefus(probleme: unknown): RefusDeLaSaisie | undefined {
+// L'adresse de la fiche : seul un identifiant de la base y entre, jamais un texte saisi.
+function adresseDeLaFiche(candidature: number): string {
+  return `/api/candidatures/${identifiant(candidature)}`;
+}
+
+function identifiant(valeur: number): string {
+  if (!Number.isSafeInteger(valeur) || valeur <= 0) {
+    throw new RangeError("Un identifiant est un entier positif.");
+  }
+
+  return String(valeur);
+}
+
+// Le motif d'un refus (`detail`, sinon `title`) ; rien si le problème n'en a pas.
+function lireLeMotif(probleme: unknown): string | undefined {
+  if (typeof probleme !== "object" || probleme === null) {
+    return undefined;
+  }
+
+  const { detail, title } = probleme as { detail?: unknown; title?: unknown };
+  return typeof detail === "string" && detail.length > 0 ? detail : typeof title === "string" ? title : undefined;
+}
+
+// Les refus d'un problème de validation (`errors`), pour les seuls champs attendus ; rien si le problème n'en a pas.
+function lireLesRefus<Champ extends string>(
+  probleme: unknown,
+  champs: readonly Champ[],
+): Partial<Record<Champ, string[]>> | undefined {
   if (typeof probleme !== "object" || probleme === null || !("errors" in probleme)) {
     return undefined;
   }
@@ -137,8 +283,8 @@ function lireLesRefus(probleme: unknown): RefusDeLaSaisie | undefined {
     return undefined;
   }
 
-  const refus: RefusDeLaSaisie = {};
-  for (const champ of CHAMPS) {
+  const refus: Partial<Record<Champ, string[]>> = {};
+  for (const champ of champs) {
     const messages = (errors as Record<string, unknown>)[champ];
     const textes = Array.isArray(messages)
       ? messages.filter((message): message is string => typeof message === "string")

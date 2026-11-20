@@ -16,7 +16,7 @@ test("le tableau de bord liste les candidatures dans l'ordre de l'API, avec entr
     ],
   });
 
-  render(<TableauDeBord client={client} nouvelleCandidature={() => {}} />);
+  render(<TableauDeBord client={client} nouvelleCandidature={() => {}} ouvrirLaFiche={() => {}} />);
 
   expect(await screen.findByRole("table")).toBeDefined();
   expect(screen.getAllByRole("columnheader").map((entete) => entete.textContent)).toEqual([
@@ -43,7 +43,7 @@ test("les textes saisis s'affichent échappés, jamais comme du HTML", async () 
     ],
   });
 
-  const { container } = render(<TableauDeBord client={client} nouvelleCandidature={() => {}} />);
+  const { container } = render(<TableauDeBord client={client} nouvelleCandidature={() => {}} ouvrirLaFiche={() => {}} />);
 
   const [ligne] = (await screen.findAllByRole("row")).slice(1);
   expect(within(ligne!).getAllByRole("cell")[0]!.textContent).toBe('<img src="x" onerror="alert(1)"> & Fils');
@@ -54,7 +54,7 @@ test("les textes saisis s'affichent échappés, jamais comme du HTML", async () 
 test("sans candidature, le tableau de bord le dit et mène à la saisie", async () => {
   const nouvelleCandidature = vi.fn();
 
-  render(<TableauDeBord client={clientSimule()} nouvelleCandidature={nouvelleCandidature} />);
+  render(<TableauDeBord client={clientSimule()} nouvelleCandidature={nouvelleCandidature} ouvrirLaFiche={() => {}} />);
 
   expect(await screen.findByText("Aucune candidature enregistrée pour l'instant.")).toBeDefined();
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer une candidature" }));
@@ -64,7 +64,7 @@ test("sans candidature, le tableau de bord le dit et mène à la saisie", async 
 test("si la liste ne se charge pas, le tableau de bord le dit", async () => {
   const client = clientSimule({ listerLesCandidatures: () => Promise.reject(new Error("panne")) });
 
-  render(<TableauDeBord client={client} nouvelleCandidature={() => {}} />);
+  render(<TableauDeBord client={client} nouvelleCandidature={() => {}} ouvrirLaFiche={() => {}} />);
 
   expect((await screen.findByRole("alert")).textContent).toBe(
     "Les candidatures n'ont pas pu être chargées. Fermez Sollicito, puis relancez-le.",
@@ -72,8 +72,26 @@ test("si la liste ne se charge pas, le tableau de bord le dit", async () => {
 });
 
 test("l'annonce d'une candidature enregistrée s'affiche au-dessus de la liste", async () => {
-  render(<TableauDeBord client={clientSimule()} annonce="Candidature enregistrée." nouvelleCandidature={() => {}} />);
+  render(<TableauDeBord client={clientSimule()} annonce="Candidature enregistrée." nouvelleCandidature={() => {}} ouvrirLaFiche={() => {}} />);
 
   expect(screen.getByText("Candidature enregistrée.").getAttribute("role")).toBe("status");
   expect(await screen.findByText("Aucune candidature enregistrée pour l'instant.")).toBeDefined();
+});
+
+test("le poste d'une candidature ouvre sa fiche, par un bouton qui nomme le poste et l'entreprise", async () => {
+  const ouvrirLaFiche = vi.fn();
+  const client = clientSimule({
+    listerLesCandidatures: async () => [
+      candidatureFictive({ id: 3, entreprise: { id: 2, nom: "Les Amis du Parc ASBL" }, poste: "Animateur" }),
+      candidatureFictive({ id: 2, entreprise: { id: 1, nom: "Lumière Verte SA" }, poste: "Comptable", statut: "Entretien" }),
+    ],
+  });
+
+  render(<TableauDeBord client={client} nouvelleCandidature={() => {}} ouvrirLaFiche={ouvrirLaFiche} />);
+
+  const bouton = await screen.findByRole("button", { name: "Comptable, chez Lumière Verte SA : ouvrir la fiche" });
+  expect(bouton.textContent).toBe("Comptable");
+  fireEvent.click(bouton);
+  expect(ouvrirLaFiche).toHaveBeenCalledExactlyOnceWith(2);
+  expect(within(lignes()[1]!).getAllByRole("cell")[3]!.textContent).toBe("Entretien");
 });

@@ -191,7 +191,9 @@ button {
   font-weight: 600;
 }
 
-.champ input {
+.champ input,
+.champ select,
+.champ textarea {
   padding: 0.45rem 0.6rem;
   border: 1px solid var(--bordure);
   border-radius: 0.3rem;
@@ -200,7 +202,13 @@ button {
   font: inherit;
 }
 
-.champ-refuse input {
+.champ textarea {
+  resize: vertical;
+}
+
+.champ-refuse input,
+.champ-refuse select,
+.champ-refuse textarea {
   border: 2px solid var(--refus);
 }
 
@@ -238,4 +246,146 @@ button {
 
 .statut-de-depart {
   margin: 0;
+}
+
+/* La fiche d'une candidature (#12) : résumé, passages de statut, correction, note d'une étape, historique. */
+
+.lien {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.fiche section {
+  margin-top: 1.75rem;
+}
+
+.fiche h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+}
+
+.resume {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1.25rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--bordure);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+
+.resume dt {
+  color: var(--texte-discret);
+}
+
+.resume dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.passages p {
+  margin: 0 0 0.4rem;
+  color: var(--texte-discret);
+}
+
+.passages ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.passages button {
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--accent);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.passages button:hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--accent-texte);
+}
+
+.correction {
+  margin-top: 1rem;
+}
+
+.secondaire {
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--bordure);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  color: var(--texte);
+  cursor: pointer;
+}
+
+.secondaire:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.passages button:disabled,
+.secondaire:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.aide {
+  margin: 0.3rem 0 0;
+  color: var(--texte-discret);
+  font-size: 0.9rem;
+}
+
+.historique {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.historique li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--bordure);
+  background: var(--surface);
+}
+
+.historique li.etape {
+  border-left-color: var(--accent);
+}
+
+.historique time {
+  color: var(--texte-discret);
+  font-variant-numeric: tabular-nums;
+}
+
+.marque {
+  padding: 0 0.45rem;
+  border: 1px solid var(--bordure);
+  border-radius: 1rem;
+  color: var(--texte-discret);
+  font-size: 0.85rem;
+}
+
+.note {
+  flex-basis: 100%;
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

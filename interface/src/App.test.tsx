@@ -3,7 +3,7 @@ import { expect, test } from "vitest";
 import { App } from "./App.tsx";
 import { ErreurDeLApi } from "./api/clientDeLApi.ts";
 import { HorsDeLaFenetre } from "./connexion.ts";
-import { candidatureFictive, clientSimule } from "./tests/clientSimule.ts";
+import { candidatureFictive, changementFictif, clientSimule, ficheFictive } from "./tests/clientSimule.ts";
 
 test("l'écran d'accueil affiche le nom de l'application", () => {
   render(<App connecter={() => new Promise(() => {})} />);
@@ -73,4 +73,33 @@ test("une candidature saisie s'enregistre, puis le tableau de bord la liste et l
     "27/03/2026 23:30",
     "Envoyée",
   ]);
+});
+
+test("depuis le tableau de bord, on ouvre la fiche, on fait avancer la candidature, et le tableau de bord montre le statut à jour", async () => {
+  let fiche = ficheFictive({ id: 7, poste: "Brasseuse", entreprise: { id: 4, nom: "Brasserie Lune Rousse" } });
+  const client = clientSimule({
+    listerLesCandidatures: async () => [candidatureFictive({ id: fiche.id, poste: fiche.poste, entreprise: fiche.entreprise, statut: fiche.statut })],
+    lireLaFiche: async () => fiche,
+    changerLeStatut: async (_, statut) => {
+      fiche = ficheFictive({ ...fiche, statut, passagesPermis: ["Proposition", "Refusee", "Retiree", "SansReponse"], historique: [changementFictif()] });
+      return { faite: true, fiche };
+    },
+  });
+  render(<App connecter={async () => client} />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "Brasseuse, chez Brasserie Lune Rousse : ouvrir la fiche" }));
+
+  // La fiche n'est pas une entrée de la navigation : aucune n'est marquée comme la page présente.
+  const titre = await screen.findByRole("heading", { level: 2, name: "Fiche de la candidature" });
+  const navigation = screen.getByRole("navigation", { name: "Navigation principale" });
+  expect(within(navigation).getAllByRole("button").map((bouton) => bouton.getAttribute("aria-current"))).toEqual([null, null]);
+  await waitFor(() => expect(document.activeElement).toBe(titre));
+  fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
+  expect(await screen.findByText("Statut changé : Entretien.")).toBeDefined();
+
+  fireEvent.click(screen.getByRole("button", { name: "Revenir au tableau de bord" }));
+
+  await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(2));
+  expect(within(screen.getAllByRole("row")[1]!).getAllByRole("cell")[3]!.textContent).toBe("Entretien");
+  expect(within(navigation).getByRole("button", { name: "Tableau de bord" }).getAttribute("aria-current")).toBe("page");
 });
