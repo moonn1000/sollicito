@@ -137,6 +137,7 @@ public sealed class FiltreDesCheminsTests
     [InlineData("/api\n")]
     [InlineData("/index.html\n")]
     [InlineData("/\n")]
+    [InlineData("/assets/\n")]
     public void Un_chemin_termine_par_un_saut_de_ligne_n_est_pas_servi(string chemin) =>
         Assert.False(FichiersDeLInterface.PeutEtreServi(new PathString(chemin)));
 }
