@@ -29,7 +29,7 @@ public sealed partial class FichiersDeLInterface
     /// Vrai si le chemin peut désigner un fichier de l'interface : hors de <c>/api</c>, et fait de segments simples
     /// (lettres, chiffres, <c>-</c>, <c>_</c>, et des points entre eux). Ni antislash, ni segment vide (<c>//</c>),
     /// ni <c>.</c> ou <c>..</c>, ni point final, ni deux-points, ni tilde : les fournisseurs de fichiers lisent ces
-    /// formes chacun à sa façon (un antislash y sépare deux dossiers, un point final disparaît sous Windows), et l'une
+    /// formes à leur façon (un antislash y sépare deux dossiers, un point final disparaît sous Windows), et l'une
     /// d'elles ferait servir sans jeton un fichier rangé sous <c>/api</c>. Le chemin arrive déjà décodé par Kestrel :
     /// <c>%5C</c> y est un antislash, refusé, et <c>/%69ndex.html</c> y est <c>/index.html</c>, servi.
     /// </summary>
