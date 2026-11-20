@@ -160,3 +160,115 @@ test("une étape part telle que saisie, et ses refus reviennent champ par champ"
   const sansChamp = apiQuiRepond(Response.json({ title: "La requête est illisible.", status: 400 }, { status: 400 }));
   await expect(creerClientDeLApi(JETON_FICTIF, sansChamp).noterUneEtape(7, saisie)).rejects.toEqual(new ErreurDeLApi(400));
 });
+
+test("une modification part en PUT, en JSON, vers la fiche, et rend la fiche à jour ou les refus de ses champs", async () => {
+  const envoyer = apiQuiRepond(Response.json(ficheFictive({ id: 7, poste: "Comptable senior" })));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, envoyer).modifierUneCandidature(7, SAISIE)).toEqual({
+    issue: "modifiee",
+    fiche: ficheFictive({ id: 7, poste: "Comptable senior" }),
+  });
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/candidatures/7");
+  expect(options?.method).toBe("PUT");
+  expect(JSON.parse(String(options?.body))).toEqual(SAISIE);
+  expect(new Headers(options?.headers).get("Content-Type")).toBe("application/json");
+  expect(new Headers(options?.headers).get(EN_TETE_DU_JETON)).toBe(JETON_FICTIF);
+  expect(options?.credentials).toBe("omit");
+
+  const probleme = {
+    title: "La candidature n'est pas modifiée : corrigez les champs signalés.",
+    status: 400,
+    errors: { envoyeeLe: ["La date et l'heure d'envoi ne peuvent pas suivre le premier événement de l'historique : l'historique commence à l'envoi."], statut: ["ignoré"] },
+  };
+  expect(await creerClientDeLApi(JETON_FICTIF, apiQuiRepond(Response.json(probleme, { status: 400 }))).modifierUneCandidature(7, SAISIE)).toEqual({
+    issue: "refusee",
+    refus: { envoyeeLe: ["La date et l'heure d'envoi ne peuvent pas suivre le premier événement de l'historique : l'historique commence à l'envoi."] },
+  });
+
+  const illisible = apiQuiRepond(Response.json({ title: "La requête est illisible.", status: 400 }, { status: 400 }));
+  const introuvable = apiQuiRepond(Response.json({ title: "Cette candidature n'existe pas.", status: 404 }, { status: 404 }));
+  await expect(creerClientDeLApi(JETON_FICTIF, illisible).modifierUneCandidature(7, SAISIE)).rejects.toEqual(new ErreurDeLApi(400));
+  await expect(creerClientDeLApi(JETON_FICTIF, introuvable).modifierUneCandidature(7, SAISIE)).rejects.toEqual(new ErreurDeLApi(404));
+});
+
+test("une suppression part en DELETE, sans corps, vers la fiche ; toute autre réponse que 204 est une erreur", async () => {
+  const envoyer = apiQuiRepond(new Response(null, { status: 204 }));
+
+  await creerClientDeLApi(JETON_FICTIF, envoyer).supprimerUneCandidature(7);
+
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/candidatures/7");
+  expect(options?.method).toBe("DELETE");
+  expect(options?.body).toBeUndefined();
+  expect(new Headers(options?.headers).get("Content-Type")).toBeNull();
+  expect(new Headers(options?.headers).get(EN_TETE_DU_JETON)).toBe(JETON_FICTIF);
+  expect(options?.credentials).toBe("omit");
+
+  const introuvable = apiQuiRepond(Response.json({ title: "Cette candidature n'existe pas.", status: 404 }, { status: 404 }));
+  await expect(creerClientDeLApi(JETON_FICTIF, introuvable).supprimerUneCandidature(7)).rejects.toEqual(new ErreurDeLApi(404));
+  await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(new Response(null, { status: 200 }))).supprimerUneCandidature(7)).rejects.toEqual(
+    new ErreurDeLApi(200),
+  );
+  // Un identifiant qui n'est pas un entier positif n'entre pas dans une adresse.
+  await expect(creerClientDeLApi(JETON_FICTIF, envoyer).supprimerUneCandidature(0)).rejects.toThrow(RangeError);
+  expect(envoyer).toHaveBeenCalledOnce();
+});
+
+test("une correction d'étape part en POST, en JSON, vers l'étape qu'elle corrige, et rend la fiche, les refus ou le motif", async () => {
+  const saisie = { type: "Entretien" as const, survenuLe: "2026-11-11T10:00", note: "Premier entretien." };
+  const envoyer = apiQuiRepond(Response.json(ficheFictive()));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, envoyer).corrigerUneEtape(7, 12, saisie)).toEqual({ issue: "faite", fiche: ficheFictive() });
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/candidatures/7/etapes/12/correction");
+  expect(options?.method).toBe("POST");
+  expect(JSON.parse(String(options?.body))).toEqual(saisie);
+  expect(new Headers(options?.headers).get(EN_TETE_DU_JETON)).toBe(JETON_FICTIF);
+
+  const refus = apiQuiRepond(Response.json({ status: 400, errors: { note: ["La note ne doit pas dépasser 2000 caractères."], poste: ["ignoré"] } }, { status: 400 }));
+  expect(await creerClientDeLApi(JETON_FICTIF, refus).corrigerUneEtape(7, 12, saisie)).toEqual({
+    issue: "refusee",
+    refus: { note: ["La note ne doit pas dépasser 2000 caractères."] },
+  });
+
+  const perimee = apiQuiRepond(Response.json({ title: "L'étape n'est pas corrigée.", detail: "Cette étape n'est pas la version en vigueur.", status: 409 }, { status: 409 }));
+  expect(await creerClientDeLApi(JETON_FICTIF, perimee).corrigerUneEtape(7, 12, saisie)).toEqual({
+    issue: "perimee",
+    motif: "Cette étape n'est pas la version en vigueur.",
+  });
+
+  const illisible = apiQuiRepond(Response.json({ title: "La requête est illisible.", status: 400 }, { status: 400 }));
+  const introuvable = apiQuiRepond(Response.json({ title: "Cette candidature n'existe pas.", status: 404 }, { status: 404 }));
+  await expect(creerClientDeLApi(JETON_FICTIF, illisible).corrigerUneEtape(7, 12, saisie)).rejects.toEqual(new ErreurDeLApi(400));
+  await expect(creerClientDeLApi(JETON_FICTIF, introuvable).corrigerUneEtape(7, 12, saisie)).rejects.toEqual(new ErreurDeLApi(404));
+  await expect(creerClientDeLApi(JETON_FICTIF, envoyer).corrigerUneEtape(7, 0, saisie)).rejects.toThrow(RangeError);
+});
+
+test("sans accord, un nom à corriger revient avec l'entreprise et le nombre de candidatures ; l'accord part dans le corps", async () => {
+  const probleme = {
+    title: "La candidature n'est pas modifiée : ce nom corrigerait celui d'une entreprise enregistrée.",
+    status: 409,
+    entreprise: { id: 4, nom: "Lumière Verte SA" },
+    candidatures: 3,
+  };
+  const refus = apiQuiRepond(Response.json(probleme, { status: 409 }));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, refus).modifierUneCandidature(7, SAISIE)).toEqual({
+    issue: "nomACorriger",
+    entreprise: { id: 4, nom: "Lumière Verte SA" },
+    candidatures: 3,
+  });
+  expect(JSON.parse(String(refus.mock.calls[0]![1]?.body))).toEqual(SAISIE);
+
+  const envoyer = apiQuiRepond(Response.json(ficheFictive()));
+  await creerClientDeLApi(JETON_FICTIF, envoyer).modifierUneCandidature(7, SAISIE, true);
+  expect(JSON.parse(String(envoyer.mock.calls[0]![1]?.body))).toEqual({ ...SAISIE, corrigerLeNomDeLEntreprise: true });
+
+  // Un 409 qui ne porte pas l'entreprise et son nombre, ou les porte mal formés, est une erreur.
+  for (const mal of [{ status: 409 }, { entreprise: { id: "4", nom: "X" }, candidatures: 3 }, { entreprise: { id: 4, nom: "X" }, candidatures: 0 }]) {
+    await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(Response.json(mal, { status: 409 }))).modifierUneCandidature(7, SAISIE)).rejects.toEqual(
+      new ErreurDeLApi(409),
+    );
+  }
+});

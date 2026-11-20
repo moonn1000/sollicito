@@ -21,6 +21,17 @@ public sealed class ReglesDesJournauxTests
     // Donnée personnelle fictive, envoyée partout où une requête peut porter du contenu.
     private const string Donnee = "Dupont-Fictif";
 
+    // Chaque catégorie au niveau le plus bavard, y compris par des réglages qui visent les catégories que la règle fait
+    // taire : un joker, et un réglage propre au fournisseur. Le test voit tout ce que l'API et ASP.NET Core écriraient.
+    private static readonly KeyValuePair<string, string?>[] LesPlusBavards =
+    [
+        new("Logging:LogLevel:Default", "Trace"),
+        new("Logging:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics*", "Trace"),
+        new("Logging:LogLevel:Microsoft.AspNetCore.Server.Kestrel.BadRequests*", "Trace"),
+        new("Logging:LogLevel:Microsoft.AspNetCore.StaticFiles*", "Trace"),
+        new($"Logging:{typeof(CaptureDesJournaux).FullName}:LogLevel:Default", "Trace"),
+    ];
+
     [Fact]
     public async Task Les_journaux_ne_vont_qu_a_la_console()
     {
@@ -34,18 +45,7 @@ public sealed class ReglesDesJournauxTests
     [Fact]
     public async Task Ni_le_jeton_ni_une_donnee_de_la_requete_n_apparait_dans_un_journal()
     {
-        // Chaque catégorie au niveau le plus bavard, y compris par des réglages qui visent les catégories que la
-        // règle fait taire : un joker, et un réglage propre au fournisseur. Le test voit tout ce que l'API et
-        // ASP.NET Core écriraient.
         var capture = new CaptureDesJournaux();
-        KeyValuePair<string, string?>[] niveaux =
-        [
-            new("Logging:LogLevel:Default", "Trace"),
-            new("Logging:LogLevel:Microsoft.AspNetCore.Hosting.Diagnostics*", "Trace"),
-            new("Logging:LogLevel:Microsoft.AspNetCore.Server.Kestrel.BadRequests*", "Trace"),
-            new("Logging:LogLevel:Microsoft.AspNetCore.StaticFiles*", "Trace"),
-            new($"Logging:{typeof(CaptureDesJournaux).FullName}:LogLevel:Default", "Trace"),
-        ];
         string jeton;
         string racineDuContenu;
         string dossierDeDonnees;
@@ -53,9 +53,7 @@ public sealed class ReglesDesJournauxTests
         await using (var api = await ApiLancee.LancerAsync(builder =>
         {
             interfaceDeTest.Servir(builder);
-            builder
-                .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(niveaux))
-                .ConfigureLogging(journaux => journaux.AddProvider(capture));
+            ToutJournaliser(builder, capture);
         }))
         {
             jeton = api.Jeton;
@@ -192,6 +190,135 @@ public sealed class ReglesDesJournauxTests
         Assert.Contains(entrees, entree => entree.Contains("Erreur inattendue pendant une requête (InvalidOperationException).", StringComparison.Ordinal));
         Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(entrees, entree => entree.Contains("Panne simulée", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Modifier_supprimer_ou_corriger_une_etape_n_ecrit_ni_l_entreprise_ni_le_poste_ni_la_note_meme_en_erreur()
+    {
+        // Les trois routes de #25, sur tous leurs chemins : admis, refusés par la validation, par l'état de l'étape
+        // (409), par la lecture du corps, par son type ou par l'origine, candidature introuvable. Les identifiants
+        // viennent des réponses.
+        var capture = new CaptureDesJournaux();
+        string jeton;
+        await using (var api = await ApiLancee.LancerAsync(builder => ToutJournaliser(builder, capture)))
+        {
+            jeton = api.Jeton;
+            var id = AppelsDuSuivi.IdDe(await api.EnregistrerAvecSuccesAsync($"{Donnee} SA", $"Poste de {Donnee}", "2026-11-02T10:00"));
+            var etape = Assert.Single((await api.NoterUneEtapeAvecSuccesAsync(id, "Appel", "2026-11-10T10:00", null))["historique"]!.AsArray())!["id"]!.GetValue<int>();
+            var supprimee = AppelsDuSuivi.IdDe(await api.EnregistrerAvecSuccesAsync($"{Donnee} SA", $"Autre poste de {Donnee}", "2026-11-03T10:00"));
+            var inconnue = supprimee + 1000;
+
+            HttpStatusCode[] statuts =
+            [
+                await StatutAsync(api.ModifierAsync(id, $"{Donnee} Belgique", $"Poste de {Donnee} senior", "2026-11-02T10:00")),
+                await StatutAsync(api.ModifierAsync(id, $"{Donnee}\t", new string('x', 201) + Donnee, Donnee)),
+                await StatutAsync(api.ModifierAsync(id, $"{Donnee} SA", $"Poste de {Donnee}", "2026-11-10T10:01")),
+                // Un nom de même clé qu'une entreprise enregistrée, écrit autrement, sans l'accord de le corriger (409).
+                await StatutAsync(api.ModifierAsync(id, $"{Donnee.ToUpperInvariant()} S.A.", $"Poste de {Donnee}", "2026-11-02T10:00")),
+                // Puis avec l'accord : l'entreprise est renommée, la donnée dans l'ancien nom comme dans le nouveau.
+                await StatutAsync(api.ModifierAsync(id, $"{Donnee.ToUpperInvariant()} S.A.", $"Poste de {Donnee}", "2026-11-02T10:00", corrigerLeNom: true)),
+                await StatutAsync(api.EnvoyerALaModificationAsync(id, $$"""{"entreprise":{{Donnee}}""")),
+                await StatutAsync(api.EnvoyerALaModificationAsync(id, $$"""{"{{Donnee}}":"x"}""")),
+                await StatutAsync(api.EnvoyerALaModificationAsync(id, $$"""{"entreprise":"{{Donnee}}","poste":"{{Donnee}}","envoyeeLe":"2026-11-02T10:00","statut":"{{Donnee}}"}""")),
+                await StatutAsync(api.EnvoyerALaModificationAsync(id, $$"""{"poste":["{{Donnee}}"]}""")),
+                await StatutAsync(api.EnvoyerALaModificationAsync(id, $$"""{"poste":"{{Donnee}}"}""", "text/" + Donnee)),
+                await StatutAsync(api.EnvoyerAsync(HttpMethod.Put, AppelsDuSuivi.AdresseDeLaFiche(id), jeton: true, requete =>
+                    requete.Content = new StringContent($$"""{"poste":"{{Donnee}}"}""", System.Text.Encoding.UTF8, "application/json"))),
+                await StatutAsync(api.ModifierAsync(inconnue, $"{Donnee} SA", $"Poste de {Donnee}", "2026-11-02T10:00")),
+                await StatutAsync(api.EnvoyerAsync(HttpMethod.Delete, AppelsDuSuivi.AdresseDeLaFiche(supprimee), jeton: true)),
+                await StatutAsync(api.SupprimerAsync(inconnue)),
+                await StatutAsync(api.SupprimerAsync(supprimee)),
+                await StatutAsync(api.SupprimerAsync(supprimee)),
+            ];
+
+            Assert.Equal(
+                [
+                    HttpStatusCode.OK, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.Conflict, HttpStatusCode.OK,
+                    HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest,
+                    HttpStatusCode.UnsupportedMediaType, HttpStatusCode.Forbidden, HttpStatusCode.NotFound,
+                    HttpStatusCode.Forbidden, HttpStatusCode.NotFound, HttpStatusCode.NoContent, HttpStatusCode.NotFound,
+                ],
+                statuts);
+
+            // La correction d'une étape : admise, la note porte la donnée ; puis, sur l'étape corrigée et sur sa
+            // correction, en vigueur, chacun de ses refus.
+            var corrigee = await api.CorrigerUneEtapeAvecSuccesAsync(id, etape, "Entretien", "2026-11-10T10:00", $"Entretien avec {Donnee}");
+            var enVigueur = corrigee["historique"]!.AsArray().Single(evenement => evenement!["corrige"]?.GetValue<int>() == etape)!["id"]!.GetValue<int>();
+            HttpStatusCode[] statutsDesCorrections =
+            [
+                await StatutAsync(api.CorrigerUneEtapeAsync(id, etape, "Entretien", "2026-11-10T10:00", $"Encore {Donnee}")),
+                await StatutAsync(api.CorrigerUneEtapeAsync(id, enVigueur, Donnee, Donnee, new string('x', 2001) + Donnee)),
+                await StatutAsync(api.EnvoyerALaCorrectionDEtapeAsync(id, enVigueur, $$"""{"note":{{Donnee}}""")),
+                await StatutAsync(api.EnvoyerALaCorrectionDEtapeAsync(id, enVigueur, $$"""{"{{Donnee}}":"x"}""")),
+                await StatutAsync(api.EnvoyerALaCorrectionDEtapeAsync(id, enVigueur, $$"""{"note":"{{Donnee}}"}""", "text/" + Donnee)),
+                await StatutAsync(api.EnvoyerAsync(HttpMethod.Post, AppelsDeLaModification.AdresseDeLaCorrection(id, enVigueur), jeton: true, requete =>
+                    requete.Content = new StringContent($$"""{"note":"{{Donnee}}"}""", System.Text.Encoding.UTF8, "application/json"))),
+                await StatutAsync(api.CorrigerUneEtapeAsync(inconnue, enVigueur, "Appel", "2026-11-10T10:00", $"Note de {Donnee}")),
+            ];
+
+            Assert.Equal(
+                [
+                    HttpStatusCode.Conflict, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest,
+                    HttpStatusCode.UnsupportedMediaType, HttpStatusCode.Forbidden, HttpStatusCode.NotFound,
+                ],
+                statutsDesCorrections);
+        }
+
+        var entrees = capture.Entrees.ToArray();
+        // Témoins : la capture a reçu les niveaux les plus bavards, et la base a bien été écrite.
+        Assert.Contains(entrees, entree => entree.StartsWith(nameof(LogLevel.Trace) + " ", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.StartsWith(nameof(LogLevel.Debug) + " Microsoft.EntityFrameworkCore.Database.Transaction ", StringComparison.Ordinal));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(jeton, StringComparison.Ordinal));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Theory]
+    [InlineData("PUT", "/api/candidatures/1")]
+    [InlineData("DELETE", "/api/candidatures/1")]
+    [InlineData("POST", "/api/candidatures/1/etapes/1/correction")]
+    public async Task Une_exception_pendant_une_modification_une_suppression_ou_une_correction_d_etape_n_ecrit_que_son_type(string methode, string chemin)
+    {
+        var capture = new CaptureDesJournaux();
+        await using (var api = await ApiLancee.LancerAsync(builder =>
+        {
+            ToutJournaliser(builder, capture);
+            builder.ConfigureTestServices(services => services.AddScoped<IDepotDesCandidatures>(_ => new DepotEnPanne(Donnee)));
+        }))
+        {
+            // Le dépôt échoue dès le début de l'écriture : l'identifiant ne désigne aucune candidature de la base.
+            using var reponse = await api.EnvoyerAsync(new HttpMethod(methode), chemin, jeton: true, requete =>
+            {
+                requete.Headers.Add("Origin", api.Origine);
+                var corps = methode switch
+                {
+                    "PUT" => $$"""{"entreprise":"{{Donnee}} SA","poste":"Poste de {{Donnee}}","envoyeeLe":"2026-11-02T10:00"}""",
+                    "POST" => $$"""{"type":"Appel","survenuLe":"2026-11-10T10:00","note":"Note de {{Donnee}}"}""",
+                    _ => null,
+                };
+                if (corps is not null)
+                {
+                    requete.Content = new StringContent(corps, System.Text.Encoding.UTF8, "application/json");
+                }
+            });
+            Assert.Equal(HttpStatusCode.InternalServerError, reponse.StatusCode);
+        }
+
+        var entrees = capture.Entrees.ToArray();
+        Assert.Contains(entrees, entree => entree.Contains("Erreur inattendue pendant une requête (InvalidOperationException).", StringComparison.Ordinal));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(entrees, entree => entree.Contains("Panne simulée", StringComparison.Ordinal));
+    }
+
+    // Chaque catégorie au niveau le plus bavard, réglages des catégories que la règle fait taire compris, vers la capture.
+    private static void ToutJournaliser(IWebHostBuilder builder, CaptureDesJournaux capture) =>
+        builder
+            .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(LesPlusBavards))
+            .ConfigureLogging(journaux => journaux.AddProvider(capture));
+
+    private static async Task<HttpStatusCode> StatutAsync(Task<HttpResponseMessage> envoi)
+    {
+        using var reponse = await envoi;
+        return reponse.StatusCode;
     }
 
     // Un enregistrement de candidature, venu de l'interface, avec le corps donné.

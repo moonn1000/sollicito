@@ -1,13 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import {
-  ErreurDeLApi,
+  estIntrouvable,
   type ClientDeLApi,
+  type EtapeLue,
   type EvenementDeLHistorique,
   type FicheDUneCandidature as Fiche,
   type ResultatDUneAction,
   type StatutDeCandidature,
 } from "../api/clientDeLApi.ts";
-import { afficherLInstant, decrireLEvenement, LIBELLES_DES_STATUTS } from "./affichage.ts";
+import { afficherLInstant, decrireLEvenement, heureSaisieDe, LIBELLES_DES_STATUTS, LIBELLES_DES_TYPES_D_ETAPE } from "./affichage.ts";
+import { FormulaireDUneEtape, type ReponseALEtape } from "./FormulaireDUneEtape.tsx";
 import { NoterUneEtape } from "./NoterUneEtape.tsx";
 
 type Chargement = { etape: "chargement" } | { etape: "prete"; fiche: Fiche } | { etape: "introuvable" } | { etape: "echec" };
@@ -19,32 +21,60 @@ const REESSAYER = "Réessayez ; si l'erreur revient, fermez Sollicito, puis rela
 
 const PAS_RELUE = "La fiche n'a pas pu être relue : fermez Sollicito, puis relancez-le.";
 
+/** La confirmation de la suppression : ouverte, ou fermée, après une annulation qui rend le focus au bouton. */
+type Confirmation = "fermee" | "ouverte" | "annulee";
+
 /**
  * La fiche d'une candidature (#12), ouverte depuis le tableau de bord : son résumé, son statut et les seuls passages
  * que le diagramme d'états permet, que l'API donne avec la fiche ; la correction du dernier changement ; une note
- * d'entretien ou d'échange ; l'historique, du plus ancien au plus récent. Les textes s'affichent comme du texte,
- * jamais comme du HTML : React les échappe.
+ * d'entretien ou d'échange ; l'historique, du plus ancien au plus récent. Elle mène à la modification de la
+ * candidature, corrige une étape de l'historique, et supprime la candidature après une confirmation affichée dans
+ * l'interface, jamais par une boîte du navigateur (#25). Les textes s'affichent comme du texte, jamais comme du HTML :
+ * React les échappe.
  */
 export function FicheDUneCandidature({
   client,
   candidature,
   revenir,
+  modifier,
+  quandSupprimee,
+  annonce,
   maintenant,
 }: {
   client: ClientDeLApi;
   candidature: number;
   /** Mène au tableau de bord. */
   revenir: () => void;
+  /** Mène à l'écran de modification de la candidature. */
+  modifier: () => void;
+  /** Reçoit la fiche de la candidature que l'API vient de supprimer. */
+  quandSupprimee: (fiche: Fiche) => void;
+  /** Ce qui vient de se passer, par exemple une modification enregistrée ; jusqu'à la prochaine action. */
+  annonce?: string;
   /** L'heure présente, qui remplit d'avance la date et l'heure d'une note. */
   maintenant?: () => Date;
 }) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
   const [enCours, setEnCours] = useState(false);
   const [message, setMessage] = useState<Message>();
+  const [annonceDeDepart, setAnnonceDeDepart] = useState(annonce);
+  const [confirmation, setConfirmation] = useState<Confirmation>("fermee");
+  const [suppression, setSuppression] = useState<"pret" | "en-cours" | "echec">("pret");
   // Compte les actions terminées : chacune ramène le focus sur le titre du statut, car le bouton cliqué a pu disparaître.
   const [actionsTerminees, setActionsTerminees] = useState(0);
+  // L'étape dont le formulaire de correction est ouvert, et ce que dit l'historique après une correction.
+  const [etapeEnCorrection, setEtapeEnCorrection] = useState<number>();
+  const [annonceDeLHistorique, setAnnonceDeLHistorique] = useState<Message>();
+  // Compte les corrections terminées : chacune ramène le focus sur le titre de l'historique.
+  const [correctionsTerminees, setCorrectionsTerminees] = useState(0);
+  // Une correction annulée rend le focus au bouton de son étape.
+  const [correctionAnnulee, setCorrectionAnnulee] = useState<{ etape: number }>();
   const titre = useRef<HTMLHeadingElement>(null);
   const titreDuStatut = useRef<HTMLHeadingElement>(null);
+  const titreDeLaConfirmation = useRef<HTMLHeadingElement>(null);
+  const boutonSupprimer = useRef<HTMLButtonElement>(null);
+  const titreDeLHistorique = useRef<HTMLHeadingElement>(null);
+  const boutonsDeCorrection = useRef(new Map<number, HTMLButtonElement>());
   const enCoursDAction = useRef(false);
   const affichee = useRef(true);
 
@@ -61,6 +91,27 @@ export function FicheDUneCandidature({
       titreDuStatut.current?.focus();
     }
   }, [actionsTerminees]);
+
+  useEffect(() => {
+    if (correctionsTerminees > 0) {
+      titreDeLHistorique.current?.focus();
+    }
+  }, [correctionsTerminees]);
+
+  useEffect(() => {
+    if (correctionAnnulee !== undefined) {
+      boutonsDeCorrection.current.get(correctionAnnulee.etape)?.focus();
+    }
+  }, [correctionAnnulee]);
+
+  // Ouverte, la confirmation prend le focus sur sa question ; annulée, elle le rend au bouton qui l'a ouverte.
+  useEffect(() => {
+    if (confirmation === "ouverte") {
+      titreDeLaConfirmation.current?.focus();
+    } else if (confirmation === "annulee") {
+      boutonSupprimer.current?.focus();
+    }
+  }, [confirmation]);
 
   // Une fiche reçue ne remplace la fiche montrée que si elle n'est pas plus ancienne. L'historique se fait par ajouts
   // seulement : une note et un changement de statut lancés ensemble peuvent répondre dans le désordre, et la réponse la
@@ -97,6 +148,10 @@ export function FicheDUneCandidature({
     enCoursDAction.current = true;
     setEnCours(true);
     setMessage(undefined);
+    setAnnonceDeDepart(undefined);
+    setAnnonceDeLHistorique(undefined);
+    // Une autre action ferme la confirmation de la suppression : elle portait sur la fiche d'avant.
+    setConfirmation("fermee");
     try {
       const resultat = await faire();
       if (!affichee.current) {
@@ -160,6 +215,89 @@ export function FicheDUneCandidature({
       "Le changement n'a pas pu être corrigé.",
     );
 
+  const demanderLaSuppression = () => {
+    setMessage(undefined);
+    setAnnonceDeDepart(undefined);
+    setAnnonceDeLHistorique(undefined);
+    setEtapeEnCorrection(undefined);
+    setSuppression("pret");
+    setConfirmation("ouverte");
+  };
+
+  const annulerLaSuppression = () => {
+    if (!enCoursDAction.current) {
+      setConfirmation("annulee");
+    }
+  };
+
+  // Supprime la candidature, une fois la suppression confirmée : la fiche passe la main au tableau de bord.
+  async function supprimer(supprimee: Fiche) {
+    if (enCoursDAction.current) {
+      return;
+    }
+
+    enCoursDAction.current = true;
+    setEnCours(true);
+    setSuppression("en-cours");
+    try {
+      await client.supprimerUneCandidature(candidature);
+      if (affichee.current) {
+        quandSupprimee(supprimee);
+      }
+    } catch (erreur) {
+      if (!affichee.current) {
+        return;
+      }
+
+      if (estIntrouvable(erreur)) {
+        setChargement({ etape: "introuvable" });
+      } else {
+        setSuppression("echec");
+      }
+    } finally {
+      enCoursDAction.current = false;
+      if (affichee.current) {
+        setEnCours(false);
+      }
+    }
+  }
+
+  // Corrige l'étape : la correction s'ajoute à l'historique (#25). Refusée parce que l'étape n'est plus en vigueur,
+  // la fiche est relue, et le motif reste affiché.
+  const corrigerLEtape =
+    (etape: EtapeLue) =>
+    async (saisie: Parameters<ClientDeLApi["corrigerUneEtape"]>[2]): Promise<ReponseALEtape> => {
+      setMessage(undefined);
+      setAnnonceDeDepart(undefined);
+      setAnnonceDeLHistorique(undefined);
+      setConfirmation("fermee");
+      try {
+        const resultat = await client.corrigerUneEtape(candidature, etape.id, saisie);
+        if (!affichee.current || resultat.issue === "refusee") {
+          return resultat.issue === "refusee" ? { acceptee: false, refus: resultat.refus } : { acceptee: true };
+        }
+
+        if (resultat.issue === "faite") {
+          montrer(resultat.fiche);
+          setAnnonceDeLHistorique({ sorte: "annonce", texte: `Étape corrigée : ${LIBELLES_DES_TYPES_D_ETAPE[saisie.type]}.` });
+        } else {
+          const relue = await relire();
+          setAnnonceDeLHistorique({ sorte: "alerte", texte: relue ? resultat.motif : `${resultat.motif} ${PAS_RELUE}` });
+        }
+
+        setEtapeEnCorrection(undefined);
+        setCorrectionsTerminees((nombre) => nombre + 1);
+        return { acceptee: true };
+      } catch (erreur) {
+        if (affichee.current && estIntrouvable(erreur)) {
+          setChargement({ etape: "introuvable" });
+          return { acceptee: true };
+        }
+
+        throw erreur;
+      }
+    };
+
   const fiche = chargement.etape === "prete" ? chargement.fiche : undefined;
   const correction = fiche?.correction ?? null;
 
@@ -168,6 +306,11 @@ export function FicheDUneCandidature({
       <h2 id="titre-de-la-fiche" ref={titre} tabIndex={-1}>
         Fiche de la candidature
       </h2>
+      {annonceDeDepart !== undefined && chargement.etape === "prete" && (
+        <p className="annonce" role="status">
+          {annonceDeDepart}
+        </p>
+      )}
       <p>
         <button type="button" className="lien" onClick={revenir}>
           Revenir au tableau de bord
@@ -198,6 +341,54 @@ export function FicheDUneCandidature({
             <dt>Statut</dt>
             <dd>{LIBELLES_DES_STATUTS[fiche.statut] ?? fiche.statut}</dd>
           </dl>
+          <div className="actions-de-la-fiche">
+            <button type="button" className="secondaire" disabled={enCours} onClick={modifier}>
+              Modifier la candidature
+            </button>
+            <button
+              type="button"
+              ref={boutonSupprimer}
+              className="secondaire danger"
+              disabled={enCours}
+              aria-expanded={confirmation === "ouverte"}
+              aria-controls={confirmation === "ouverte" ? "confirmation-de-la-suppression" : undefined}
+              onClick={demanderLaSuppression}
+            >
+              Supprimer la candidature
+            </button>
+          </div>
+          {confirmation === "ouverte" && (
+            <section
+              id="confirmation-de-la-suppression"
+              className="confirmation"
+              aria-labelledby="titre-de-la-suppression"
+              aria-describedby="texte-de-la-suppression"
+              onKeyDown={(evenement) => {
+                if (evenement.key === "Escape") {
+                  annulerLaSuppression();
+                }
+              }}
+            >
+              <h3 id="titre-de-la-suppression" ref={titreDeLaConfirmation} tabIndex={-1}>
+                Supprimer cette candidature ?
+              </h3>
+              <p id="texte-de-la-suppression">La suppression est définitive : elle emporte tout l'historique de la candidature.</p>
+              <div className="actions">
+                <button type="button" className="danger" disabled={enCours} onClick={() => void supprimer(fiche)}>
+                  {suppression === "en-cours" ? "Suppression…" : "Supprimer définitivement"}
+                </button>
+                <button type="button" className="secondaire" disabled={enCours} onClick={annulerLaSuppression}>
+                  Annuler
+                </button>
+              </div>
+              {suppression === "echec" && (
+                <p className="alerte" role="alert">
+                  La candidature n'a pas pu être supprimée. Réessayez ; si l'erreur revient, fermez Sollicito, puis
+                  relancez-le.
+                </p>
+              )}
+            </section>
+          )}
           <section aria-labelledby="titre-du-statut">
             <h3 id="titre-du-statut" ref={titreDuStatut} tabIndex={-1}>
               Faire avancer la candidature
@@ -241,42 +432,143 @@ export function FicheDUneCandidature({
             client={client}
             candidature={candidature}
             maintenant={maintenant}
-            autresActions={actionsTerminees}
+            autresActions={actionsTerminees + correctionsTerminees}
             quandNotee={(fiche) => {
               setMessage(undefined);
+              setAnnonceDeDepart(undefined);
+              setAnnonceDeLHistorique(undefined);
+              setConfirmation("fermee");
               montrer(fiche);
             }}
           />
-          <Historique envoyeeLe={fiche.envoyeeLe} evenements={fiche.historique} />
+          <Historique
+            envoyeeLe={fiche.envoyeeLe}
+            evenements={fiche.historique}
+            titre={titreDeLHistorique}
+            annonce={annonceDeLHistorique}
+            etapeEnCorrection={etapeEnCorrection}
+            ouvrir={(etape) => {
+              setAnnonceDeLHistorique(undefined);
+              setConfirmation("fermee");
+              setEtapeEnCorrection(etape.id);
+            }}
+            enCours={enCours}
+            boutonDeCorrection={(etape) => (bouton) => {
+              if (bouton === null) {
+                boutonsDeCorrection.current.delete(etape);
+              } else {
+                boutonsDeCorrection.current.set(etape, bouton);
+              }
+            }}
+            formulaireDeCorrection={(etape) => (
+              <FormulaireDUneEtape
+                prefixe={`correction-${etape.id}`}
+                depart={{ type: etape.type, survenuLe: heureSaisieDe(new Date(etape.survenuLe)), note: etape.note ?? "" }}
+                envoyer={corrigerLEtape(etape)}
+                libelleDuBouton="Enregistrer la correction"
+                libelleEnCours="Enregistrement…"
+                messageDEchec={`La correction n'a pas pu être enregistrée. ${REESSAYER}`}
+                aide="La correction s'ajoute à l'historique, à sa date ; l'étape corrigée y reste, marquée comme corrigée."
+                annuler={() => {
+                  setEtapeEnCorrection(undefined);
+                  setCorrectionAnnulee({ etape: etape.id });
+                }}
+                premierChamp={(champ) => champ?.focus()}
+              />
+            )}
+          />
         </>
       )}
     </section>
   );
 }
 
-/** L'historique, du plus ancien au plus récent, dans l'ordre que rend l'API ; il commence à l'envoi. */
-function Historique({ envoyeeLe, evenements }: { envoyeeLe: string; evenements: EvenementDeLHistorique[] }) {
+/**
+ * L'historique, du plus ancien au plus récent, dans l'ordre que rend l'API. L'envoi s'y range à son instant, au premier
+ * rang à égalité : l'historique en vigueur commence là, et seuls des événements corrigés peuvent le précéder (#25).
+ * Chaque étape en vigueur se corrige : son formulaire s'ouvre à sa place ; une étape corrigée reste, marquée comme
+ * corrigée.
+ */
+function Historique({
+  envoyeeLe,
+  evenements,
+  titre,
+  annonce,
+  etapeEnCorrection,
+  ouvrir,
+  enCours,
+  boutonDeCorrection,
+  formulaireDeCorrection,
+}: {
+  envoyeeLe: string;
+  evenements: EvenementDeLHistorique[];
+  titre: RefObject<HTMLHeadingElement | null>;
+  /** Ce qu'a donné la dernière correction : une annonce, ou une alerte. */
+  annonce: Message | undefined;
+  /** L'étape dont le formulaire de correction est ouvert. */
+  etapeEnCorrection: number | undefined;
+  ouvrir: (etape: EtapeLue) => void;
+  /** Vrai pendant une autre action de la fiche : aucune correction ne s'ouvre alors. */
+  enCours: boolean;
+  boutonDeCorrection: (etape: number) => (bouton: HTMLButtonElement | null) => void;
+  formulaireDeCorrection: (etape: EtapeLue) => ReactNode;
+}) {
+  // Le rang de l'envoi : avant le premier événement qui ne le précède pas.
+  const rangDeLEnvoi = evenements.findIndex((evenement) => Date.parse(evenement.survenuLe) >= Date.parse(envoyeeLe));
+  const avant = rangDeLEnvoi === -1 ? evenements : evenements.slice(0, rangDeLEnvoi);
+  const apres = rangDeLEnvoi === -1 ? [] : evenements.slice(rangDeLEnvoi);
+  const ligne = (evenement: EvenementDeLHistorique) => (
+    <li key={evenement.id} className={evenement.sorte === "etape" ? "etape" : undefined}>
+      <time dateTime={evenement.survenuLe}>{afficherLInstant(evenement.survenuLe)}</time>
+      <span>{decrireLEvenement(evenement)}</span>
+      {evenement.estCorrige && <span className="marque">{evenement.sorte === "etape" ? "corrigée" : "corrigé"}</span>}
+      {evenement.sorte === "etape" && evenement.note !== null && <p className="note">{evenement.note}</p>}
+      {evenement.sorte === "etape" && !evenement.estCorrige && etapeEnCorrection !== evenement.id && (
+        <button
+          type="button"
+          className="secondaire corriger"
+          disabled={enCours}
+          ref={boutonDeCorrection(evenement.id)}
+          aria-label={`Corriger l'étape : ${decrireLEvenement(evenement)}, ${afficherLInstant(evenement.survenuLe)}`}
+          onClick={() => ouvrir(evenement)}
+        >
+          Corriger
+        </button>
+      )}
+      {evenement.sorte === "etape" && etapeEnCorrection === evenement.id && (
+        <div className="correction-d-etape" role="group" aria-labelledby={`titre-de-la-correction-${evenement.id}`}>
+          <p id={`titre-de-la-correction-${evenement.id}`}>
+            Corriger l'étape : {decrireLEvenement(evenement)}, {afficherLInstant(evenement.survenuLe)}
+          </p>
+          {formulaireDeCorrection(evenement)}
+        </div>
+      )}
+    </li>
+  );
+
   return (
     <section aria-labelledby="titre-de-l-historique">
-      <h3 id="titre-de-l-historique">Historique</h3>
+      <h3 id="titre-de-l-historique" ref={titre} tabIndex={-1}>
+        Historique
+      </h3>
+      {annonce?.sorte === "annonce" && (
+        <p className="annonce" role="status">
+          {annonce.texte}
+        </p>
+      )}
+      {annonce?.sorte === "alerte" && (
+        <p className="alerte" role="alert">
+          {annonce.texte}
+        </p>
+      )}
       <ol className="historique">
-        <li>
+        {avant.map(ligne)}
+        <li className="envoi">
           <time dateTime={envoyeeLe}>{afficherLInstant(envoyeeLe)}</time>
           <span>Candidature envoyée</span>
         </li>
-        {evenements.map((evenement) => (
-          <li key={evenement.id} className={evenement.sorte === "etape" ? "etape" : undefined}>
-            <time dateTime={evenement.survenuLe}>{afficherLInstant(evenement.survenuLe)}</time>
-            <span>{decrireLEvenement(evenement)}</span>
-            {evenement.sorte === "changementDeStatut" && evenement.estCorrige && <span className="marque">corrigé</span>}
-            {evenement.sorte === "etape" && evenement.note !== null && <p className="note">{evenement.note}</p>}
-          </li>
-        ))}
+        {apres.map(ligne)}
       </ol>
     </section>
   );
-}
-
-function estIntrouvable(erreur: unknown): boolean {
-  return erreur instanceof ErreurDeLApi && erreur.statut === 404;
 }

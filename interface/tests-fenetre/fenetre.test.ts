@@ -298,7 +298,8 @@ test("la fiche de la candidature fait avancer son statut et note un échange, pu
   const lignes = await page.locator("ol.historique > li").allTextContents();
   expect(lignes).toHaveLength(3);
   expect(lignes[0]).toBe("27/03/2026 23:30Candidature envoyée");
-  expect(lignes[1]).toBe(`28/03/2026 10:00Échange (courriel, message)${note}`);
+  // L'étape, en vigueur, porte son bouton « Corriger » (#25).
+  expect(lignes[1]).toBe(`28/03/2026 10:00Échange (courriel, message)${note}Corriger`);
   expect(lignes[2]).toMatch(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}Statut passé d'Envoyée à Entretien$/u);
   // La note s'affiche comme du texte : aucune balise ne s'est créée.
   expect(await page.locator("main b, main img").count()).toBe(0);
@@ -307,6 +308,54 @@ test("la fiche de la candidature fait avancer son statut et note un échange, pu
   await page.getByRole("heading", { level: 2, name: "Tableau de bord" }).waitFor();
   await page.getByRole("row").nth(1).waitFor();
   expect(await page.getByRole("row").nth(1).getByRole("cell").allTextContents()).toEqual([entreprise, "Comptable", "27/03/2026 23:30", "Entretien"]);
+});
+
+test("la candidature et son étape se corrigent depuis la fiche, puis la candidature se supprime après une confirmation affichée dans la page", async () => {
+  const { page } = fenetre;
+  const entreprise = '<img src="x" onerror="alert(1)"> Lumière Verte SA';
+  let boites = 0;
+  page.on("dialog", (boite) => {
+    boites++;
+    void boite.dismiss();
+  });
+
+  await page.getByRole("button", { name: `Comptable, chez ${entreprise} : ouvrir la fiche` }).click();
+  await page.getByRole("button", { name: "Modifier la candidature" }).click();
+  await page.getByRole("heading", { level: 2, name: "Modifier la candidature" }).waitFor();
+  // L'échange du 28/03 ouvre l'historique : l'écran le rappelle, et l'API refuse un envoi plus tardif.
+  await page.getByText("Au plus tard le 28/03/2026 10:00, date du premier événement de l'historique.").waitFor();
+  await page.getByLabel("Date et heure d'envoi").fill("2026-03-28T10:01");
+  await page.getByRole("button", { name: "Enregistrer les modifications" }).click();
+  await page.getByText("La date et l'heure d'envoi ne peuvent pas suivre le premier événement de l'historique : l'historique commence à l'envoi.").waitFor();
+  await page.getByRole("button", { name: "Annuler" }).click();
+
+  // L'échange était mal daté : sa correction (POST), passée par le contrôle de l'origine, s'ajoute à l'historique.
+  await page.getByRole("button", { name: "Corriger l'étape : Échange (courriel, message), 28/03/2026 10:00" }).click();
+  const correction = page.getByRole("group", { name: "Corriger l'étape : Échange (courriel, message), 28/03/2026 10:00" });
+  await correction.getByLabel("Date et heure").fill("2026-03-29T10:00");
+  await correction.getByRole("button", { name: "Enregistrer la correction" }).click();
+  await page.getByText("Étape corrigée : Échange (courriel, message).").waitFor();
+  expect(await page.locator("ol.historique .marque").allTextContents()).toEqual(["corrigée"]);
+
+  // L'échange corrigé ne borne plus l'envoi : sa correction, du 29/03, le borne. La modification (PUT), puis la
+  // suppression (DELETE), passent aussi par le contrôle de l'origine.
+  await page.getByRole("button", { name: "Modifier la candidature" }).click();
+  await page.getByText("Au plus tard le 29/03/2026 10:00, date du premier événement de l'historique.").waitFor();
+  await page.getByLabel("Date et heure d'envoi").fill("2026-03-28T10:01");
+  await page.getByLabel("Poste").fill("Comptable senior");
+  await page.getByRole("button", { name: "Enregistrer les modifications" }).click();
+  await page.getByText(`Candidature modifiée : Comptable senior, chez ${entreprise}.`).waitFor();
+  expect(await page.locator("dl.resume dd").allTextContents()).toEqual([entreprise, "Comptable senior", "28/03/2026 10:01", "Entretien"]);
+  // Le nom, prérempli puis renvoyé, s'affiche toujours comme du texte : aucune image ne s'est créée.
+  expect(await page.locator("main img").count()).toBe(0);
+
+  await page.getByRole("button", { name: "Supprimer la candidature" }).click();
+  await page.getByRole("region", { name: "Supprimer cette candidature ?" }).getByRole("button", { name: "Supprimer définitivement" }).click();
+  await page.getByText(`Candidature supprimée : Comptable senior, chez ${entreprise}.`).waitFor();
+  await page.getByText("Aucune candidature enregistrée pour l'instant.").waitFor();
+  // La confirmation vit dans la page : le navigateur intégré n'a ouvert aucune boîte.
+  expect(boites).toBe(0);
+  expect(await page.locator("main img").count()).toBe(0);
 });
 
 test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fichier", async () => {

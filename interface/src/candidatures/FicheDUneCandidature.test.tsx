@@ -7,9 +7,26 @@ import { FicheDUneCandidature } from "./FicheDUneCandidature.tsx";
 // Le 18/11/2026 à 14:30, heure de Bruxelles (le fuseau des tests).
 const maintenant = () => new Date("2026-11-18T13:30:00Z");
 
-function afficher(client = clientSimule(), revenir = vi.fn()) {
-  const { container } = render(<FicheDUneCandidature client={client} candidature={7} revenir={revenir} maintenant={maintenant} />);
-  return { client, revenir, container };
+function afficher(client = clientSimule(), revenir = vi.fn(), annonce?: string) {
+  const modifier = vi.fn();
+  const quandSupprimee = vi.fn();
+  const { container } = render(
+    <FicheDUneCandidature
+      client={client}
+      candidature={7}
+      revenir={revenir}
+      modifier={modifier}
+      quandSupprimee={quandSupprimee}
+      annonce={annonce}
+      maintenant={maintenant}
+    />,
+  );
+  return { client, revenir, modifier, quandSupprimee, container };
+}
+
+// La confirmation de la suppression, affichée dans la fiche.
+function confirmation() {
+  return screen.queryByRole("region", { name: "Supprimer cette candidature ?" });
 }
 
 // Le résumé de la candidature : chaque terme et sa définition.
@@ -79,13 +96,14 @@ test("l'historique commence à l'envoi, puis suit l'ordre de l'API, et marque le
 
   const historique = await screen.findByRole("heading", { level: 3, name: "Historique" });
   const lignes = within(historique.closest("section")!).getAllByRole("listitem");
+  // Chaque étape en vigueur porte son bouton « Corriger » (#25).
   expect(lignes.map((ligne) => ligne.textContent)).toEqual([
     "27/03/2026 23:30Candidature envoyée",
-    "10/11/2026 10:00AppelRappel de la responsable\nmardi matin",
+    "10/11/2026 10:00AppelRappel de la responsable\nmardi matinCorriger",
     "18/11/2026 14:30Statut passé d'Envoyée à Entretien",
     "18/11/2026 15:30Statut passé d'Entretien à Refuséecorrigé",
     "18/11/2026 15:35Correction : retour de Refusée à Entretien",
-    "01/12/2026 09:30Entretien",
+    "01/12/2026 09:30EntretienCorriger",
   ]);
   expect(within(lignes[3]!).getByText("corrigé").className).toBe("marque");
   expect(lignes[1]!.querySelector("time")?.getAttribute("dateTime")).toBe("2026-11-10T09:00:00Z");
@@ -269,4 +287,310 @@ test("si la fiche ne peut être relue après un refus, la fiche le dit avec le m
   expect((await screen.findByRole("alert")).textContent).toBe(
     "La candidature est déjà au statut Refusée. La fiche n'a pas pu être relue : fermez Sollicito, puis relancez-le.",
   );
+});
+
+test("« Modifier la candidature » mène à l'écran de modification", async () => {
+  const { modifier } = afficher();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Modifier la candidature" }));
+
+  expect(modifier).toHaveBeenCalledOnce();
+});
+
+test("« Supprimer la candidature » demande une confirmation dans la fiche, sans boîte du navigateur ; « Annuler » ne supprime rien", async () => {
+  const boiteDuNavigateur = vi.spyOn(window, "confirm").mockReturnValue(true);
+  const { client, quandSupprimee } = afficher();
+  const supprimer = await screen.findByRole("button", { name: "Supprimer la candidature" });
+  expect(confirmation()).toBeNull();
+
+  fireEvent.click(supprimer);
+
+  const question = confirmation()!;
+  expect(within(question).getByText("La suppression est définitive : elle emporte tout l'historique de la candidature.")).toBeDefined();
+  expect(supprimer.getAttribute("aria-expanded")).toBe("true");
+  // La question reçoit le focus : on lit ce qu'on s'apprête à faire avant de choisir.
+  await waitFor(() => expect(document.activeElement).toBe(within(question).getByRole("heading", { level: 3, name: "Supprimer cette candidature ?" })));
+
+  fireEvent.click(within(question).getByRole("button", { name: "Annuler" }));
+
+  expect(confirmation()).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(supprimer));
+  expect(client.supprimerUneCandidature).not.toHaveBeenCalled();
+  expect(quandSupprimee).not.toHaveBeenCalled();
+  expect(boiteDuNavigateur).not.toHaveBeenCalled();
+  boiteDuNavigateur.mockRestore();
+});
+
+test("Échap ferme la confirmation sans rien supprimer", async () => {
+  const { client } = afficher();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.keyDown(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }), { key: "Escape" });
+
+  expect(confirmation()).toBeNull();
+  expect(client.supprimerUneCandidature).not.toHaveBeenCalled();
+});
+
+test("confirmée, la suppression part vers l'API, puis la fiche passe la main avec la candidature supprimée", async () => {
+  const fiche = ficheFictive({ id: 7, poste: "Brasseuse", entreprise: { id: 4, nom: "Brasserie Lune Rousse" } });
+  const { client, quandSupprimee } = afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.click(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }));
+
+  await waitFor(() => expect(quandSupprimee).toHaveBeenCalledExactlyOnceWith(fiche));
+  expect(client.supprimerUneCandidature).toHaveBeenCalledExactlyOnceWith(7);
+});
+
+test("pendant la suppression, les boutons attendent la réponse ; un échec se signale, et la confirmation reste ouverte", async () => {
+  let repondre: (erreur: Error) => void = () => {};
+  const supprimerUneCandidature = vi.fn(() => new Promise<void>((_, rejeter) => (repondre = rejeter)));
+  const { quandSupprimee } = afficher(clientSimule({ supprimerUneCandidature }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.click(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }));
+
+  const enCours = await within(confirmation()!).findByRole("button", { name: "Suppression…" });
+  expect(enCours.hasAttribute("disabled")).toBe(true);
+  expect(screen.getByRole("button", { name: "Modifier la candidature" }).hasAttribute("disabled")).toBe(true);
+  fireEvent.click(enCours);
+  fireEvent.keyDown(enCours, { key: "Escape" });
+  expect(supprimerUneCandidature).toHaveBeenCalledOnce();
+  expect(confirmation()).not.toBeNull();
+
+  repondre(new Error("panne"));
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "La candidature n'a pas pu être supprimée. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.",
+  );
+  expect(quandSupprimee).not.toHaveBeenCalled();
+  expect(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }).hasAttribute("disabled")).toBe(false);
+});
+
+test("une candidature déjà supprimée ailleurs le dit, au lieu de la fiche", async () => {
+  const { quandSupprimee } = afficher(clientSimule({ supprimerUneCandidature: () => Promise.reject(new ErreurDeLApi(404)) }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.click(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe("Cette candidature n'existe pas, ou plus.");
+  expect(screen.queryByRole("button", { name: "Modifier la candidature" })).toBeNull();
+  expect(quandSupprimee).not.toHaveBeenCalled();
+});
+
+test("l'annonce d'une modification s'affiche sur la fiche, jusqu'à la prochaine action", async () => {
+  afficher(clientSimule(), vi.fn(), "Candidature modifiée : Comptable, chez Lumière Verte SA.");
+
+  expect((await screen.findByRole("status")).textContent).toBe("Candidature modifiée : Comptable, chez Lumière Verte SA.");
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
+
+  expect(await screen.findByText("Statut changé : Entretien.")).toBeDefined();
+  expect(screen.queryByText("Candidature modifiée : Comptable, chez Lumière Verte SA.")).toBeNull();
+  expect(screen.getAllByRole("status")).toHaveLength(1);
+});
+
+test("une autre action ferme la confirmation de la suppression, qui portait sur la fiche d'avant", async () => {
+  const { client } = afficher();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  expect(confirmation()).not.toBeNull();
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
+
+  expect(await screen.findByText("Statut changé : Entretien.")).toBeDefined();
+  expect(confirmation()).toBeNull();
+  expect(client.supprimerUneCandidature).not.toHaveBeenCalled();
+});
+
+// Les étapes d'une fiche dont l'appel du 10/11 a été corrigé une fois : l'appel, marqué comme corrigé, et sa correction.
+function ficheAvecUneEtapeCorrigee() {
+  return ficheFictive({
+    historique: [
+      etapeFictive({ id: 2, survenuLe: "2026-11-10T09:00:00Z", type: "Appel", note: "Rappel.", estCorrige: true }),
+      etapeFictive({ id: 3, survenuLe: "2026-11-11T09:00:00Z", type: "Entretien", note: "Premier entretien.", corrige: 2 }),
+    ],
+  });
+}
+
+test("une étape corrigée reste dans l'historique, marquée comme corrigée ; seule la version en vigueur se corrige", async () => {
+  afficher(clientSimule({ lireLaFiche: async () => ficheAvecUneEtapeCorrigee() }));
+
+  const historique = (await screen.findByRole("heading", { level: 3, name: "Historique" })).closest("section")!;
+  const lignes = within(historique).getAllByRole("listitem");
+  expect(lignes.map((ligne) => ligne.textContent)).toEqual([
+    "27/03/2026 23:30Candidature envoyée",
+    "10/11/2026 10:00AppelcorrigéeRappel.",
+    "11/11/2026 10:00Correction : EntretienPremier entretien.Corriger",
+  ]);
+  expect(within(historique).getAllByRole("button", { name: /^Corriger l'étape/u }).map((bouton) => bouton.getAttribute("aria-label"))).toEqual([
+    "Corriger l'étape : Correction : Entretien, 11/11/2026 10:00",
+  ]);
+});
+
+test("corriger une étape ouvre son formulaire prérempli, envoie la correction, puis l'annonce et ramène le focus sur l'historique", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, survenuLe: "2026-11-10T09:00:00Z", type: "Appel", note: "Rappel." })] });
+  const apres = ficheAvecUneEtapeCorrigee();
+  const { client } = afficher(
+    clientSimule({ lireLaFiche: async () => fiche, corrigerUneEtape: vi.fn(async () => ({ issue: "faite" as const, fiche: apres })) }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+
+  const formulaire = screen.getByRole("group", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" });
+  const type = within(formulaire).getByLabelText<HTMLSelectElement>("Type");
+  expect(type.value).toBe("Appel");
+  expect(within(formulaire).getByLabelText<HTMLInputElement>("Date et heure").value).toBe("2026-11-10T10:00");
+  expect(within(formulaire).getByLabelText<HTMLTextAreaElement>("Note (facultative)").value).toBe("Rappel.");
+  await waitFor(() => expect(document.activeElement).toBe(type));
+  fireEvent.change(type, { target: { value: "Entretien" } });
+  fireEvent.change(within(formulaire).getByLabelText("Date et heure"), { target: { value: "2026-11-11T10:00" } });
+  fireEvent.click(within(formulaire).getByRole("button", { name: "Enregistrer la correction" }));
+
+  expect((await screen.findByText("Étape corrigée : Entretien.")).getAttribute("role")).toBe("status");
+  expect(client.corrigerUneEtape).toHaveBeenCalledExactlyOnceWith(7, 2, { type: "Entretien", survenuLe: "2026-11-11T10:00", note: "Rappel." });
+  expect(screen.queryByRole("group", { name: /^Corriger l'étape/u })).toBeNull();
+  expect(screen.getByText("Correction : Entretien")).toBeDefined();
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 3, name: "Historique" })));
+  // Le statut n'a pas changé.
+  expect(resume().Statut).toBe("Envoyée");
+});
+
+test("« Annuler » ferme la correction sans rien envoyer et rend le focus à son bouton", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  const { client } = afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" })).getByRole("button", { name: "Annuler" }));
+
+  expect(screen.queryByRole("group", { name: /^Corriger l'étape/u })).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" })));
+  expect(client.corrigerUneEtape).not.toHaveBeenCalled();
+});
+
+test("les refus d'une correction s'affichent à côté du champ, dans son formulaire, qui reste ouvert", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(
+    clientSimule({
+      lireLaFiche: async () => fiche,
+      corrigerUneEtape: async () => ({ issue: "refusee", refus: { survenuLe: ["La date et l'heure ne peuvent pas précéder l'envoi de la candidature."] } }),
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  const formulaire = screen.getByRole("group", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" });
+  fireEvent.click(within(formulaire).getByRole("button", { name: "Enregistrer la correction" }));
+
+  const date = within(formulaire).getByLabelText("Date et heure");
+  await waitFor(() => expect(date.getAttribute("aria-invalid")).toBe("true"));
+  expect(document.getElementById(date.getAttribute("aria-describedby")!)?.textContent).toBe(
+    "La date et l'heure ne peuvent pas précéder l'envoi de la candidature.",
+  );
+  await waitFor(() => expect(document.activeElement).toBe(date));
+  // Ses champs ont leurs propres identifiants : ceux de la note d'une étape restent libres.
+  expect(date.id).toBe("correction-2-survenuLe");
+  expect(screen.getAllByLabelText("Date et heure")).toHaveLength(2);
+});
+
+test("une étape déjà corrigée ailleurs : la fiche le dit, la relit, et ferme la correction", async () => {
+  const lireLaFiche = vi
+    .fn<ReturnType<typeof clientSimule>["lireLaFiche"]>()
+    .mockResolvedValueOnce(ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] }))
+    .mockResolvedValueOnce(ficheAvecUneEtapeCorrigee());
+  const motif = "Cette étape n'est pas la version en vigueur : elle a déjà été corrigée, ou la fiche a changé entre-temps.";
+  afficher(clientSimule({ lireLaFiche, corrigerUneEtape: async () => ({ issue: "perimee", motif }) }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  fireEvent.click(within(screen.getByRole("group", { name: /^Corriger l'étape/u })).getByRole("button", { name: "Enregistrer la correction" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe(motif);
+  await waitFor(() => expect(screen.getByText("Correction : Entretien")).toBeDefined());
+  expect(screen.queryByRole("group", { name: /^Corriger l'étape/u })).toBeNull();
+  expect(lireLaFiche).toHaveBeenCalledTimes(2);
+});
+
+test("une correction qui échoue se signale dans son formulaire, sans rien perdre", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(clientSimule({ lireLaFiche: async () => fiche, corrigerUneEtape: () => Promise.reject(new Error("panne")) }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  const formulaire = screen.getByRole("group", { name: /^Corriger l'étape/u });
+  fireEvent.change(within(formulaire).getByLabelText("Note (facultative)"), { target: { value: "Note corrigée" } });
+  fireEvent.click(within(formulaire).getByRole("button", { name: "Enregistrer la correction" }));
+
+  expect((await within(formulaire).findByRole("alert")).textContent).toBe(
+    "La correction n'a pas pu être enregistrée. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.",
+  );
+  expect(within(formulaire).getByLabelText<HTMLTextAreaElement>("Note (facultative)").value).toBe("Note corrigée");
+});
+
+test("une correction d'une candidature supprimée entre-temps montre qu'elle n'existe plus", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(clientSimule({ lireLaFiche: async () => fiche, corrigerUneEtape: () => Promise.reject(new ErreurDeLApi(404)) }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  fireEvent.click(within(screen.getByRole("group", { name: /^Corriger l'étape/u })).getByRole("button", { name: "Enregistrer la correction" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe("Cette candidature n'existe pas, ou plus.");
+});
+
+test("une action sur le statut efface l'annonce d'une correction d'étape", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(clientSimule({ lireLaFiche: async () => fiche, corrigerUneEtape: async () => ({ issue: "faite", fiche: ficheAvecUneEtapeCorrigee() }) }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  fireEvent.click(within(screen.getByRole("group", { name: /^Corriger l'étape/u })).getByRole("button", { name: "Enregistrer la correction" }));
+  expect(await screen.findByText("Étape corrigée : Appel.")).toBeDefined();
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
+
+  expect(await screen.findByText("Statut changé : Entretien.")).toBeDefined();
+  expect(screen.queryByText("Étape corrigée : Appel.")).toBeNull();
+  expect(screen.getAllByRole("status")).toHaveLength(1);
+});
+
+test("l'envoi se range à son instant : seuls des événements corrigés peuvent le précéder, et il passe premier à égalité", async () => {
+  const fiche = ficheFictive({
+    envoyeeLe: "2026-11-12T09:00:00Z",
+    historique: [
+      etapeFictive({ id: 2, survenuLe: "2026-11-10T09:00:00Z", type: "Appel", estCorrige: true }),
+      etapeFictive({ id: 4, survenuLe: "2026-11-12T09:00:00Z", type: "Entretien", corrige: 2 }),
+      changementFictif({ id: 5, survenuLe: "2026-11-18T13:30:00Z" }),
+    ],
+  });
+  afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  const historique = (await screen.findByRole("heading", { level: 3, name: "Historique" })).closest("section")!;
+  expect(within(historique).getAllByRole("listitem").map((ligne) => ligne.textContent)).toEqual([
+    "10/11/2026 10:00Appelcorrigée",
+    "12/11/2026 10:00Candidature envoyée",
+    "12/11/2026 10:00Correction : EntretienCorriger",
+    "18/11/2026 14:30Statut passé d'Envoyée à Entretien",
+  ]);
+});
+
+test("ouvrir la correction d'une étape ferme la confirmation de la suppression", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  expect(confirmation()).not.toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+
+  expect(confirmation()).toBeNull();
+  expect(screen.getByRole("group", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" })).toBeDefined();
+});
+
+test("pendant une autre action de la fiche, aucune étape ne s'ouvre à la correction", async () => {
+  let repondre: () => void = () => {};
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(
+    clientSimule({
+      lireLaFiche: async () => fiche,
+      changerLeStatut: () => new Promise((resoudre) => (repondre = () => resoudre({ faite: true, fiche: ficheFictive({ ...fiche, statut: "Refusee", passagesPermis: [] }) }))),
+    }),
+  );
+
+  fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+
+  const corriger = screen.getByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" });
+  await waitFor(() => expect(corriger.hasAttribute("disabled")).toBe(true));
+  repondre();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }).hasAttribute("disabled")).toBe(false));
 });

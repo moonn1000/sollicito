@@ -389,3 +389,101 @@ button {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Modifier ou supprimer une candidature (#25) : les actions de la fiche, et la confirmation de la suppression. */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.actions .secondaire {
+  border-color: var(--bordure);
+  background: var(--surface);
+  color: var(--texte);
+  font-weight: normal;
+}
+
+.actions-de-la-fiche {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.danger,
+.actions .danger {
+  border: 1px solid var(--refus);
+  background: var(--refus);
+  color: var(--surface);
+}
+
+.secondaire.danger {
+  background: var(--surface);
+  color: var(--refus);
+}
+
+.secondaire.danger:hover:not(:disabled) {
+  border-color: var(--refus);
+}
+
+.danger:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.confirmation {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--refus);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+
+.confirmation p {
+  margin: 0 0 0.75rem;
+}
+
+/* Corriger une étape de l'historique (#25) : le bouton à droite de l'étape, le formulaire à sa place, sur toute la
+   largeur. */
+
+.historique .corriger {
+  margin-left: auto;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+.correction-d-etape {
+  flex-basis: 100%;
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--bordure);
+  border-radius: 0.4rem;
+}
+
+.correction-d-etape > p {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}
+
+/* L'avertissement d'un nom d'entreprise corrigé (#25, ADR-0007), et la ligne de l'envoi dans l'historique. */
+
+.avertissement {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+
+.avertissement h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+}
+
+.avertissement p {
+  margin: 0 0 0.75rem;
+}
+
+.historique li.envoi {
+  border-left-color: var(--texte-discret);
+}

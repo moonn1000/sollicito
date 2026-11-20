@@ -53,6 +53,8 @@ export function etapeFictive(modifications: Partial<EtapeLue> = {}): EtapeLue {
     survenuLe: "2026-11-10T09:00:00Z",
     type: "Appel",
     note: null,
+    corrige: null,
+    estCorrige: false,
     ...modifications,
   };
 }
@@ -87,6 +89,15 @@ export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
       notee: true,
       fiche: ficheFictive({ id: candidature }),
     })),
+    corrigerUneEtape: vi.fn<ClientDeLApi["corrigerUneEtape"]>(async (candidature) => ({
+      issue: "faite",
+      fiche: ficheFictive({ id: candidature }),
+    })),
+    modifierUneCandidature: vi.fn<ClientDeLApi["modifierUneCandidature"]>(async (candidature, saisie) => ({
+      issue: "modifiee",
+      fiche: ficheFictive({ id: candidature, entreprise: { id: 9, nom: saisie.entreprise.trim() }, poste: saisie.poste.trim() }),
+    })),
+    supprimerUneCandidature: vi.fn<ClientDeLApi["supprimerUneCandidature"]>(async () => undefined),
     ...modifications,
   } satisfies ClientDeLApi;
 }

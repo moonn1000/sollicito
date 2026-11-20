@@ -71,7 +71,7 @@ public abstract record EvenementDeLHistorique(int Id, DateTime SurvenuLe)
                 changement.Nouveau,
                 changement.Corrige?.Id,
                 candidature.EstCorrige(changement)),
-            Etape etape => new EtapeLue(etape.Id, etape.SurvenuLe, etape.Type, etape.Note),
+            Etape etape => new EtapeLue(etape.Id, etape.SurvenuLe, etape.Type, etape.Note, etape.Corrige?.Id, candidature.EstCorrigee(etape)),
             _ => throw new ArgumentOutOfRangeException(nameof(evenement), evenement?.GetType().Name, "Sorte d'événement inconnue."),
         };
     }
@@ -92,9 +92,12 @@ public sealed record ChangementDeStatutLu(
     int? Corrige,
     bool EstCorrige) : EvenementDeLHistorique(Id, SurvenuLe);
 
-/// <summary>Une étape, qui ne change pas le statut.</summary>
+/// <summary>Une étape, qui ne change pas le statut : notée, ou la correction d'une autre (#25).</summary>
 /// <param name="Id">L'identifiant de l'événement.</param>
 /// <param name="SurvenuLe">Son instant, en UTC, donné par l'utilisateur.</param>
 /// <param name="Type">Son type.</param>
 /// <param name="Note">Sa note, ou rien.</param>
-public sealed record EtapeLue(int Id, DateTime SurvenuLe, TypeDEtape Type, string? Note) : EvenementDeLHistorique(Id, SurvenuLe);
+/// <param name="Corrige">Pour une correction, l'identifiant de l'étape corrigée ; rien pour une étape notée.</param>
+/// <param name="EstCorrige">Vrai si une correction l'a corrigée depuis : elle reste dans l'historique, marquée comme telle.</param>
+public sealed record EtapeLue(int Id, DateTime SurvenuLe, TypeDEtape Type, string? Note, int? Corrige, bool EstCorrige)
+    : EvenementDeLHistorique(Id, SurvenuLe);

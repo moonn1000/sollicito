@@ -15,7 +15,10 @@ public interface IDepotDesCandidatures
     /// <summary>Les candidatures, les plus récentes d'abord : par date d'envoi, puis par ordre d'enregistrement.</summary>
     Task<IReadOnlyList<CandidatureListee>> ListerAsync(CancellationToken annulation);
 
-    /// <summary>Les entreprises enregistrées, dans l'ordre de leur clé.</summary>
+    /// <summary>
+    /// Les entreprises que l'écran de saisie et celui de modification proposent, dans l'ordre de leur clé : celles qu'une
+    /// candidature porte encore. Une entreprise sans candidature reste en base, et sa clé la reconnaît toujours.
+    /// </summary>
     Task<IReadOnlyList<EntrepriseConnue>> ListerLesEntreprisesAsync(CancellationToken annulation);
 
     /// <summary>La candidature de cet identifiant, avec tout son historique et son entreprise, pour la lire ; rien si elle n'existe pas.</summary>
@@ -25,14 +28,24 @@ public interface IDepotDesCandidatures
 /// <summary>Une écriture exclusive dans la base. La quitter sans l'avoir validée l'annule.</summary>
 public interface IEcritureDesCandidatures : IAsyncDisposable
 {
-    /// <summary>L'entreprise de cette clé, si elle est enregistrée.</summary>
+    /// <summary>L'entreprise de cette clé, si elle est enregistrée : ce qui change en elle, son nom, est gardé à la validation.</summary>
     Task<Entreprise?> TrouverLEntrepriseAsync(string cle, CancellationToken annulation);
 
+    /// <summary>Le nombre de candidatures que porte l'entreprise de cet identifiant.</summary>
+    Task<int> CompterLesCandidaturesAsync(int entrepriseId, CancellationToken annulation);
+
     /// <summary>
-    /// La candidature de cet identifiant, avec tout son historique et son entreprise, pour la faire avancer : ce qui
-    /// change en elle, statut et événements ajoutés, est gardé à la validation. Rien si elle n'existe pas.
+    /// La candidature de cet identifiant, avec tout son historique et son entreprise, pour la faire avancer ou la
+    /// modifier : ce qui change en elle (statut, événements ajoutés, entreprise, poste, date d'envoi) est gardé à la
+    /// validation. Rien si elle n'existe pas.
     /// </summary>
     Task<CandidatureSuivie?> TrouverLaCandidatureAsync(int id, CancellationToken annulation);
+
+    /// <summary>
+    /// Supprime la candidature de cet identifiant et tous ses événements, corrections comprises ; son entreprise reste.
+    /// La suppression n'est gardée qu'à la validation. Rend faux si la candidature n'existe pas.
+    /// </summary>
+    Task<bool> SupprimerLaCandidatureAsync(int id, CancellationToken annulation);
 
     /// <summary>Ajoute une entreprise, qui reçoit aussitôt son identifiant.</summary>
     Task AjouterAsync(Entreprise entreprise, CancellationToken annulation);

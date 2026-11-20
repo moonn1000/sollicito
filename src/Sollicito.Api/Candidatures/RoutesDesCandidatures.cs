@@ -5,9 +5,9 @@ using Sollicito.Application.Candidatures;
 namespace Sollicito.Api.Candidatures;
 
 /// <summary>
-/// Les routes des candidatures (#11, #12), derrière les contrôles de l'API comme toutes les autres. Aucune ne porte de
-/// donnée dans son adresse, seulement des identifiants : les textes saisis voyagent dans le corps, et l'écran de saisie
-/// filtre lui-même les entreprises qu'il propose.
+/// Les routes des candidatures (#11, #12, #25), derrière les contrôles de l'API comme toutes les autres. Aucune ne porte
+/// de donnée dans son adresse, seulement des identifiants : les textes saisis voyagent dans le corps, et l'écran de
+/// saisie filtre lui-même les entreprises qu'il propose.
 /// </summary>
 internal static class RoutesDesCandidatures
 {
@@ -25,6 +25,21 @@ internal static class RoutesDesCandidatures
 
     /// <summary>Le titre d'une étape refusée ; le détail suit, champ par champ.</summary>
     public const string TitreDeLEtapeRefusee = "L'étape n'est pas ajoutée à l'historique : corrigez les champs signalés.";
+
+    /// <summary>Le titre d'une correction d'étape refusée par ses champs ; le détail suit, champ par champ.</summary>
+    public const string TitreDeLaCorrectionDEtapeRefusee = "La correction de l'étape n'est pas ajoutée à l'historique : corrigez les champs signalés.";
+
+    /// <summary>Le titre d'une correction d'étape refusée parce que l'étape n'est pas en vigueur ; son motif suit, en détail.</summary>
+    public const string TitreDeLEtapeNonCorrigee = "L'étape n'est pas corrigée.";
+
+    /// <summary>Le titre d'une modification refusée ; le détail suit, champ par champ.</summary>
+    public const string TitreDeLaModificationRefusee = "La candidature n'est pas modifiée : corrigez les champs signalés.";
+
+    /// <summary>Le titre d'une modification qui corrigerait le nom d'une entreprise sans l'accord de l'utilisateur.</summary>
+    public const string TitreDuNomACorriger = "La candidature n'est pas modifiée : ce nom corrigerait celui d'une entreprise enregistrée.";
+
+    /// <summary>Le détail de ce refus : il ne reprend pas le nom saisi, que l'écran connaît.</summary>
+    public const string DetailDuNomACorriger = "Confirmez la correction du nom de l'entreprise pour toutes ses candidatures, ou gardez son nom enregistré.";
 
     public static void Declarer(IEndpointRouteBuilder routes)
     {
@@ -44,6 +59,25 @@ internal static class RoutesDesCandidatures
         routes.MapGet("/api/candidatures/{id:int}", LireLaFicheAsync)
             .WithName("LireLaFicheDUneCandidature")
             .WithSummary("La fiche d'une candidature : son statut, les passages permis et son historique")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithTags("Candidatures");
+
+        routes.MapPut("/api/candidatures/{id:int}", ModifierAsync)
+            .WithName("ModifierUneCandidature")
+            .WithSummary("Corriger l'entreprise, le poste et la date d'envoi d'une candidature, sans toucher à son statut")
+            .WithDescription(
+                "Les champs suivent les règles de l'enregistrement, et l'entreprise est reconnue de nouveau par la clé de "
+                + "son nom. La date d'envoi ne suit pas le premier événement en vigueur de l'historique ; renvoyée "
+                + "inchangée, à la minute près, elle garde l'instant enregistré. Ni le statut ni l'historique ne changent. "
+                + "Un nom de même clé, écrit autrement, corrige le nom de l'entreprise avec corrigerLeNomDeLEntreprise ; "
+                + "sans lui, refusé (409), avec le nom enregistré et le nombre de candidatures concernées.")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithTags("Candidatures");
+
+        routes.MapDelete("/api/candidatures/{id:int}", SupprimerAsync)
+            .WithName("SupprimerUneCandidature")
+            .WithSummary("Supprimer une candidature et tout son historique, définitivement ; son entreprise reste")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithTags("Candidatures");
 
@@ -76,9 +110,19 @@ internal static class RoutesDesCandidatures
             .ProducesProblem(StatusCodes.Status404NotFound)
             .WithTags("Candidatures");
 
+        routes.MapPost("/api/candidatures/{id:int}/etapes/{etape:int}/correction", CorrigerUneEtapeAsync)
+            .WithName("CorrigerUneEtape")
+            .WithSummary("Corriger une étape de l'historique : sa correction s'y ajoute et la désigne, sans changer le statut")
+            .WithDescription(
+                "La correction suit les règles d'une étape. L'étape corrigée reste dans l'historique, marquée comme "
+                + "corrigée. Refusée (409) si l'étape n'est pas la version en vigueur : déjà corrigée, ou inconnue.")
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithTags("Candidatures");
+
         routes.MapGet("/api/entreprises", ListerLesEntreprisesAsync)
             .WithName("ListerLesEntreprises")
-            .WithSummary("Les entreprises déjà enregistrées, que l'écran de saisie propose")
+            .WithSummary("Les entreprises qu'une candidature porte encore, que les écrans de saisie et de modification proposent")
             .WithTags("Entreprises");
     }
 
@@ -102,6 +146,19 @@ internal static class RoutesDesCandidatures
         CancellationToken annulation) =>
         await suivi.LireLaFicheAsync(id, annulation) is { } fiche ? TypedResults.Ok(fiche) : Introuvable();
 
+    private static async Task<Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult>> ModifierAsync(
+        int id,
+        SaisieDUneModification saisie,
+        ModificationDesCandidatures modification,
+        CancellationToken annulation) =>
+        Repondre(await modification.ModifierAsync(id, saisie, annulation), TitreDeLaModificationRefusee);
+
+    private static async Task<Results<NoContent, ProblemHttpResult>> SupprimerAsync(
+        int id,
+        ModificationDesCandidatures modification,
+        CancellationToken annulation) =>
+        await modification.SupprimerAsync(id, annulation) ? TypedResults.NoContent() : Introuvable();
+
     private static async Task<Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult>> ChangerLeStatutAsync(
         int id,
         SaisieDUnStatut saisie,
@@ -123,12 +180,24 @@ internal static class RoutesDesCandidatures
         CancellationToken annulation) =>
         Repondre(await suivi.NoterUneEtapeAsync(id, saisie, annulation), TitreDeLEtapeRefusee);
 
+    private static async Task<Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult>> CorrigerUneEtapeAsync(
+        int id,
+        int etape,
+        SaisieDUneEtape saisie,
+        SuiviDesCandidatures suivi,
+        CancellationToken annulation) =>
+        Repondre(await suivi.CorrigerUneEtapeAsync(id, etape, saisie, annulation), TitreDeLaCorrectionDEtapeRefusee, TitreDeLEtapeNonCorrigee);
+
     private static async Task<Ok<IReadOnlyList<EntrepriseConnue>>> ListerLesEntreprisesAsync(IDepotDesCandidatures depot, CancellationToken annulation) =>
         TypedResults.Ok(await depot.ListerLesEntreprisesAsync(annulation));
 
     // La fiche à jour (200), les refus d'une saisie (400), une candidature introuvable (404), une action que l'état de
-    // la candidature ne permet pas (409, avec son motif en détail). Le titre est celui du refus, 400 ou 409.
-    private static Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult> Repondre(ResultatDuSuivi resultat, string titreDuRefus) =>
+    // la candidature ne permet pas (409, avec son motif en détail). Le titre est celui du refus, 400 ou 409, sauf titre
+    // propre au 409.
+    private static Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult> Repondre(
+        ResultatDuSuivi resultat,
+        string titreDuRefus,
+        string? titreDuConflit = null) =>
         resultat switch
         {
             ResultatDuSuivi.Fait fait => TypedResults.Ok(fait.Fiche),
@@ -136,8 +205,18 @@ internal static class RoutesDesCandidatures
             ResultatDuSuivi.Introuvable => Introuvable(),
             ResultatDuSuivi.NonPermis nonPermis => TypedResults.Problem(
                 statusCode: StatusCodes.Status409Conflict,
-                title: titreDuRefus,
+                title: titreDuConflit ?? titreDuRefus,
                 detail: nonPermis.Motif),
+            // Le nom enregistré, lu en base, et le nombre de candidatures concernées ; jamais le nom saisi.
+            ResultatDuSuivi.NomACorriger nomACorriger => TypedResults.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: TitreDuNomACorriger,
+                detail: DetailDuNomACorriger,
+                extensions: new Dictionary<string, object?>(StringComparer.Ordinal)
+                {
+                    ["entreprise"] = nomACorriger.Entreprise,
+                    ["candidatures"] = nomACorriger.Candidatures,
+                }),
             _ => throw new UnreachableException(),
         };
 

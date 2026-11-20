@@ -27,11 +27,13 @@ export function deStatut(statut: StatutDeCandidature): string {
 
 /**
  * Ce que dit un événement de l'historique, en une phrase : « Statut passé d'Envoyée à Entretien », « Correction :
- * retour de Refusée à Entretien », « Entretien ». La note d'une étape s'affiche à part.
+ * retour de Refusée à Entretien », « Entretien », « Correction : Entretien » pour une étape corrigée (#25). La note
+ * d'une étape s'affiche à part.
  */
 export function decrireLEvenement(evenement: EvenementDeLHistorique): string {
   if (evenement.sorte === "etape") {
-    return LIBELLES_DES_TYPES_D_ETAPE[evenement.type] ?? evenement.type;
+    const type = LIBELLES_DES_TYPES_D_ETAPE[evenement.type] ?? evenement.type;
+    return evenement.corrige === null ? type : `Correction : ${type}`;
   }
 
   const vers = LIBELLES_DES_STATUTS[evenement.nouveau];
@@ -69,9 +71,9 @@ export function heureSaisieDe(date: Date): string {
 export const PROPOSITIONS_AU_PLUS = 5;
 
 /**
- * Les entreprises déjà enregistrées dont le nom contient le texte saisi, sans tenir compte des accents ni des
- * majuscules : « lumiere » propose « Lumière Verte SA ». Ce n'est qu'une aide à la saisie : l'API reconnaît seule
- * l'entreprise, par la clé de son nom.
+ * Parmi les entreprises connues, celles qu'une candidature porte encore, celles dont le nom contient le texte saisi,
+ * sans tenir compte des accents ni des majuscules : « lumiere » propose « Lumière Verte SA ». Ce n'est qu'une aide à
+ * la saisie : l'API reconnaît seule l'entreprise, par la clé de son nom.
  */
 export function proposerDesEntreprises(connues: readonly EntrepriseConnue[], saisie: string): EntrepriseConnue[] {
   const cherche = simplifier(saisie);

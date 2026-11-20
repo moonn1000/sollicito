@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-/** Les attributs qu'un champ de formulaire reçoit de son cadre : son nom, et ses refus comme description. */
+/** Les attributs qu'un champ de formulaire reçoit de son cadre : son nom, et son aide et ses refus comme description. */
 export interface AttributsDuChamp {
   id: string;
   name: string;
@@ -9,31 +9,42 @@ export interface AttributsDuChamp {
 }
 
 /**
- * Un champ de formulaire, son libellé et ses refus, que le champ désigne comme sa description (`aria-describedby`) :
- * l'écran de saisie d'une candidature (#11) et la note d'une étape (#12) s'en servent. Le refus s'affiche comme du
- * texte, à côté du champ.
+ * Un champ de formulaire, son libellé, une aide facultative et ses refus, que le champ désigne comme sa description
+ * (`aria-describedby`) : l'écran de saisie d'une candidature (#11), sa modification (#25) et la note d'une étape (#12)
+ * s'en servent. L'aide et le refus s'affichent comme du texte, à côté du champ.
  */
 export function Champ({
   id,
   libelle,
+  aide,
   refus,
   children,
 }: {
   id: string;
   libelle: string;
+  /** Ce qu'il faut savoir avant de remplir le champ, par exemple une limite. */
+  aide?: string;
   refus: string[] | undefined;
   children: (attributs: AttributsDuChamp) => ReactNode;
 }) {
   const refuse = refus !== undefined && refus.length > 0;
+  const idDeLAide = `${id}-aide`;
   const idDuRefus = `${id}-refus`;
+  const description = [aide === undefined ? undefined : idDeLAide, refuse ? idDuRefus : undefined].filter(Boolean).join(" ");
   return (
     <div className={refuse ? "champ champ-refuse" : "champ"}>
       <label htmlFor={id}>{libelle}</label>
       {children({
         id,
         name: id,
-        ...(refuse ? { "aria-invalid": true, "aria-describedby": idDuRefus } : {}),
+        ...(refuse ? { "aria-invalid": true } : {}),
+        ...(description.length > 0 ? { "aria-describedby": description } : {}),
       })}
+      {aide !== undefined && (
+        <p className="aide" id={idDeLAide}>
+          {aide}
+        </p>
+      )}
       {refuse && (
         <p className="refus" id={idDuRefus}>
           {refus.join(" ")}

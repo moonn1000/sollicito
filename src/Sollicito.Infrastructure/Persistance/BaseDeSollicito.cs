@@ -64,6 +64,7 @@ public sealed class BaseDeSollicito(DbContextOptions<BaseDeSollicito> options) :
             candidature.Ignore(c => c.Historique);
             candidature.Ignore(c => c.PassagesPermis);
             candidature.Ignore(c => c.ChangementACorriger);
+            candidature.Ignore(c => c.PremierEvenement);
         });
 
         modelBuilder.Entity<EvenementDeCandidature>(evenement =>
@@ -90,6 +91,11 @@ public sealed class BaseDeSollicito(DbContextOptions<BaseDeSollicito> options) :
         {
             etape.Property(e => e.Type).HasConversion<string>().HasMaxLength(20);
             etape.Property(e => e.Note).HasMaxLength(Etape.LongueurMaximaleDeLaNote);
+            // Une correction d'étape (#25) désigne l'étape qu'elle corrige, qui n'est corrigée qu'une fois : l'index est
+            // unique. Sa colonne est à part de celle des changements de statut, qui ne désignent que des changements.
+            // NO ACTION, comme pour les changements : la suppression d'une candidature emporte toute la chaîne en une
+            // instruction.
+            etape.HasOne(e => e.Corrige).WithOne().HasForeignKey<Etape>("EtapeCorrigeeId").OnDelete(DeleteBehavior.NoAction);
         });
     }
 

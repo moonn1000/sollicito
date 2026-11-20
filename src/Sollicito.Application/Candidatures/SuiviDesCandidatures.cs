@@ -4,7 +4,7 @@ namespace Sollicito.Application.Candidatures;
 
 /// <summary>
 /// Faire avancer une candidature et relire son historique (#12, absorbe #41) : lire sa fiche, changer son statut,
-/// corriger son dernier changement, noter une étape. Chaque action lit la candidature et l'écrit dans une même
+/// corriger son dernier changement, noter une étape, et corriger une étape (#25). Chaque action lit la candidature et l'écrit dans une même
 /// écriture exclusive : deux actions simultanées ne partent jamais du même état. L'horloge date les changements de
 /// statut, et donne le fuseau où se lit l'heure saisie d'une étape.
 /// </summary>
@@ -27,6 +27,9 @@ public sealed class SuiviDesCandidatures(IDepotDesCandidatures depot, TimeProvid
 
     /// <summary>Le message d'une date et d'une heure d'étape illisibles.</summary>
     public const string DateIllisible = "La date et l'heure s'écrivent AAAA-MM-JJTHH:MM, par exemple 2026-11-20T10:00.";
+
+    /// <summary>Le message d'une étape à corriger qui n'est pas la version en vigueur, ou qui n'existe pas (#25).</summary>
+    public const string EtapePasEnVigueur = "Cette étape n'est pas la version en vigueur : elle a déjà été corrigée, ou la fiche a changé entre-temps.";
 
     /// <summary>La fiche de la candidature, ou rien si elle n'existe pas.</summary>
     public async Task<FicheDUneCandidature?> LireLaFicheAsync(int id, CancellationToken annulation)
@@ -93,7 +96,19 @@ public sealed class SuiviDesCandidatures(IDepotDesCandidatures depot, TimeProvid
     }
 
     /// <summary>Note une étape, qui ne change pas le statut, ou rend les refus de ses champs, sans rien noter.</summary>
-    public async Task<ResultatDuSuivi> NoterUneEtapeAsync(int id, SaisieDUneEtape saisie, CancellationToken annulation)
+    public Task<ResultatDuSuivi> NoterUneEtapeAsync(int id, SaisieDUneEtape saisie, CancellationToken annulation) =>
+        EcrireUneEtapeAsync(id, saisie, corrigee: null, annulation);
+
+    /// <summary>
+    /// Corrige une étape (#25), si c'est bien la version en vigueur que l'écran montrait : sa correction, aux règles d'une
+    /// étape, s'ajoute à l'historique et la désigne. Une étape déjà corrigée, ou qui n'existe pas, est refusée sans rien
+    /// changer ; sinon, les refus des champs, comme pour une étape notée.
+    /// </summary>
+    public Task<ResultatDuSuivi> CorrigerUneEtapeAsync(int id, int etape, SaisieDUneEtape saisie, CancellationToken annulation) =>
+        EcrireUneEtapeAsync(id, saisie, etape, annulation);
+
+    // Une étape notée, ou la correction de l'étape « corrigee » : mêmes champs, mêmes règles, même écriture exclusive.
+    private async Task<ResultatDuSuivi> EcrireUneEtapeAsync(int id, SaisieDUneEtape saisie, int? corrigee, CancellationToken annulation)
     {
         ArgumentNullException.ThrowIfNull(saisie);
 
@@ -115,6 +130,16 @@ public sealed class SuiviDesCandidatures(IDepotDesCandidatures depot, TimeProvid
         }
 
         var candidature = suivie.Candidature;
+        Etape? aCorriger = null;
+        if (corrigee is { } idDeLEtape)
+        {
+            aCorriger = candidature.EtapeEnVigueur(idDeLEtape);
+            if (aCorriger is null)
+            {
+                return new ResultatDuSuivi.NonPermis(EtapePasEnVigueur);
+            }
+        }
+
         if (!EssayerDeLireLaDate(saisie.SurvenuLe, candidature.EnvoyeeLe, out var survenueLe, out var erreur))
         {
             refus[SaisieDUneEtape.Champs.SurvenuLe] = [erreur];
@@ -131,7 +156,15 @@ public sealed class SuiviDesCandidatures(IDepotDesCandidatures depot, TimeProvid
             return new ResultatDuSuivi.Refuse(refus);
         }
 
-        candidature.NoterUneEtape(type, survenueLe, note);
+        if (aCorriger is null)
+        {
+            candidature.NoterUneEtape(type, survenueLe, note);
+        }
+        else
+        {
+            candidature.CorrigerUneEtape(aCorriger, type, survenueLe, note);
+        }
+
         await ecriture.ValiderAsync(annulation);
         return new ResultatDuSuivi.Fait(FicheDUneCandidature.De(suivie));
     }
@@ -226,4 +259,12 @@ public abstract record ResultatDuSuivi
 
     /// <summary>L'action n'est pas permise dans l'état présent de la candidature, pour ce motif lisible. Rien ne change.</summary>
     public sealed record NonPermis(string Motif) : ResultatDuSuivi;
+
+    /// <summary>
+    /// La modification corrigerait le nom affiché d'une entreprise (#25, ADR-0007) et attend l'accord de l'utilisateur.
+    /// Rien ne change.
+    /// </summary>
+    /// <param name="Entreprise">L'entreprise que reconnaît le nom saisi, sous son nom enregistré.</param>
+    /// <param name="Candidatures">Les candidatures qui afficheraient le nom corrigé, celle qu'on modifie comprise.</param>
+    public sealed record NomACorriger(EntrepriseConnue Entreprise, int Candidatures) : ResultatDuSuivi;
 }

@@ -185,7 +185,8 @@ public sealed class CandidaturesTests
         Assert.Equal([champ], refus.Select(paire => paire.Key));
         Assert.Equal([message], refus[champ]!.AsArray().Select(texte => texte!.GetValue<string>()));
         Assert.Empty(await api.ListerAsync());
-        Assert.Empty(await api.ListerLesEntreprisesAsync());
+        // Aucune entreprise créée, pas même hors des propositions, qui ne montrent que celles qu'une candidature porte.
+        Assert.Empty(await api.EntreprisesEnBaseAsync());
     }
 
     [Fact]

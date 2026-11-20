@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Sollicito.Domain.Candidatures;
 using Sollicito.Domain.Entreprises;
 
@@ -64,18 +65,36 @@ public sealed class EnregistrementDesCandidatures(IDepotDesCandidatures depot, T
             candidature.Statut));
     }
 
-    private bool EssayerDeLireLEnvoi(string? saisie, DateTime maintenant, out DateTime envoyeeLe, out string erreur)
+    /// <summary>
+    /// Lit la forme d'une date et d'une heure d'envoi saisies, requises : <c>AAAA-MM-JJTHH:MM</c>, les secondes en
+    /// option. Rend l'heure saisie, sans fuseau, ou le motif du refus. La modification d'une candidature (#25) la lit de
+    /// même.
+    /// </summary>
+    internal static bool EssayerDeLireLaFormeDeLEnvoi(string? saisie, out DateTime heureSaisie, [NotNullWhen(false)] out string? erreur)
     {
-        envoyeeLe = default;
+        heureSaisie = default;
         if (string.IsNullOrWhiteSpace(saisie))
         {
             erreur = EnvoiManquant;
             return false;
         }
 
-        if (!HeureSaisie.EssayerDeLire(saisie, out var heureSaisie))
+        if (!HeureSaisie.EssayerDeLire(saisie, out heureSaisie))
         {
             erreur = EnvoiIllisible;
+            return false;
+        }
+
+        erreur = null;
+        return true;
+    }
+
+    private bool EssayerDeLireLEnvoi(string? saisie, DateTime maintenant, out DateTime envoyeeLe, out string erreur)
+    {
+        envoyeeLe = default;
+        if (!EssayerDeLireLaFormeDeLEnvoi(saisie, out var heureSaisie, out var illisible))
+        {
+            erreur = illisible;
             return false;
         }
 

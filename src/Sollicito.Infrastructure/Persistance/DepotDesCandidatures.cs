@@ -30,8 +30,11 @@ internal sealed class DepotDesCandidatures(BaseDeSollicito baseDeSollicito) : ID
                 candidature.Statut))
             .ToListAsync(annulation);
 
+    // Seules celles qu'une candidature porte encore : une entreprise quittée ou dont la dernière candidature est
+    // supprimée reste en base, mais n'est plus proposée (#25).
     public async Task<IReadOnlyList<EntrepriseConnue>> ListerLesEntreprisesAsync(CancellationToken annulation) =>
         await baseDeSollicito.Entreprises.AsNoTracking()
+            .Where(entreprise => baseDeSollicito.Candidatures.Any(candidature => candidature.EntrepriseId == entreprise.Id))
             .OrderBy(entreprise => entreprise.Cle)
             .ThenBy(entreprise => entreprise.Id)
             .Select(entreprise => new EntrepriseConnue(entreprise.Id, entreprise.Nom))
@@ -64,8 +67,16 @@ internal sealed class DepotDesCandidatures(BaseDeSollicito baseDeSollicito) : ID
         public Task<Entreprise?> TrouverLEntrepriseAsync(string cle, CancellationToken annulation) =>
             baseDeSollicito.Entreprises.SingleOrDefaultAsync(entreprise => entreprise.Cle == cle, annulation);
 
+        public Task<int> CompterLesCandidaturesAsync(int entrepriseId, CancellationToken annulation) =>
+            baseDeSollicito.Candidatures.CountAsync(candidature => candidature.EntrepriseId == entrepriseId, annulation);
+
         public Task<CandidatureSuivie?> TrouverLaCandidatureAsync(int id, CancellationToken annulation) =>
             ChargerAsync(baseDeSollicito, id, annulation);
+
+        // Une seule instruction, dans la transaction de l'écriture : la base emporte les événements en cascade, et ne
+        // vérifie l'auto-référence des corrections (NO ACTION) qu'en fin d'instruction, quand tous sont partis.
+        public async Task<bool> SupprimerLaCandidatureAsync(int id, CancellationToken annulation) =>
+            await baseDeSollicito.Candidatures.Where(candidature => candidature.Id == id).ExecuteDeleteAsync(annulation) == 1;
 
         public async Task AjouterAsync(Entreprise entreprise, CancellationToken annulation)
         {
