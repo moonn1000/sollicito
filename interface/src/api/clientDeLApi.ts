@@ -169,7 +169,7 @@ export interface ClientDeLApi {
   lireEtat(): Promise<EtatDeLApplication>;
   /** Les candidatures, les plus récentes d'abord. */
   listerLesCandidatures(): Promise<Candidature[]>;
-  /** Les entreprises déjà enregistrées, que l'écran de saisie propose. */
+  /** Les entreprises qu'une candidature porte encore, que les écrans de saisie et de modification proposent. */
   listerLesEntreprises(): Promise<EntrepriseConnue[]>;
   /** Enregistre une candidature, ou rend les refus de ses champs. */
   enregistrerUneCandidature(saisie: SaisieDUneCandidature): Promise<ResultatDeLEnregistrement>;

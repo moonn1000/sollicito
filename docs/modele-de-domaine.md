@@ -380,7 +380,7 @@ La fiche d'une candidature (#12) mène à sa modification et à sa suppression (
   - La saisie d'une candidature (#11), elle, garde le nom de la première saisie, sans avertissement.
   - La fiche et l'annonce de la modification montrent le nom de l'entreprise rattachée.
 
-**Supprimer** retire la candidature, après une confirmation affichée dans l'interface, jamais par une boîte du navigateur. La suppression est définitive : elle emporte tous les événements de la candidature, corrections comprises, et, quand elles entreront en base (#14), ses relances. Elle laisse son entreprise, que la saisie propose toujours, et son offre (#38). Une candidature close se supprime comme une autre.
+**Supprimer** retire la candidature, après une confirmation affichée dans l'interface, jamais par une boîte du navigateur. La suppression est définitive : elle emporte tous les événements de la candidature, corrections comprises, et, quand elles entreront en base (#14), ses relances. Elle laisse son entreprise en base, et son offre (#38) ; une entreprise qu'aucune candidature ne porte plus n'est plus proposée. Une candidature close se supprime comme une autre.
 
 **Une étape mal datée** qui borne la date d'envoi se corrige (voir « Corriger une étape ») : corrigée, elle ne la borne plus.
 

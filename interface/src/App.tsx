@@ -68,7 +68,8 @@ export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
   const quandEnregistree = (candidature: Candidature) =>
     annoncer(`Candidature enregistrée : ${candidature.poste}, chez ${candidature.entreprise.nom}.`, { nom: "tableau" });
 
-  // L'annonce nomme l'entreprise rattachée, celle que l'API a reconnue : son nom est celui de sa première saisie.
+  // L'annonce nomme l'entreprise rattachée, celle que l'API a reconnue : sous le nom de sa première saisie, ou sous celui
+  // que la modification vient de corriger (ADR-0007).
   const quandModifiee = (fiche: Fiche) =>
     annoncer(`Candidature modifiée : ${fiche.poste}, chez ${fiche.entreprise.nom}.`, { nom: "fiche", candidature: fiche.id });
 
