@@ -172,7 +172,13 @@ test("la correction vise le changement que la fiche propose de corriger, et s'an
     correction: { changement: 12, de: "Entretien", retourA: "Envoyee" },
     historique: [changementFictif({ id: 12 })],
   });
-  const { client } = afficher(clientSimule({ lireLaFiche: async () => fiche }));
+  // La correction s'ajoute à l'historique : la fiche rendue a un événement de plus.
+  const corrigee = ficheFictive({
+    historique: [changementFictif({ id: 12, estCorrige: true }), changementFictif({ id: 13, ancien: "Entretien", nouveau: "Envoyee", corrige: 12 })],
+  });
+  const { client } = afficher(
+    clientSimule({ lireLaFiche: async () => fiche, corrigerLeDernierChangement: vi.fn(async () => ({ faite: true as const, fiche: corrigee })) }),
+  );
 
   fireEvent.click(await screen.findByRole("button", { name: "Corriger le dernier changement : revenir à Envoyée" }));
 
@@ -223,4 +229,44 @@ test("une action sur le statut efface l'annonce de la dernière étape ajoutée,
   expect(await screen.findByText("Statut changé : Refusée.")).toBeDefined();
   expect(screen.queryByText("Étape ajoutée à l'historique : Entretien.")).toBeNull();
   expect(screen.getAllByRole("status")).toHaveLength(1);
+});
+
+test("une réponse plus ancienne, arrivée après une plus récente, ne remplace pas la fiche montrée", async () => {
+  let repondreALaNote: () => void = () => {};
+  const ancienne = ficheFictive({ historique: [etapeFictive({ id: 2 })] });
+  const recente = ficheFictive({
+    statut: "Refusee",
+    passagesPermis: [],
+    historique: [etapeFictive({ id: 2 }), changementFictif({ id: 3, nouveau: "Refusee" })],
+  });
+  afficher(
+    clientSimule({
+      noterUneEtape: () => new Promise((resoudre) => (repondreALaNote = () => resoudre({ notee: true, fiche: ancienne }))),
+      changerLeStatut: async () => ({ faite: true, fiche: recente }),
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Ajouter à l'historique" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+  expect(await screen.findByText("Statut changé : Refusée.")).toBeDefined();
+  repondreALaNote();
+
+  await waitFor(() => expect(screen.getByRole("button", { name: "Ajouter à l'historique" })).toBeDefined());
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(resume().Statut).toBe("Refusée");
+  expect(screen.getByText("La candidature est close : son statut ne change plus.")).toBeDefined();
+});
+
+test("si la fiche ne peut être relue après un refus, la fiche le dit avec le motif", async () => {
+  const lireLaFiche = vi
+    .fn<ReturnType<typeof clientSimule>["lireLaFiche"]>()
+    .mockResolvedValueOnce(ficheFictive())
+    .mockRejectedValueOnce(new ErreurDeLApi(500));
+  afficher(clientSimule({ lireLaFiche, changerLeStatut: async () => ({ faite: false, motif: "La candidature est déjà au statut Refusée." }) }));
+
+  fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "La candidature est déjà au statut Refusée. La fiche n'a pas pu être relue : fermez Sollicito, puis relancez-le.",
+  );
 });

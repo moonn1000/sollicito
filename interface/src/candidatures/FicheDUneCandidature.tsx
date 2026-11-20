@@ -17,6 +17,8 @@ type Message = { sorte: "annonce" | "alerte"; texte: string };
 
 const REESSAYER = "Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.";
 
+const PAS_RELUE = "La fiche n'a pas pu être relue : fermez Sollicito, puis relancez-le.";
+
 /**
  * La fiche d'une candidature (#12), ouverte depuis le tableau de bord : son résumé, son statut et les seuls passages
  * que le diagramme d'états permet, que l'API donne avec la fiche ; la correction du dernier changement ; une note
@@ -60,6 +62,14 @@ export function FicheDUneCandidature({
     }
   }, [actionsTerminees]);
 
+  // Une fiche reçue ne remplace la fiche montrée que si elle n'est pas plus ancienne. L'historique se fait par ajouts
+  // seulement : une note et un changement de statut lancés ensemble peuvent répondre dans le désordre, et la réponse la
+  // plus récente est celle qui porte le plus d'événements.
+  const montrer = (recue: Fiche) =>
+    setChargement((avant) =>
+      avant.etape === "prete" && avant.fiche.historique.length > recue.historique.length ? avant : { etape: "prete", fiche: recue },
+    );
+
   useEffect(() => {
     let active = true;
     client.lireLaFiche(candidature).then(
@@ -94,12 +104,12 @@ export function FicheDUneCandidature({
       }
 
       if (resultat.faite) {
-        setChargement({ etape: "prete", fiche: resultat.fiche });
+        montrer(resultat.fiche);
         setMessage({ sorte: "annonce", texte: annonce(resultat.fiche) });
       } else {
         // Refusée par l'API : la fiche montrée n'était plus à jour. On la relit, et le motif reste affiché.
-        setMessage({ sorte: "alerte", texte: resultat.motif });
-        await relire();
+        const relue = await relire();
+        setMessage({ sorte: "alerte", texte: relue ? resultat.motif : `${resultat.motif} ${PAS_RELUE}` });
       }
     } catch (erreur) {
       if (!affichee.current) {
@@ -120,16 +130,19 @@ export function FicheDUneCandidature({
     }
   }
 
-  async function relire() {
+  // Relit la fiche ; rend faux si elle n'a pas pu être relue.
+  async function relire(): Promise<boolean> {
     try {
       const fiche = await client.lireLaFiche(candidature);
       if (affichee.current) {
-        setChargement({ etape: "prete", fiche });
+        montrer(fiche);
       }
+      return true;
     } catch (erreur) {
       if (affichee.current && estIntrouvable(erreur)) {
         setChargement({ etape: "introuvable" });
       }
+      return false;
     }
   }
 
@@ -231,7 +244,7 @@ export function FicheDUneCandidature({
             autresActions={actionsTerminees}
             quandNotee={(fiche) => {
               setMessage(undefined);
-              setChargement({ etape: "prete", fiche });
+              montrer(fiche);
             }}
           />
           <Historique envoyeeLe={fiche.envoyeeLe} evenements={fiche.historique} />

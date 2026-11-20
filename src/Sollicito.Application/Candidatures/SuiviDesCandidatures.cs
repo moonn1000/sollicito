@@ -97,6 +97,16 @@ public sealed class SuiviDesCandidatures(IDepotDesCandidatures depot, TimeProvid
     {
         ArgumentNullException.ThrowIfNull(saisie);
 
+        // Le type et la note se lisent sans la candidature ; la date, elle, se compare à son envoi.
+        var refus = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        if (string.IsNullOrEmpty(saisie.Type) || !EssayerDeLireLeNom(saisie.Type, out TypeDEtape type))
+        {
+            type = default;
+            refus[SaisieDUneEtape.Champs.Type] = [TypeInconnu];
+        }
+
+        var noteAdmise = Etape.EssayerDeLireLaNote(saisie.Note, out var note, out var erreurDeLaNote);
+
         await using var ecriture = await depot.CommencerUneEcritureAsync(annulation);
         var suivie = await ecriture.TrouverLaCandidatureAsync(id, annulation);
         if (suivie is null)
@@ -105,21 +115,15 @@ public sealed class SuiviDesCandidatures(IDepotDesCandidatures depot, TimeProvid
         }
 
         var candidature = suivie.Candidature;
-        var refus = new Dictionary<string, string[]>(StringComparer.Ordinal);
-        if (string.IsNullOrEmpty(saisie.Type) || !EssayerDeLireLeNom(saisie.Type, out TypeDEtape type))
-        {
-            type = default;
-            refus[SaisieDUneEtape.Champs.Type] = [TypeInconnu];
-        }
-
         if (!EssayerDeLireLaDate(saisie.SurvenuLe, candidature.EnvoyeeLe, out var survenueLe, out var erreur))
         {
             refus[SaisieDUneEtape.Champs.SurvenuLe] = [erreur];
         }
 
-        if (!Etape.EssayerDeLireLaNote(saisie.Note, out var note, out erreur))
+        // Les refus suivent l'ordre des champs du formulaire : type, date, note.
+        if (!noteAdmise)
         {
-            refus[SaisieDUneEtape.Champs.Note] = [erreur];
+            refus[SaisieDUneEtape.Champs.Note] = [erreurDeLaNote!];
         }
 
         if (refus.Count > 0)
