@@ -9,7 +9,7 @@ type Chargement = { etape: "chargement" } | { etape: "prete"; fiche: Fiche } | {
  * L'écran de modification d'une candidature (#25), ouvert depuis sa fiche : son entreprise, son poste et sa date
  * d'envoi, remplis d'avance, la date à la minute, dans le fuseau du poste. Le statut ne se modifie pas ici : il avance
  * depuis la fiche. L'API valide chaque champ avec les règles de la saisie, et la date d'envoi ne suit pas le premier
- * événement de l'historique, que l'écran rappelle sous le champ.
+ * événement en vigueur de l'historique, que l'écran rappelle sous le champ.
  */
 export function ModificationDUneCandidature({
   client,
@@ -120,10 +120,15 @@ export function ModificationDUneCandidature({
   );
 }
 
-// L'instant du premier événement de l'historique, quelle que soit sa sorte ; rien s'il n'y en a aucun.
+// L'instant du premier événement en vigueur de l'historique, quelle que soit sa sorte : un événement marqué comme
+// corrigé ne compte plus. Rien s'il n'y en a aucun.
 function premierEvenement(fiche: Fiche): string | undefined {
   let premier: string | undefined;
   for (const evenement of fiche.historique) {
+    if (evenement.estCorrige) {
+      continue;
+    }
+
     if (premier === undefined || Date.parse(evenement.survenuLe) < Date.parse(premier)) {
       premier = evenement.survenuLe;
     }

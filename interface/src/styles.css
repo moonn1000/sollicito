@@ -443,3 +443,25 @@ button {
 .confirmation p {
   margin: 0 0 0.75rem;
 }
+
+/* Corriger une étape de l'historique (#25) : le bouton à droite de l'étape, le formulaire à sa place, sur toute la
+   largeur. */
+
+.historique .corriger {
+  margin-left: auto;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.9rem;
+}
+
+.correction-d-etape {
+  flex-basis: 100%;
+  margin-top: 0.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--bordure);
+  border-radius: 0.4rem;
+}
+
+.correction-d-etape > p {
+  margin: 0 0 0.75rem;
+  font-weight: 600;
+}

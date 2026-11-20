@@ -96,13 +96,14 @@ test("l'historique commence à l'envoi, puis suit l'ordre de l'API, et marque le
 
   const historique = await screen.findByRole("heading", { level: 3, name: "Historique" });
   const lignes = within(historique.closest("section")!).getAllByRole("listitem");
+  // Chaque étape en vigueur porte son bouton « Corriger » (#25).
   expect(lignes.map((ligne) => ligne.textContent)).toEqual([
     "27/03/2026 23:30Candidature envoyée",
-    "10/11/2026 10:00AppelRappel de la responsable\nmardi matin",
+    "10/11/2026 10:00AppelRappel de la responsable\nmardi matinCorriger",
     "18/11/2026 14:30Statut passé d'Envoyée à Entretien",
     "18/11/2026 15:30Statut passé d'Entretien à Refuséecorrigé",
     "18/11/2026 15:35Correction : retour de Refusée à Entretien",
-    "01/12/2026 09:30Entretien",
+    "01/12/2026 09:30EntretienCorriger",
   ]);
   expect(within(lignes[3]!).getByText("corrigé").className).toBe("marque");
   expect(lignes[1]!.querySelector("time")?.getAttribute("dateTime")).toBe("2026-11-10T09:00:00Z");
@@ -397,4 +398,149 @@ test("une autre action ferme la confirmation de la suppression, qui portait sur 
   expect(await screen.findByText("Statut changé : Entretien.")).toBeDefined();
   expect(confirmation()).toBeNull();
   expect(client.supprimerUneCandidature).not.toHaveBeenCalled();
+});
+
+// Les étapes d'une fiche dont l'appel du 10/11 a été corrigé une fois : l'appel, marqué comme corrigé, et sa correction.
+function ficheAvecUneEtapeCorrigee() {
+  return ficheFictive({
+    historique: [
+      etapeFictive({ id: 2, survenuLe: "2026-11-10T09:00:00Z", type: "Appel", note: "Rappel.", estCorrige: true }),
+      etapeFictive({ id: 3, survenuLe: "2026-11-11T09:00:00Z", type: "Entretien", note: "Premier entretien.", corrige: 2 }),
+    ],
+  });
+}
+
+test("une étape corrigée reste dans l'historique, marquée comme corrigée ; seule la version en vigueur se corrige", async () => {
+  afficher(clientSimule({ lireLaFiche: async () => ficheAvecUneEtapeCorrigee() }));
+
+  const historique = (await screen.findByRole("heading", { level: 3, name: "Historique" })).closest("section")!;
+  const lignes = within(historique).getAllByRole("listitem");
+  expect(lignes.map((ligne) => ligne.textContent)).toEqual([
+    "27/03/2026 23:30Candidature envoyée",
+    "10/11/2026 10:00AppelcorrigéeRappel.",
+    "11/11/2026 10:00Correction : EntretienPremier entretien.Corriger",
+  ]);
+  expect(within(historique).getAllByRole("button", { name: /^Corriger l'étape/u }).map((bouton) => bouton.getAttribute("aria-label"))).toEqual([
+    "Corriger l'étape : Correction : Entretien, 11/11/2026 10:00",
+  ]);
+});
+
+test("corriger une étape ouvre son formulaire prérempli, envoie la correction, puis l'annonce et ramène le focus sur l'historique", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, survenuLe: "2026-11-10T09:00:00Z", type: "Appel", note: "Rappel." })] });
+  const apres = ficheAvecUneEtapeCorrigee();
+  const { client } = afficher(
+    clientSimule({ lireLaFiche: async () => fiche, corrigerUneEtape: vi.fn(async () => ({ issue: "faite" as const, fiche: apres })) }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+
+  const formulaire = screen.getByRole("group", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" });
+  const type = within(formulaire).getByLabelText<HTMLSelectElement>("Type");
+  expect(type.value).toBe("Appel");
+  expect(within(formulaire).getByLabelText<HTMLInputElement>("Date et heure").value).toBe("2026-11-10T10:00");
+  expect(within(formulaire).getByLabelText<HTMLTextAreaElement>("Note (facultative)").value).toBe("Rappel.");
+  await waitFor(() => expect(document.activeElement).toBe(type));
+  fireEvent.change(type, { target: { value: "Entretien" } });
+  fireEvent.change(within(formulaire).getByLabelText("Date et heure"), { target: { value: "2026-11-11T10:00" } });
+  fireEvent.click(within(formulaire).getByRole("button", { name: "Enregistrer la correction" }));
+
+  expect((await screen.findByText("Étape corrigée : Entretien.")).getAttribute("role")).toBe("status");
+  expect(client.corrigerUneEtape).toHaveBeenCalledExactlyOnceWith(7, 2, { type: "Entretien", survenuLe: "2026-11-11T10:00", note: "Rappel." });
+  expect(screen.queryByRole("group", { name: /^Corriger l'étape/u })).toBeNull();
+  expect(screen.getByText("Correction : Entretien")).toBeDefined();
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 3, name: "Historique" })));
+  // Le statut n'a pas changé.
+  expect(resume().Statut).toBe("Envoyée");
+});
+
+test("« Annuler » ferme la correction sans rien envoyer et rend le focus à son bouton", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  const { client } = afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" })).getByRole("button", { name: "Annuler" }));
+
+  expect(screen.queryByRole("group", { name: /^Corriger l'étape/u })).toBeNull();
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" })));
+  expect(client.corrigerUneEtape).not.toHaveBeenCalled();
+});
+
+test("les refus d'une correction s'affichent à côté du champ, dans son formulaire, qui reste ouvert", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(
+    clientSimule({
+      lireLaFiche: async () => fiche,
+      corrigerUneEtape: async () => ({ issue: "refusee", refus: { survenuLe: ["La date et l'heure ne peuvent pas précéder l'envoi de la candidature."] } }),
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  const formulaire = screen.getByRole("group", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" });
+  fireEvent.click(within(formulaire).getByRole("button", { name: "Enregistrer la correction" }));
+
+  const date = within(formulaire).getByLabelText("Date et heure");
+  await waitFor(() => expect(date.getAttribute("aria-invalid")).toBe("true"));
+  expect(document.getElementById(date.getAttribute("aria-describedby")!)?.textContent).toBe(
+    "La date et l'heure ne peuvent pas précéder l'envoi de la candidature.",
+  );
+  await waitFor(() => expect(document.activeElement).toBe(date));
+  // Ses champs ont leurs propres identifiants : ceux de la note d'une étape restent libres.
+  expect(date.id).toBe("correction-2-survenuLe");
+  expect(screen.getAllByLabelText("Date et heure")).toHaveLength(2);
+});
+
+test("une étape déjà corrigée ailleurs : la fiche le dit, la relit, et ferme la correction", async () => {
+  const lireLaFiche = vi
+    .fn<ReturnType<typeof clientSimule>["lireLaFiche"]>()
+    .mockResolvedValueOnce(ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] }))
+    .mockResolvedValueOnce(ficheAvecUneEtapeCorrigee());
+  const motif = "Cette étape n'est pas la version en vigueur : elle a déjà été corrigée, ou la fiche a changé entre-temps.";
+  afficher(clientSimule({ lireLaFiche, corrigerUneEtape: async () => ({ issue: "perimee", motif }) }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  fireEvent.click(within(screen.getByRole("group", { name: /^Corriger l'étape/u })).getByRole("button", { name: "Enregistrer la correction" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe(motif);
+  await waitFor(() => expect(screen.getByText("Correction : Entretien")).toBeDefined());
+  expect(screen.queryByRole("group", { name: /^Corriger l'étape/u })).toBeNull();
+  expect(lireLaFiche).toHaveBeenCalledTimes(2);
+});
+
+test("une correction qui échoue se signale dans son formulaire, sans rien perdre", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(clientSimule({ lireLaFiche: async () => fiche, corrigerUneEtape: () => Promise.reject(new Error("panne")) }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  const formulaire = screen.getByRole("group", { name: /^Corriger l'étape/u });
+  fireEvent.change(within(formulaire).getByLabelText("Note (facultative)"), { target: { value: "Note corrigée" } });
+  fireEvent.click(within(formulaire).getByRole("button", { name: "Enregistrer la correction" }));
+
+  expect((await within(formulaire).findByRole("alert")).textContent).toBe(
+    "La correction n'a pas pu être enregistrée. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.",
+  );
+  expect(within(formulaire).getByLabelText<HTMLTextAreaElement>("Note (facultative)").value).toBe("Note corrigée");
+});
+
+test("une correction d'une candidature supprimée entre-temps montre qu'elle n'existe plus", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(clientSimule({ lireLaFiche: async () => fiche, corrigerUneEtape: () => Promise.reject(new ErreurDeLApi(404)) }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  fireEvent.click(within(screen.getByRole("group", { name: /^Corriger l'étape/u })).getByRole("button", { name: "Enregistrer la correction" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe("Cette candidature n'existe pas, ou plus.");
+});
+
+test("une action sur le statut efface l'annonce d'une correction d'étape", async () => {
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(clientSimule({ lireLaFiche: async () => fiche, corrigerUneEtape: async () => ({ issue: "faite", fiche: ficheAvecUneEtapeCorrigee() }) }));
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  fireEvent.click(within(screen.getByRole("group", { name: /^Corriger l'étape/u })).getByRole("button", { name: "Enregistrer la correction" }));
+  expect(await screen.findByText("Étape corrigée : Appel.")).toBeDefined();
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
+
+  expect(await screen.findByText("Statut changé : Entretien.")).toBeDefined();
+  expect(screen.queryByText("Étape corrigée : Appel.")).toBeNull();
+  expect(screen.getAllByRole("status")).toHaveLength(1);
 });

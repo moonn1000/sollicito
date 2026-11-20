@@ -214,3 +214,33 @@ test("une suppression part en DELETE, sans corps, vers la fiche ; toute autre r�
   await expect(creerClientDeLApi(JETON_FICTIF, envoyer).supprimerUneCandidature(0)).rejects.toThrow(RangeError);
   expect(envoyer).toHaveBeenCalledOnce();
 });
+
+test("une correction d'étape part en POST, en JSON, vers l'étape qu'elle corrige, et rend la fiche, les refus ou le motif", async () => {
+  const saisie = { type: "Entretien" as const, survenuLe: "2026-11-11T10:00", note: "Premier entretien." };
+  const envoyer = apiQuiRepond(Response.json(ficheFictive()));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, envoyer).corrigerUneEtape(7, 12, saisie)).toEqual({ issue: "faite", fiche: ficheFictive() });
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/candidatures/7/etapes/12/correction");
+  expect(options?.method).toBe("POST");
+  expect(JSON.parse(String(options?.body))).toEqual(saisie);
+  expect(new Headers(options?.headers).get(EN_TETE_DU_JETON)).toBe(JETON_FICTIF);
+
+  const refus = apiQuiRepond(Response.json({ status: 400, errors: { note: ["La note ne doit pas dépasser 2000 caractères."], poste: ["ignoré"] } }, { status: 400 }));
+  expect(await creerClientDeLApi(JETON_FICTIF, refus).corrigerUneEtape(7, 12, saisie)).toEqual({
+    issue: "refusee",
+    refus: { note: ["La note ne doit pas dépasser 2000 caractères."] },
+  });
+
+  const perimee = apiQuiRepond(Response.json({ title: "L'étape n'est pas corrigée.", detail: "Cette étape n'est pas la version en vigueur.", status: 409 }, { status: 409 }));
+  expect(await creerClientDeLApi(JETON_FICTIF, perimee).corrigerUneEtape(7, 12, saisie)).toEqual({
+    issue: "perimee",
+    motif: "Cette étape n'est pas la version en vigueur.",
+  });
+
+  const illisible = apiQuiRepond(Response.json({ title: "La requête est illisible.", status: 400 }, { status: 400 }));
+  const introuvable = apiQuiRepond(Response.json({ title: "Cette candidature n'existe pas.", status: 404 }, { status: 404 }));
+  await expect(creerClientDeLApi(JETON_FICTIF, illisible).corrigerUneEtape(7, 12, saisie)).rejects.toEqual(new ErreurDeLApi(400));
+  await expect(creerClientDeLApi(JETON_FICTIF, introuvable).corrigerUneEtape(7, 12, saisie)).rejects.toEqual(new ErreurDeLApi(404));
+  await expect(creerClientDeLApi(JETON_FICTIF, envoyer).corrigerUneEtape(7, 0, saisie)).rejects.toThrow(RangeError);
+});

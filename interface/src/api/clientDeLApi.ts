@@ -73,7 +73,7 @@ export interface ChangementDeStatutLu {
   estCorrige: boolean;
 }
 
-/** Une étape, qui ne change pas le statut : un appel, un entretien, un échange. */
+/** Une étape, qui ne change pas le statut : un appel, un entretien, un échange ; notée, ou la correction d'une autre. */
 export interface EtapeLue {
   sorte: "etape";
   id: number;
@@ -81,6 +81,10 @@ export interface EtapeLue {
   survenuLe: string;
   type: TypeDEtape;
   note: string | null;
+  /** Pour une correction (#25), l'identifiant de l'étape corrigée ; rien pour une étape notée. */
+  corrige: number | null;
+  /** Vrai si une correction l'a corrigée depuis : elle reste dans l'historique, marquée comme telle. */
+  estCorrige: boolean;
 }
 
 /** Un événement de l'historique : sa sorte dit lequel. */
@@ -126,6 +130,15 @@ export type RefusDeLEtape = Partial<Record<ChampDeLEtape, string[]>>;
 /** Ce que rend une étape notée : la fiche à jour, ou les refus de ses champs. */
 export type ResultatDeLEtape = { notee: true; fiche: FicheDUneCandidature } | { notee: false; refus: RefusDeLEtape };
 
+/**
+ * Ce que rend la correction d'une étape : la fiche à jour ; les refus de ses champs ; ou le motif d'un refus que l'état
+ * de l'étape explique (elle n'est plus la version en vigueur).
+ */
+export type ResultatDeLaCorrectionDEtape =
+  | { issue: "faite"; fiche: FicheDUneCandidature }
+  | { issue: "refusee"; refus: RefusDeLEtape }
+  | { issue: "perimee"; motif: string };
+
 const CHAMPS: readonly ChampDeLaSaisie[] = ["entreprise", "poste", "envoyeeLe"];
 
 const CHAMPS_DE_L_ETAPE: readonly ChampDeLEtape[] = ["type", "survenuLe", "note"];
@@ -163,6 +176,8 @@ export interface ClientDeLApi {
   corrigerLeDernierChangement(candidature: number, changement: number): Promise<ResultatDUneAction>;
   /** Ajoute une étape à l'historique, ou rend les refus de ses champs. */
   noterUneEtape(candidature: number, saisie: SaisieDUneEtape): Promise<ResultatDeLEtape>;
+  /** Corrige une étape, désignée par son identifiant : sa correction s'ajoute à l'historique (#25). */
+  corrigerUneEtape(candidature: number, etape: number, saisie: SaisieDUneEtape): Promise<ResultatDeLaCorrectionDEtape>;
   /**
    * Corrige l'entreprise, le poste et la date d'envoi d'une candidature, ou rend les refus de ses champs ; une
    * `ErreurDeLApi` 404 si elle n'existe pas.
@@ -255,6 +270,28 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
         const refus = lireLesRefus(await reponse.json().catch(() => undefined), CHAMPS_DE_L_ETAPE);
         if (refus !== undefined && Object.keys(refus).length > 0) {
           return { notee: false, refus };
+        }
+      }
+
+      throw new ErreurDeLApi(reponse.status);
+    },
+    corrigerUneEtape: async (candidature, etape, saisie) => {
+      const reponse = await ecrire(`${adresseDeLaFiche(candidature)}/etapes/${identifiant(etape)}/correction`, saisie);
+      if (reponse.status === 200) {
+        return { issue: "faite", fiche: (await reponse.json()) as FicheDUneCandidature };
+      }
+
+      if (reponse.status === 400) {
+        const refus = lireLesRefus(await reponse.json().catch(() => undefined), CHAMPS_DE_L_ETAPE);
+        if (refus !== undefined && Object.keys(refus).length > 0) {
+          return { issue: "refusee", refus };
+        }
+      }
+
+      if (reponse.status === 409) {
+        const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+        if (motif !== undefined) {
+          return { issue: "perimee", motif };
         }
       }
 

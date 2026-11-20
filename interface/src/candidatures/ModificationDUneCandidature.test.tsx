@@ -188,3 +188,19 @@ test("deux envois rapprochés, avant le rendu suivant, ne font qu'une modificati
 
   expect(client.modifierUneCandidature).toHaveBeenCalledOnce();
 });
+
+test("un événement corrigé ne borne plus l'envoi : l'aide nomme le premier événement en vigueur", async () => {
+  const fiche = ficheFictive({
+    historique: [
+      etapeFictive({ id: 2, survenuLe: "2026-11-10T09:00:00Z", estCorrige: true }),
+      changementFictif({ id: 3, survenuLe: "2026-11-12T09:00:00Z", estCorrige: true }),
+      etapeFictive({ id: 4, survenuLe: "2026-11-14T09:00:00Z", corrige: 2 }),
+      changementFictif({ id: 5, survenuLe: "2026-11-15T09:00:00Z", ancien: "Entretien", nouveau: "Envoyee", corrige: 3 }),
+    ],
+  });
+  afficher(clientSimule({ lireLaFiche: async () => fiche }));
+
+  await screen.findByLabelText("Date et heure d'envoi");
+
+  expect(description("Date et heure d'envoi")).toEqual(["Au plus tard le 14/11/2026 10:00, date du premier événement de l'historique."]);
+});
