@@ -9,7 +9,7 @@
 
 L'ADR-0001 cadre une V1 complète. Le backlog publié le 2026-11-14 l'étalait sur douze sprints de deux semaines (D15), jusqu'au 30 avril 2027. La V1 doit maintenant être finie le mardi 1er décembre 2026 au soir : elle ne garde que le cœur de ce cadrage.
 
-Elle doit aussi marcher dès le téléchargement : on lance Sollicito sans rien installer ni régler, la base se crée seule, et un premier écran propose de connecter une IA, facultative.
+Elle doit aussi marcher dès le téléchargement : on lance Sollicito sans rien installer, la base se crée seule, et un premier écran propose de connecter une IA, facultative.
 
 Le 2026-11-18, le prototype de #9 a levé le risque que la spec de la V1 désignait : publié en exe autonome d'un seul fichier, l'hôte de l'ADR-0003 se lance, ouvre sa fenêtre et lit une base SQLite (ADR-0003, « À vérifier », point .NET 10).
 
@@ -57,7 +57,7 @@ Sollicito n'a pas de serveur distant. En V1, qui n'a ni le Forem ni l'import par
 - les données de diagnostic que le runtime WebView2 envoie à Microsoft : les facultatives selon le réglage « Données de diagnostic » de Windows, les obligatoires quel que soit ce réglage, et par défaut un rapport à chaque plantage de l'un de ses processus[^donnees] ;
 - les mises à jour du runtime, qu'il télécharge seul[^distribution].
 
-Les deux derniers échanges viennent du runtime, un composant de Windows, et non du code de Sollicito, qui ne les contrôle pas, hormis les rapports de plantage (voir « À vérifier »). La vérification de réputation des navigations, qui ferait appel à SmartScreen, reste coupée (ADR-0003). Une navigation annulée peut quand même envoyer sa requête (ADR-0003, « À vérifier ») : contre une fuite vers un site extérieur, restent l'échappement du contenu et la CSP. Le README décrit ces échanges, dans sa section « Ce qui quitte votre machine ».
+Les deux derniers échanges viennent du runtime, un composant de Windows, et non du code de Sollicito, qui ne les contrôle pas, hormis les rapports de plantage (voir « À vérifier »). La vérification de réputation des navigations, qui ferait appel à SmartScreen, reste coupée (ADR-0003). Une navigation annulée peut quand même envoyer sa requête (ADR-0003, « À vérifier ») : contre une fuite vers un site extérieur, restent l'échappement du contenu, la CSP et le filtre des requêtes de la fenêtre (ADR-0006). Le README décrit ces échanges, dans sa section « Ce qui quitte votre machine ».
 
 ### Paliers
 

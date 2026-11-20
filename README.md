@@ -12,7 +12,7 @@ Une recherche d'emploi, ce sont des dizaines de candidatures, autant de dates à
 
 ## Ce que fait la V1
 
-Un exe Windows d'un seul fichier, publié sur la page des versions : vous le téléchargez et le lancez, sans rien installer ni régler. Il lui faut le runtime WebView2 de Microsoft, livré avec Windows 11 et déjà présent sur la plupart des Windows 10. L'exe n'est pas signé : SmartScreen affiche un avertissement pour chaque nouvelle version, tant qu'elle n'a pas acquis de réputation, et Smart App Control peut le bloquer là où il est actif. La base se crée seule, et un premier écran propose de connecter une IA, facultative.
+Un exe Windows d'un seul fichier, publié sur la page des versions : vous le téléchargez et le lancez, sans rien installer. Il lui faut le runtime WebView2 de Microsoft, livré avec Windows 11 et déjà présent sur la plupart des Windows 10. L'exe n'est pas signé : SmartScreen affiche un avertissement pour chaque nouvelle version, tant qu'elle n'a pas acquis de réputation, et Smart App Control peut le bloquer là où il est actif. La base se crée seule, et un premier écran propose de connecter une IA, facultative.
 
 - **Candidatures** : entreprise, poste, date et heure d'envoi, statut, dans un tableau de bord. Vous faites avancer le statut, notez un entretien ou un échange, relisez l'historique daté ; vous corrigez ou supprimez une candidature.
 - **Relances** : une relance vous est proposée à son échéance et ouvre un brouillon dans votre messagerie, adressé au contact de l'entreprise s'il y en a un. C'est vous qui l'envoyez.
@@ -73,7 +73,7 @@ L'intégration continue construit et teste ces deux parties de la même façon, 
 
 Les protections prévues dès la conception, détaillées dans l'[ADR-0001](docs/adr/0001-cadrage-architecture-v1.md) (D9 et D10) :
 
-- l'API locale refuse les appels venus d'autres pages web, d'autres appareils ou d'autres comptes du PC : écoute sur 127.0.0.1 seulement, jeton aléatoire à chaque lancement transmis par un en-tête, refus par le serveur des origines et des en-têtes `Host` inattendus ; ses journaux ne contiennent ni le jeton ni vos données ;
+- l'API locale refuse les appels venus d'autres pages web, d'autres appareils ou d'autres comptes du PC (voir le [modèle de menaces](docs/modele-de-menaces.md)) : écoute sur 127.0.0.1 seulement, jeton aléatoire à chaque lancement transmis par un en-tête, refus par le serveur des origines et des en-têtes `Host` inattendus ; ses journaux ne contiennent ni le jeton ni vos données ;
 - la fenêtre n'affichera que l'interface de Sollicito, sous une politique de sécurité du contenu stricte ; les liens externes s'ouvriront dans votre navigateur ;
 - les clés d'API d'IA seront chiffrées par l'API Data Protection d'ASP.NET Core, protégée par DPAPI et liée à votre compte Windows ; jamais stockées en clair, jamais dans les sauvegardes ni les exports ;
 - le contenu des offres sera traité comme non fiable : affichage échappé, et une IA qui ne peut rien déclencher d'elle-même ;
