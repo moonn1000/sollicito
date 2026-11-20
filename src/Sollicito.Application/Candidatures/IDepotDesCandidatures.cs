@@ -28,8 +28,11 @@ public interface IDepotDesCandidatures
 /// <summary>Une écriture exclusive dans la base. La quitter sans l'avoir validée l'annule.</summary>
 public interface IEcritureDesCandidatures : IAsyncDisposable
 {
-    /// <summary>L'entreprise de cette clé, si elle est enregistrée.</summary>
+    /// <summary>L'entreprise de cette clé, si elle est enregistrée : ce qui change en elle, son nom, est gardé à la validation.</summary>
     Task<Entreprise?> TrouverLEntrepriseAsync(string cle, CancellationToken annulation);
+
+    /// <summary>Le nombre de candidatures que porte l'entreprise de cet identifiant.</summary>
+    Task<int> CompterLesCandidaturesAsync(int entrepriseId, CancellationToken annulation);
 
     /// <summary>
     /// La candidature de cet identifiant, avec tout son historique et son entreprise, pour la faire avancer ou la

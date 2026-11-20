@@ -67,6 +67,9 @@ internal sealed class DepotDesCandidatures(BaseDeSollicito baseDeSollicito) : ID
         public Task<Entreprise?> TrouverLEntrepriseAsync(string cle, CancellationToken annulation) =>
             baseDeSollicito.Entreprises.SingleOrDefaultAsync(entreprise => entreprise.Cle == cle, annulation);
 
+        public Task<int> CompterLesCandidaturesAsync(int entrepriseId, CancellationToken annulation) =>
+            baseDeSollicito.Candidatures.CountAsync(candidature => candidature.EntrepriseId == entrepriseId, annulation);
+
         public Task<CandidatureSuivie?> TrouverLaCandidatureAsync(int id, CancellationToken annulation) =>
             ChargerAsync(baseDeSollicito, id, annulation);
 

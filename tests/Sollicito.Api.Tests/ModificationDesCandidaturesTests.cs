@@ -62,9 +62,9 @@ public sealed class ModificationDesCandidaturesTests
         var lumiere = await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", "Comptable", "2026-11-02T10:00");
         var id = IdDe(await api.EnregistrerAvecSuccesAsync("Brasserie Lune Rousse", "Brasseuse", "2026-11-03T10:00"));
 
-        var fiche = await api.ModifierAvecSuccesAsync(id, "LUMIÈRE VERTE S.A.", "Brasseuse", "2026-11-03T10:00");
+        var fiche = await api.ModifierAvecSuccesAsync(id, "Lumière Verte SA", "Brasseuse", "2026-11-03T10:00");
 
-        // La candidature rejoint l'entreprise de même clé, qui garde le nom de sa première saisie.
+        // La candidature rejoint l'entreprise de même clé, sous son nom enregistré.
         Assert.Equal(lumiere["entreprise"]!["id"]!.GetValue<int>(), fiche["entreprise"]!["id"]!.GetValue<int>());
         Assert.Equal("Lumière Verte SA", fiche["entreprise"]!["nom"]!.GetValue<string>());
         // L'entreprise quittée n'a plus de candidature : elle reste en base, mais n'est plus proposée.
@@ -73,16 +73,115 @@ public sealed class ModificationDesCandidaturesTests
     }
 
     [Fact]
-    public async Task Une_autre_orthographe_de_la_meme_cle_ne_renomme_pas_l_entreprise()
+    public async Task Une_autre_orthographe_de_la_meme_cle_attend_l_accord_puis_corrige_le_nom_pour_toutes_les_candidatures()
     {
         await using var api = await LancerAsync();
         var id = IdDe(await api.EnregistrerAvecSuccesAsync("Lumiere Verte", "Comptable", "2026-11-02T10:00"));
+        var autre = IdDe(await api.EnregistrerAvecSuccesAsync("lumière verte", "Magasinier", "2026-11-03T10:00"));
+        var entreprise = (await api.FicheAsync(id))["entreprise"]!["id"]!.GetValue<int>();
+        var avant = (await api.FicheAsync(id)).ToJsonString();
 
-        var fiche = await api.ModifierAvecSuccesAsync(id, "Lumière Verte SA", "Comptable", "2026-11-02T10:00");
+        // Sans l'accord : refusée, rien ne change, et le refus dit le nom enregistré et le nombre de candidatures.
+        using (var refusee = await api.ModifierAsync(id, "Lumière Verte SA", "Comptable senior", "2026-11-02T10:00"))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, refusee.StatusCode);
+            var texte = await refusee.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            var probleme = JsonNode.Parse(texte)!;
+            Assert.Equal("La candidature n'est pas modifiée : ce nom corrigerait celui d'une entreprise enregistrée.", probleme["title"]!.GetValue<string>());
+            Assert.Equal((entreprise, "Lumiere Verte"), (probleme["entreprise"]!["id"]!.GetValue<int>(), probleme["entreprise"]!["nom"]!.GetValue<string>()));
+            Assert.Equal(2, probleme["candidatures"]!.GetValue<int>());
+            // Le refus ne reprend pas le texte de la requête.
+            Assert.DoesNotContain("Lumière Verte SA", texte, StringComparison.Ordinal);
+            Assert.DoesNotContain("Comptable senior", texte, StringComparison.Ordinal);
+        }
 
-        // Même clé, même entreprise : son nom affiché reste celui de la première saisie (limite écrite au modèle).
-        Assert.Equal("Lumiere Verte", fiche["entreprise"]!["nom"]!.GetValue<string>());
+        Assert.Equal(avant, (await api.FicheAsync(id)).ToJsonString());
         Assert.Equal(["Lumiere Verte"], Noms(await api.ListerLesEntreprisesAsync()));
+
+        // Avec l'accord : le nom affiché se corrige pour toutes les candidatures de l'entreprise.
+        var fiche = await api.ModifierAvecSuccesAsync(id, "Lumière Verte SA", "Comptable senior", "2026-11-02T10:00", corrigerLeNom: true);
+
+        Assert.Equal((entreprise, "Lumière Verte SA"), (fiche["entreprise"]!["id"]!.GetValue<int>(), fiche["entreprise"]!["nom"]!.GetValue<string>()));
+        Assert.Equal("Lumière Verte SA", (await api.FicheAsync(autre))["entreprise"]!["nom"]!.GetValue<string>());
+        Assert.All(await api.ListerAsync(), candidature => Assert.Equal("Lumière Verte SA", candidature!["entreprise"]!["nom"]!.GetValue<string>()));
+        Assert.Equal(["Lumière Verte SA"], Noms(await api.ListerLesEntreprisesAsync()));
+    }
+
+    [Fact]
+    public async Task Un_nom_qui_reconnait_une_autre_entreprise_ecrit_autrement_compte_aussi_la_candidature_qui_la_rejoint()
+    {
+        await using var api = await LancerAsync();
+        var lumiere = (await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", "Comptable", "2026-11-02T10:00"))["entreprise"]!["id"]!.GetValue<int>();
+        var id = IdDe(await api.EnregistrerAvecSuccesAsync("Brasserie Lune Rousse", "Brasseuse", "2026-11-03T10:00"));
+
+        using (var refusee = await api.ModifierAsync(id, "LUMIÈRE VERTE S.A.", "Brasseuse", "2026-11-03T10:00"))
+        {
+            Assert.Equal(HttpStatusCode.Conflict, refusee.StatusCode);
+            var probleme = await AppelsDesCandidatures.LireAsync(refusee);
+            Assert.Equal((lumiere, "Lumière Verte SA"), (probleme["entreprise"]!["id"]!.GetValue<int>(), probleme["entreprise"]!["nom"]!.GetValue<string>()));
+            // Sa candidature, et celle qui la rejoindrait.
+            Assert.Equal(2, probleme["candidatures"]!.GetValue<int>());
+        }
+
+        // « Garder » le nom enregistré : la candidature rejoint l'entreprise, que rien ne renomme.
+        var gardee = await api.ModifierAvecSuccesAsync(id, "Lumière Verte SA", "Brasseuse", "2026-11-03T10:00");
+        Assert.Equal((lumiere, "Lumière Verte SA"), (gardee["entreprise"]!["id"]!.GetValue<int>(), gardee["entreprise"]!["nom"]!.GetValue<string>()));
+
+        // Avec l'accord, depuis une autre candidature encore : elle rejoint l'entreprise et en corrige le nom.
+        var troisieme = IdDe(await api.EnregistrerAvecSuccesAsync("Les Amis du Parc ASBL", "Animateur", "2026-11-04T10:00"));
+        var corrigee = await api.ModifierAvecSuccesAsync(troisieme, "LUMIÈRE VERTE S.A.", "Animateur", "2026-11-04T10:00", corrigerLeNom: true);
+        Assert.Equal((lumiere, "LUMIÈRE VERTE S.A."), (corrigee["entreprise"]!["id"]!.GetValue<int>(), corrigee["entreprise"]!["nom"]!.GetValue<string>()));
+        Assert.All(await api.ListerAsync(), candidature => Assert.Equal("LUMIÈRE VERTE S.A.", candidature!["entreprise"]!["nom"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Le_nom_enregistre_renvoye_tel_quel_ou_un_nom_neuf_n_attendent_aucun_accord()
+    {
+        await using var api = await LancerAsync();
+        var id = IdDe(await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", "Comptable", "2026-11-02T10:00"));
+
+        // Le même nom, à ses blancs près ; puis un nom d'une autre clé, accord donné ou non : aucun 409.
+        Assert.Equal("Lumière Verte SA", (await api.ModifierAvecSuccesAsync(id, "  Lumière Verte SA ", "Comptable", "2026-11-02T10:00"))["entreprise"]!["nom"]!.GetValue<string>());
+        Assert.Equal("Brasserie Lune Rousse", (await api.ModifierAvecSuccesAsync(id, "Brasserie Lune Rousse", "Comptable", "2026-11-02T10:00", corrigerLeNom: true))["entreprise"]!["nom"]!.GetValue<string>());
+        Assert.Equal("Les Amis du Parc ASBL", (await api.ModifierAvecSuccesAsync(id, "Les Amis du Parc ASBL", "Comptable", "2026-11-02T10:00", corrigerLeNom: false))["entreprise"]!["nom"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Un_champ_refuse_ou_une_candidature_inconnue_passent_avant_l_accord_du_nom()
+    {
+        await using var api = await LancerAsync();
+        var id = IdDe(await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", "Comptable", "2026-11-02T10:00"));
+
+        using var refusee = await api.ModifierAsync(id, "LUMIÈRE VERTE S.A.", "", "2026-11-02T10:00");
+        using var inconnue = await api.ModifierAsync(id + 1, "LUMIÈRE VERTE S.A.", "Comptable", "2026-11-02T10:00");
+
+        Assert.Equal(HttpStatusCode.BadRequest, refusee.StatusCode);
+        Assert.Equal(["poste"], (await AppelsDesCandidatures.LireAsync(refusee))["errors"]!.AsObject().Select(paire => paire.Key));
+        Assert.Equal(HttpStatusCode.NotFound, inconnue.StatusCode);
+    }
+
+    [Fact]
+    public async Task La_saisie_d_une_candidature_garde_le_nom_de_la_premiere_saisie_sans_rien_demander()
+    {
+        await using var api = await LancerAsync();
+        await api.EnregistrerAvecSuccesAsync("Lumiere Verte", "Comptable", "2026-11-02T10:00");
+
+        var deuxieme = await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", "Magasinier", "2026-11-03T10:00");
+
+        Assert.Equal("Lumiere Verte", deuxieme["entreprise"]!["nom"]!.GetValue<string>());
+        Assert.Equal(["Lumiere Verte"], Noms(await api.ListerLesEntreprisesAsync()));
+    }
+
+    [Fact]
+    public async Task L_accord_du_nom_n_est_pas_un_champ_de_la_saisie()
+    {
+        await using var api = await LancerAsync();
+
+        using var reponse = await api.EnvoyerCorpsAsync("""{"entreprise":"Lumière Verte SA","poste":"Comptable","envoyeeLe":"2026-11-02T10:00","corrigerLeNomDeLEntreprise":true}""");
+
+        Assert.Equal(HttpStatusCode.BadRequest, reponse.StatusCode);
+        Assert.Equal("La requête est illisible.", (await AppelsDesCandidatures.LireAsync(reponse))["title"]!.GetValue<string>());
+        Assert.Empty(await api.ListerAsync());
     }
 
     [Fact]
@@ -405,11 +504,10 @@ public sealed class ModificationDesCandidaturesTests
             ids.Add(IdDe(await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", $"Poste {numero}", "2026-11-02T10:00")));
         }
 
-        string[] noms = ["Brasserie Lune Rousse S.R.L.", "BRASSERIE LUNE ROUSSE", "Brasserie Lune Rousse SRL", "brasserie lune rousse"];
-        var reponses = await Task.WhenAll(ids.Select((id, numero) => api.ModifierAsync(id, noms[numero % noms.Length], $"Poste {numero}", "2026-11-02T10:00")));
+        var reponses = await Task.WhenAll(ids.Select((id, numero) => api.ModifierAsync(id, "Brasserie Lune Rousse S.R.L.", $"Poste {numero}", "2026-11-02T10:00")));
 
         Assert.All(reponses, reponse => Assert.Equal(HttpStatusCode.OK, reponse.StatusCode));
-        // Une seule entreprise de plus, sous le nom de la première modification passée, et toutes les candidatures y vont.
+        // Une seule entreprise de plus, et toutes les candidatures y vont.
         Assert.Equal(2, (await EntreprisesEnBaseAsync(api)).Length);
         Assert.Single(await api.ListerLesEntreprisesAsync());
         var entreprises = new HashSet<int>();

@@ -259,4 +259,12 @@ public abstract record ResultatDuSuivi
 
     /// <summary>L'action n'est pas permise dans l'état présent de la candidature, pour ce motif lisible. Rien ne change.</summary>
     public sealed record NonPermis(string Motif) : ResultatDuSuivi;
+
+    /// <summary>
+    /// La modification corrigerait le nom affiché d'une entreprise (#25, ADR-0007) et attend l'accord de l'utilisateur.
+    /// Rien ne change.
+    /// </summary>
+    /// <param name="Entreprise">L'entreprise que reconnaît le nom saisi, sous son nom enregistré.</param>
+    /// <param name="Candidatures">Les candidatures qui afficheraient le nom corrigé, celle qu'on modifie comprise.</param>
+    public sealed record NomACorriger(EntrepriseConnue Entreprise, int Candidatures) : ResultatDuSuivi;
 }

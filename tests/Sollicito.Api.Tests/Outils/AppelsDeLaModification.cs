@@ -11,19 +11,30 @@ namespace Sollicito.Api.Tests.Outils;
 /// </summary>
 public static class AppelsDeLaModification
 {
-    /// <summary>Envoie une modification, champ par champ, comme l'écran de modification.</summary>
-    public static Task<HttpResponseMessage> ModifierAsync(this ApiLancee api, int id, string? entreprise, string? poste, string? envoyeeLe) =>
-        api.EnvoyerALaModificationAsync(id, new JsonObject
+    /// <summary>
+    /// Envoie une modification, champ par champ, comme l'écran de modification ; avec l'accord de corriger le nom de
+    /// l'entreprise, si le test le donne.
+    /// </summary>
+    public static Task<HttpResponseMessage> ModifierAsync(this ApiLancee api, int id, string? entreprise, string? poste, string? envoyeeLe, bool? corrigerLeNom = null)
+    {
+        var corps = new JsonObject
         {
             ["entreprise"] = entreprise,
             ["poste"] = poste,
             ["envoyeeLe"] = envoyeeLe,
-        }.ToJsonString());
+        };
+        if (corrigerLeNom is { } accord)
+        {
+            corps["corrigerLeNomDeLEntreprise"] = accord;
+        }
+
+        return api.EnvoyerALaModificationAsync(id, corps.ToJsonString());
+    }
 
     /// <summary>Envoie une modification qui doit être admise, et rend la fiche à jour.</summary>
-    public static async Task<JsonObject> ModifierAvecSuccesAsync(this ApiLancee api, int id, string entreprise, string poste, string envoyeeLe)
+    public static async Task<JsonObject> ModifierAvecSuccesAsync(this ApiLancee api, int id, string entreprise, string poste, string envoyeeLe, bool? corrigerLeNom = null)
     {
-        using var reponse = await api.ModifierAsync(id, entreprise, poste, envoyeeLe);
+        using var reponse = await api.ModifierAsync(id, entreprise, poste, envoyeeLe, corrigerLeNom);
         Assert.Equal(HttpStatusCode.OK, reponse.StatusCode);
         return (await AppelsDesCandidatures.LireAsync(reponse)).AsObject();
     }

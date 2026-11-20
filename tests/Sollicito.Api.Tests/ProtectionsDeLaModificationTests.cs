@@ -128,7 +128,7 @@ public sealed class ProtectionsDeLaModificationTests
         var modification = fiche["put"]!.AsObject();
         Assert.Equal("ModifierUneCandidature", modification["operationId"]!.GetValue<string>());
         Assert.NotNull(modification["requestBody"]!["content"]!["application/json"]);
-        foreach (var code in new[] { "200", "400", "404" })
+        foreach (var code in new[] { "200", "400", "404", "409" })
         {
             Assert.NotNull(modification["responses"]![code]);
         }

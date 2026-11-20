@@ -6,7 +6,7 @@ namespace Sollicito.Domain.Entreprises;
 /// <summary>
 /// Une organisation à qui l'on postule (modèle de domaine, « Reconnaître une entreprise »). Elle se reconnaît à sa
 /// clé, tirée de son nom : deux noms de même clé désignent la même entreprise, et le nom affiché reste celui de la
-/// première saisie.
+/// première saisie, sauf correction par l'écran de modification (#25, ADR-0007).
 /// </summary>
 public sealed class Entreprise
 {
@@ -48,6 +48,25 @@ public sealed class Entreprise
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Corrige le nom affiché (#25, ADR-0007) : un nom de même clé, écrit autrement, saisi dans l'écran de modification
+    /// d'une candidature. Il doit être admis par <see cref="EssayerDeLireLeNom"/>, et garder la clé de l'entreprise.
+    /// </summary>
+    public void CorrigerLeNom(string? saisie)
+    {
+        if (!EssayerDeLireLeNom(saisie, out var nom, out var erreur))
+        {
+            throw new ArgumentException(erreur, nameof(saisie));
+        }
+
+        if (!string.Equals(CleDEntreprise.De(nom), Cle, StringComparison.Ordinal))
+        {
+            throw new ArgumentException("Un nom corrigé garde la clé de l'entreprise.", nameof(saisie));
+        }
+
+        Nom = nom;
     }
 
     /// <summary>Une nouvelle entreprise, à partir d'un nom saisi : il doit être admis par <see cref="EssayerDeLireLeNom"/>.</summary>
