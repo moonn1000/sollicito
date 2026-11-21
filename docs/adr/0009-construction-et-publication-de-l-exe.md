@@ -66,7 +66,7 @@ Deux textes de release-please ne se règlent pas et restent en anglais : le comm
 
 `version.yml` n'a qu'un déclencheur, `workflow_dispatch`, et ne tourne que depuis `main`. Il ne connaît qu'un groupe de concurrence, sans annulation : deux runs à la fois créeraient deux fois la même version. Chaque run a un effet public. Personne ne le lance avant le GO du mainteneur, au palier 5. La sortie d'une version se déroule ainsi :
 
-1. Le mainteneur lance le workflow de version : release-please ouvre la pull request de version.
+1. Le mainteneur coche « Allow GitHub Actions to create and approve pull requests » (Settings → Actions → General), sans quoi le jeton du workflow ne peut pas ouvrir la pull request de version. Puis il lance le workflow de version : release-please ouvre la pull request de version.
 2. Le mainteneur approuve ses runs (« Approve workflows to run »), ou la ferme puis la rouvre : « Verdict » s'y affiche alors.
 3. Le mainteneur la fusionne, puis relance le workflow de version. release-please crée l'étiquette `vX.Y.Z` et la version en brouillon. Un job à `actions: write` seul lance ensuite `publication.yml` sur `refs/tags/vX.Y.Z` : une étiquette créée par le jeton du workflow ne déclenche aucun workflow.
 4. La publication joint au brouillon l'exe, son empreinte et le paquet de son attestation.
