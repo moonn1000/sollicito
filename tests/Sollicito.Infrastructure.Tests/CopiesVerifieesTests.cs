@@ -135,6 +135,40 @@ public sealed class CopiesVerifieesTests : IDisposable
     }
 
     [Fact]
+    public async Task Une_copie_annulee_pendant_que_son_renommage_se_reprend_ne_remplace_pas_celle_d_avant()
+    {
+        var destination = Path.Combine(_dossier, "copie.db");
+        await File.WriteAllTextAsync(destination, "copie d'hier", TestContext.Current.CancellationToken);
+        using var annulation = new CancellationTokenSource();
+        FileStream? tenu = null;
+        try
+        {
+            // Un autre programme tient le fichier provisoire sans en partager la suppression, comme un antivirus qui
+            // l'examine : le renommage échoue, et se reprend.
+            var ecriture = CopiesVerifiees.EcrireAsync(Source, destination, annulation.Token, verifier: (provisoire, _) =>
+            {
+                tenu = new FileStream(provisoire, FileMode.Open, FileAccess.Read, FileShare.Read);
+                return Task.FromResult(true);
+            });
+            await Task.Delay(120, TestContext.Current.CancellationToken);
+
+            // L'annulation tombe pendant les reprises, puis le fichier se libère.
+            await annulation.CancelAsync();
+            await Task.Delay(150, TestContext.Current.CancellationToken);
+            tenu?.Dispose();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ecriture);
+        }
+        finally
+        {
+            tenu?.Dispose();
+        }
+
+        Assert.Equal("copie d'hier", await File.ReadAllTextAsync(destination, TestContext.Current.CancellationToken));
+        Assert.Equal(["copie.db", "source.db"], Directory.EnumerateFiles(_dossier).Select(Path.GetFileName).Where(nom => !nom!.StartsWith("source.db-", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public async Task Une_verification_annulee_en_cours_s_interrompt_au_lieu_d_aller_au_bout()
     {
         // Cent mille lignes sous trois index : integrity_check met plusieurs centaines de millisecondes à les relire

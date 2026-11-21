@@ -41,9 +41,9 @@ public static class CopiesVerifiees
                 throw new InvalidDataException("La copie ne se relit pas comme une base saine.");
             }
 
-            // Une copie annulée, même saine, ne remplace pas celle d'avant : celle d'une fermeture abandonnée la laisse.
-            annulation.ThrowIfCancellationRequested();
-            await ReessayerAsync(() => File.Move(provisoire, destination, overwrite: true));
+            // Une copie annulée, même saine, ne remplace pas celle d'avant, reprises du renommage comprises : celle d'une
+            // fermeture abandonnée la laisse.
+            await ReessayerAsync(() => File.Move(provisoire, destination, overwrite: true), annulation);
         }
         finally
         {
@@ -94,11 +94,15 @@ public static class CopiesVerifiees
         }
     }
 
-    /// <summary>Une opération sur un fichier, reprise tant qu'un autre programme le tient, quelques fois au plus.</summary>
-    public static async Task ReessayerAsync(Action operation)
+    /// <summary>
+    /// Une opération sur un fichier, reprise tant qu'un autre programme le tient, quelques fois au plus. L'annulation
+    /// arrête les reprises : une opération déjà lancée va au bout, aucune ne commence après elle.
+    /// </summary>
+    public static async Task ReessayerAsync(Action operation, CancellationToken annulation = default)
     {
         for (var essai = 1; ; essai++)
         {
+            annulation.ThrowIfCancellationRequested();
             try
             {
                 operation();
@@ -106,7 +110,7 @@ public static class CopiesVerifiees
             }
             catch (IOException erreur) when (essai < Essais && erreur.HResult is PartageRefuse or VerrouRefuse)
             {
-                await Task.Delay(EntreDeuxEssais);
+                await Task.Delay(EntreDeuxEssais, annulation);
             }
         }
     }
