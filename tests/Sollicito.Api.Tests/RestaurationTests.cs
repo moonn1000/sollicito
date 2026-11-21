@@ -308,6 +308,13 @@ public sealed class RestaurationTests : IAsyncLifetime
             Assert.Equal(PorteDeLaBase.TitreDuRefus, (await AppelsDesCandidatures.LireAsync(ecriture))["title"]!.GetValue<string>());
         }
 
+        // La casse ne fait pas passer la porte : le routage l'ignore, la porte aussi.
+        foreach (var chemin in new[] { "/API/candidatures", "/Api/Candidatures" })
+        {
+            using var reponse = await api.EnvoyerAsync(HttpMethod.Get, chemin, jeton: true);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, reponse.StatusCode);
+        }
+
         foreach (var chemin in new[] { "/api/etat", "/api/sauvegardes", "/api/reglages/relances", "/api/openapi/v1.json" })
         {
             using var reponse = await api.EnvoyerAsync(HttpMethod.Get, chemin, jeton: true);

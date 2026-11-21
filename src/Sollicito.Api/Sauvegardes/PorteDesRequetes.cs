@@ -11,7 +11,8 @@ internal sealed partial class PorteDesRequetes(RequestDelegate suite, PorteDeLaB
     public async Task InvokeAsync(HttpContext http)
     {
         var route = http.GetEndpoint();
-        if (route is null || route.Metadata.GetMetadata<SansLaBase>() is not null || !http.Request.Path.StartsWithSegments("/api", StringComparison.Ordinal))
+        // Sans la casse, comme le routage : « /API/… » atteint les mêmes routes que « /api/… ».
+        if (route is null || route.Metadata.GetMetadata<SansLaBase>() is not null || !http.Request.Path.StartsWithSegments("/api", StringComparison.OrdinalIgnoreCase))
         {
             await suite(http);
             return;
