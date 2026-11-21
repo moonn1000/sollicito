@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ClientDeLApi, EtatDesSauvegardes } from "../api/clientDeLApi.ts";
 import { ANNONCE_DE_LA_COPIE, texteDeLAlerte } from "./affichage.ts";
 
@@ -87,8 +87,10 @@ export function AlerteDesSauvegardes({
       setEtat(apres);
       setAnnonce(texteDeLAlerte(apres) === undefined ? { texte: ANNONCE_DE_LA_COPIE, sous: undefined } : undefined);
     } catch {
-      // Sous l'alerte affichée quand l'essai répond : une relecture a pu la changer pendant qu'il attendait.
-      setAnnonce({ texte: ECHEC_DE_L_ESSAI, sous: alerteAffichee.current });
+      // Sous l'alerte affichée quand l'essai répond : une relecture a pu la changer pendant qu'il attendait. Partie
+      // entre-temps, elle ne laisse rien à réessayer, et le message ne reste pas seul.
+      const sous = alerteAffichee.current;
+      setAnnonce(sous === undefined ? undefined : { texte: ECHEC_DE_L_ESSAI, sous });
     } finally {
       occupe.current = false;
       setEnCours(false);
@@ -96,7 +98,8 @@ export function AlerteDesSauvegardes({
   };
 
   const alerte = etat === undefined ? undefined : texteDeLAlerte(etat);
-  useEffect(() => {
+  // Avant que l'écran ne se peigne : un essai qui répond ensuite lit l'alerte qu'on voit.
+  useLayoutEffect(() => {
     alerteAffichee.current = alerte;
   });
 

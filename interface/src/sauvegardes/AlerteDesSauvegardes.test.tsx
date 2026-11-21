@@ -254,6 +254,36 @@ test("un essai manqué le dit sous l'alerte affichée quand il répond, même si
   }
 });
 
+test("un essai manqué alors que l'alerte est partie entre-temps ne laisse aucun message seul", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    let refuserLEssai: (raison: unknown) => void = () => {};
+    const client = clientSimule({
+      lireLesSauvegardes: vi
+        .fn()
+        .mockResolvedValueOnce(sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-19T08:00:00Z" } }))
+        .mockResolvedValue(sauvegardesFictives()),
+      sauvegarderMaintenant: vi.fn().mockReturnValue(new Promise((_, refuser) => (refuserLEssai = refuser))),
+    });
+    tableauDeBord(client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Réessayer" }));
+    // Pendant l'essai, la copie de l'heure réussit : l'alerte part.
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS);
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+
+    // L'essai échoue ensuite : il n'y a plus rien à réessayer, et aucun message ne reste seul.
+    await act(async () => {
+      refuserLEssai(new ErreurDeLApi(500));
+      await Promise.resolve();
+    });
+    expect(screen.queryByText(ECHEC_DE_L_ESSAI)).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("le tableau de bord quitté pendant une lecture, l'état ne se relit plus", async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   try {
