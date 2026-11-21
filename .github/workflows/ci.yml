@@ -102,12 +102,15 @@ jobs:
       - name: Piloter la vraie fenêtre
         run: pnpm run test:fenetre
 
-  # L'exe autonome d'un seul fichier : construit, contrôlé, lancé, gardé 7 jours en artefact (ADR-0009).
+  # L'exe autonome d'un seul fichier : construit, contrôlé, lancé ; gardé 7 jours en artefact sur les seuls push
+  # vers main, jamais pour une pull request (ADR-0009).
   # Un workflow réutilisable du dépôt se lit au commit du run, jamais sur le disque du runner. La syntaxe « $/ »
   # que propose zizmor date de juillet 2026, et actionlint 1.7.12 la refuse : « ./ » reste.
   exe:
     name: Exe
     uses: ./.github/workflows/exe.yml # zizmor: ignore[self-repository]
+    with:
+      artefact: ${{ github.event_name == 'push' && 'non-publie' || '' }}
 
   # Le même commit, construit dans un autre dossier : seule son empreinte sert.
   exe-ailleurs:
@@ -136,11 +139,33 @@ jobs:
             exit 1
           fi
 
+  # La publication à blanc, sans id-token ni écriture : la garde, éprouvée sur des refs admises et refusées, et la
+  # configuration de release-please. La préparation des fichiers se fait dans le job « Exe ». Rien ne s'atteste,
+  # rien ne s'envoie.
+  publication-a-blanc:
+    name: Publication, à blanc
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Récupérer le dépôt, avec l'historique de main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Éprouver la garde de la publication
+        run: bash .github/scripts/tester-la-garde.sh
+
+      - name: Contrôler la configuration de release-please
+        run: bash .github/scripts/tester-la-version.sh
+
   # Seule vérification à rendre obligatoire : elle échoue dès qu'un job ci-dessus n'a pas réussi.
   verdict:
     name: Verdict
     if: always()
-    needs: [dotnet, interface, fenetre, exe, exe-ailleurs, reproductibilite]
+    needs: [dotnet, interface, fenetre, exe, exe-ailleurs, reproductibilite, publication-a-blanc]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

@@ -1,7 +1,7 @@
-# Construit l'exe autonome d'un seul fichier tel que la publication le construira, puis le contrôle, le lance et le
-# garde en artefact (ADR-0009). La CI l'appelle deux fois : la seconde construction, dans un autre dossier, doit
-# donner la même empreinte. Aucun secret : le jeton ne peut que lire le dépôt. Aucun cache : rien d'un autre run
-# n'entre dans l'exe.
+# Construit l'exe autonome d'un seul fichier tel que la publication le construira, puis le contrôle, le lance et
+# prépare en essai les fichiers d'une version (ADR-0009). La CI l'appelle deux fois, et la seconde construction,
+# dans un autre dossier, doit donner la même empreinte. La publication l'appelle sur l'étiquette d'une version.
+# Aucun secret : le jeton ne peut que lire le dépôt. Aucun cache : rien d'un autre run n'entre dans l'exe.
 # Les actions sont épinglées par empreinte de commit, leur version en commentaire.
 name: Exe
 
@@ -13,13 +13,22 @@ on:
         type: string
         default: "."
       complet:
-        description: Contrôler l'exe, le lancer et le garder en artefact ; sinon, calculer seulement son empreinte.
+        description: Contrôler l'exe, le lancer et préparer en essai les fichiers d'une version ; sinon, calculer seulement son empreinte.
         type: boolean
         default: true
+      artefact:
+        description: >-
+          Artefact du run, 7 jours : « non-publie » (push sur main), « candidat » (publication, sur une étiquette),
+          ou vide (pull request : aucun artefact).
+        type: string
+        default: ""
     outputs:
       empreinte:
         description: Empreinte SHA-256 de l'exe, en hexadécimal minuscule.
         value: ${{ jobs.construire.outputs.empreinte }}
+      artefact:
+        description: Nom de l'artefact du run, vide s'il n'y en a pas.
+        value: ${{ jobs.construire.outputs.artefact }}
 
 permissions:
   contents: read
@@ -37,6 +46,7 @@ jobs:
       contents: read
     outputs:
       empreinte: ${{ steps.empreinte.outputs.empreinte }}
+      artefact: ${{ steps.artefact.outputs.nom }}
     defaults:
       run:
         shell: pwsh
@@ -92,8 +102,7 @@ jobs:
         if: inputs.complet
         run: ./.github/scripts/lancer-exe.ps1 -Exe "$env:RUNNER_TEMP/publication/Sollicito.exe"
 
-      - name: Préparer l'artefact
-        id: artefact
+      - name: Rassembler l'exe et son empreinte
         if: inputs.complet
         env:
           EMPREINTE: ${{ steps.empreinte.outputs.empreinte }}
@@ -102,11 +111,38 @@ jobs:
           Copy-Item -LiteralPath "$env:RUNNER_TEMP/publication/Sollicito.exe" -Destination $dossier
           # Format de sha256sum : l'empreinte, deux espaces, le nom du fichier.
           [IO.File]::WriteAllText((Join-Path $dossier 'Sollicito.exe.sha256'), "$env:EMPREINTE  Sollicito.exe`n")
-          "nom=exe-non-publie-$($env:GITHUB_SHA.Substring(0, 7))" >> $env:GITHUB_OUTPUT
 
-      # Un exe d'essai, ni publié ni attesté. Sur un dépôt public, tout compte GitHub connecté peut le télécharger.
-      - name: Garder l'exe en artefact, 7 jours
+      # Le même script que la publication, sur une version d'essai : il s'arrête avant l'attestation et l'envoi.
+      - name: Préparer les fichiers d'une version, en essai
         if: inputs.complet
+        shell: bash
+        env:
+          EMPREINTE: ${{ steps.empreinte.outputs.empreinte }}
+        run: |
+          temp="$(cygpath -u "$RUNNER_TEMP")"
+          bash .github/scripts/preparer-les-fichiers.sh 0.0.0 "$temp/artefact" "$EMPREINTE" "$temp/essai-de-version"
+
+      - name: Nommer l'artefact
+        id: artefact
+        if: inputs.complet && inputs.artefact != ''
+        env:
+          SORTE: ${{ inputs.artefact }}
+        run: |
+          if ($env:SORTE -ceq 'non-publie') {
+            $nom = "exe-non-publie-$($env:GITHUB_SHA.Substring(0, 7))"
+          }
+          elseif ($env:SORTE -ceq 'candidat' -and $env:GITHUB_REF -cmatch '^refs/tags/(v[0-9]+\.[0-9]+\.[0-9]+)\z') {
+            $nom = "exe-candidat-$($Matches[1])"
+          }
+          else {
+            throw "Artefact inattendu : « non-publie » sur main, « candidat » sur une étiquette de version."
+          }
+          "Artefact : $nom"
+          "nom=$nom" >> $env:GITHUB_OUTPUT
+
+      # Visible par tout compte GitHub connecté, sur un dépôt public : jamais pour une pull request.
+      - name: Garder l'exe en artefact, 7 jours
+        if: inputs.complet && inputs.artefact != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.artefact.outputs.nom }}

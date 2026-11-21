@@ -1,0 +1,61 @@
+# La version (ADR-0009) : release-please ouvre ou tient à jour la pull request de version ; une fois celle-ci
+# fusionnée, il crée l'étiquette vX.Y.Z et la version en brouillon, puis ce workflow lance publication.yml sur
+# l'étiquette. Il ne se lance qu'à la main, depuis main, et pas avant le GO du mainteneur au palier 5 : chaque run a
+# un effet public (pull request de version, labels, étiquette).
+# Les actions sont épinglées par empreinte de commit, leur version en commentaire.
+name: Version
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+# Deux runs à la fois créeraient deux fois la même version : le second attend le premier.
+concurrency:
+  group: version
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: release-please
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # la branche de la pull request de version, l'étiquette et la version en brouillon
+      issues: write # les labels de la pull request de version
+      pull-requests: write # la pull request de version
+    outputs:
+      cree: ${{ steps.release-please.outputs.release_created }}
+      etiquette: ${{ steps.release-please.outputs.tag_name }}
+    steps:
+      # La v5.0.0 embarque release-please 17.6.0 (voir le modèle de menaces).
+      - name: Lancer release-please
+        id: release-please
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # Une étiquette créée par le jeton du workflow ne déclenche aucun workflow : la publication se lance ici.
+  publication:
+    name: Lancer la publication
+    needs: release-please
+    if: needs.release-please.outputs.cree == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write # lancer publication.yml sur l'étiquette
+    steps:
+      - name: Lancer publication.yml sur l'étiquette
+        env:
+          ETIQUETTE: ${{ needs.release-please.outputs.etiquette }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if ! [[ "$ETIQUETTE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Refus : release-please n'a pas rendu une étiquette vX.Y.Z."
+            exit 1
+          fi
+          gh workflow run publication.yml --ref "refs/tags/$ETIQUETTE"
+          echo "Publication lancée sur refs/tags/$ETIQUETTE."
