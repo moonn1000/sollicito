@@ -18,8 +18,8 @@ namespace Sollicito.Infrastructure.Sauvegardes;
 /// <item>aucune clé étrangère sans sa ligne (<c>foreign_key_check</c>) ;</item>
 /// <item>une ligne restée dans le verrou des migrations de la copie de travail en est retirée, puis la copie se migre si
 /// elle est plus ancienne, et se relit saine ;</item>
-/// <item>son schéma est celui de l'exe, que ses migrations construisent dans une base en mémoire : tables et colonnes,
-/// clés étrangères, texte des index.</item>
+/// <item>son schéma est celui de l'exe, que ses migrations construisent dans une base en mémoire : texte des tables,
+/// colonnes, clés étrangères, texte des index ; puis, de nouveau, aucune clé étrangère sans sa ligne.</item>
 /// </list>
 /// Seule la copie de travail s'écrit. Une erreur d'écriture ou de lecture du disque n'est pas un verdict : elle se lève.
 /// </summary>
@@ -98,6 +98,12 @@ public static class VerificationDUneCopie
                 {
                     return new VerdictDUneCopie(SorteDeVerdict.Etrangere, 0);
                 }
+
+                // Les clés étrangères, de nouveau : la migration a pu reconstruire des tables.
+                if (LireLesLignes(connexion, "PRAGMA foreign_key_check").Count > 0)
+                {
+                    return new VerdictDUneCopie(SorteDeVerdict.Abimee, 0);
+                }
             }
 
             return new VerdictDUneCopie(SorteDeVerdict.Saine, aAppliquer);
@@ -165,7 +171,9 @@ public static class VerificationDUneCopie
         return LaStructure(memoire);
     }
 
-    // Tables et colonnes, clés étrangères, texte des index ; ni les tables internes de SQLite, ni le verrou des migrations.
+    // Texte des tables, colonnes, clés étrangères, texte des index ; ni les tables internes de SQLite, ni le verrou des
+    // migrations. Les mêmes migrations, jouées dans le même ordre, écrivent le même texte, qu'une copie soit migrée en
+    // une fois ou en plusieurs.
     private static List<string> LaStructure(SqliteConnection connexion)
     {
         var lignes = new List<string>();
@@ -178,6 +186,8 @@ public static class VerificationDUneCopie
             }
             else if (objet.Type == "table")
             {
+                // Le texte de la table : une contrainte CHECK ou une collation ajoutée ne se voit pas dans ses colonnes.
+                lignes.Add($"table|{objet.Nom}|{objet.Sql}");
                 lignes.AddRange(LireLesLignes(connexion, "SELECT cid || '|' || name || '|' || type || '|' || \"notnull\" || '|' || quote(dflt_value) || '|' || pk || '|' || hidden FROM pragma_table_xinfo($nom) ORDER BY cid", objet.Nom)
                     .Select(colonne => $"colonne|{objet.Nom}|{colonne}"));
                 lignes.AddRange(LireLesLignes(connexion, "SELECT id || '|' || seq || '|' || \"table\" || '|' || \"from\" || '|' || quote(\"to\") || '|' || on_update || '|' || on_delete || '|' || \"match\" FROM pragma_foreign_key_list($nom) ORDER BY id, seq", objet.Nom)

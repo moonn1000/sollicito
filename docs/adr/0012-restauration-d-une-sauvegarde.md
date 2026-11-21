@@ -22,7 +22,7 @@ L'ADR-0008 renvoie la restauration à #28 : « Restaurer », sur toutes les copi
 - La page envoie à l'hôte `{"type":"restaurerUneSauvegarde","copie":"<identifiant>"}`, sous le contrôle de la source du canal du jeton. Deux champs exactement : un champ de plus, répété compris, un identifiant d'une autre forme, un message d'une autre forme ou d'une autre source n'ouvre rien.
 - L'hôte retrouve la copie dans l'état des sauvegardes tenu en mémoire, lit l'état de la base en cours par `PRAGMA quick_check`, en lecture seule, puis ouvre un dialogue de Windows (`TaskDialog`) : la date de la copie, ce qui sera perdu, « Restaurer » ou « Annuler », ce dernier par défaut. Un script de la page ne clique pas ce dialogue. Le dialogue ne promet un retour (« vous pourrez y revenir ») que si la copie d'avant se restaurera, donc devant une base saine.
 - Sur le oui, l'hôte appelle le service de la restauration en mémoire, hors du fil de la fenêtre, qui reste vivante. Aucune route de l'API ne restaure. L'hôte rend à la page « en cours », puis l'issue, sans chemin ni donnée.
-- Un seul dialogue de l'hôte à la fois : une demande de restauration pendant un choix de dossier, ou pendant une autre restauration, reçoit « occupé » ; un choix de dossier pendant une restauration n'ouvre rien.
+- Un seul dialogue de l'hôte à la fois : une demande de restauration pendant un choix de dossier reçoit « occupé » ; une demande pendant une autre restauration ne reçoit rien, pour que la page qui attend la sienne en reçoive la vraie issue ; un choix de dossier pendant une restauration n'ouvre rien.
 - Les messages du jeton et du choix du dossier ne portent plus que leur champ `type` (#88).
 
 ### La liste, et l'identifiant d'une copie
@@ -53,7 +53,7 @@ La copie peut venir d'un dossier partagé (un NAS, une clé passée de main en m
 5. aucune clé étrangère sans sa ligne (`foreign_key_check`) ;
 6. une ligne restée dans le verrou des migrations de la copie de travail, qui n'est qu'à nous, en est retirée : `MigrateAsync` l'attendrait sans fin (#79) ;
 7. la migration, si la copie est plus ancienne, puis un nouvel `integrity_check` ;
-8. son schéma comparé à celui de l'exe, que ses migrations construisent dans une base en mémoire : tables et colonnes, clés étrangères, texte des index.
+8. son schéma comparé à celui de l'exe, que ses migrations construisent dans une base en mémoire : texte des tables (une contrainte ou une collation ajoutée ne se voit pas dans les colonnes), colonnes, clés étrangères, texte des index ; puis, de nouveau, `foreign_key_check`.
 
 Ce que `Microsoft.Data.Sqlite` ne permet pas, ou que Sollicito n'emploie pas : compiler SQLite avec `SQLITE_TRUSTED_SCHEMA=0` (le paquet `e_sqlite3` vient compilé) ; `sqlite3_hard_heap_limit64`, que `SQLitePCLRaw` expose mais qui borne la mémoire de tout le processus, base en cours comprise ; marquer des fonctions `SQLITE_DIRECTONLY`, Sollicito n'en déclarant aucune ; les autres limites que la page conseille pour du SQL qui n'est pas sûr, puisque le SQL qui touche la copie est celui de Sollicito et d'EF Core.
 

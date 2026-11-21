@@ -121,21 +121,71 @@ public sealed class VerificationDUneCopieTests : IDisposable
     }
 
     [Fact]
-    public async Task Une_fonction_cachee_dans_le_schema_ne_s_execute_jamais_pendant_la_verification()
+    public async Task Une_fonction_inconnue_cachee_dans_un_index_du_schema_fait_refuser_la_copie()
     {
         await CreerUneBaseAsync(Copie, migration: null);
-        var appels = 0;
         using (var connexion = Ouvrir(Copie))
         {
             connexion.CreateFunction("piege", (long valeur) => valeur, isDeterministic: true);
             ExecuterSur(connexion, "CREATE INDEX IX_Piege ON Candidatures (piege(Id))");
         }
 
-        var verdict = await VerifierAsync();
+        // integrity_check évaluerait cet index sur expression : la copie est refusée, et la base n'a pas changé.
+        Assert.NotEqual(SorteDeVerdict.Saine, (await VerifierAsync()).Sorte);
+    }
 
-        // integrity_check évalue les index sur expression : la fonction, inconnue et non sûre, fait refuser la copie avant.
-        Assert.NotEqual(SorteDeVerdict.Saine, verdict.Sorte);
-        Assert.Equal(0, appels);
+    [Theory]
+    [InlineData("contrainte CHECK ajoutée")]
+    [InlineData("contrainte CHECK avec une fonction")]
+    [InlineData("collation ajoutée à une colonne")]
+    public async Task Une_table_dont_le_texte_est_retouche_est_etrangere(string retouche)
+    {
+        await CreerUneBaseAsync(Copie, migration: null);
+        var texte = Assert.Single(Lire(Copie, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'Entreprises'"));
+        var retouchee = retouche switch
+        {
+            "contrainte CHECK ajoutée" => texte[..texte.LastIndexOf(')')] + ", CHECK (0))",
+            "contrainte CHECK avec une fonction" => texte[..texte.LastIndexOf(')')] + ", CHECK (length(\"Nom\") > 1000))",
+            _ => texte.Replace("\"Nom\" TEXT", "\"Nom\" TEXT COLLATE NOCASE", StringComparison.Ordinal),
+        };
+        Assert.NotEqual(texte, retouchee);
+        // Le texte de la table se retouche dans sqlite_master, comme un outil le ferait : ses colonnes, ses clés et ses index
+        // restent les mêmes.
+        using (var connexion = Ouvrir(Copie))
+        {
+            using var commande = connexion.CreateCommand();
+            commande.CommandText = "PRAGMA writable_schema = ON; UPDATE sqlite_master SET sql = $texte WHERE type = 'table' AND name = 'Entreprises'; PRAGMA writable_schema = OFF;";
+            commande.Parameters.AddWithValue("$texte", retouchee);
+            commande.ExecuteNonQuery();
+        }
+
+        Assert.Equal([retouchee], Lire(Copie, "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'Entreprises'"));
+        Assert.Equal(new VerdictDUneCopie(SorteDeVerdict.Etrangere, 0), await VerifierAsync());
+    }
+
+    [Fact]
+    public void Une_connexion_reglee_pour_un_fichier_non_sur_coupe_vues_declencheurs_schema_inscriptible_et_grosses_valeurs()
+    {
+        using (var connexion = Ouvrir(Copie, SqliteOpenMode.ReadWriteCreate))
+        {
+            ExecuterSur(connexion, "CREATE TABLE Notes (Texte TEXT); CREATE VIEW Vue AS SELECT Texte FROM Notes; CREATE TRIGGER Declencheur AFTER INSERT ON Notes BEGIN DELETE FROM Notes; END");
+        }
+
+        using var reglee = Ouvrir(Copie);
+        CopieDeLaBase.ReglerPourUnFichierNonSur(reglee);
+
+        Assert.Equal(["0"], LireSur(reglee, "PRAGMA trusted_schema"));
+        Assert.Equal(["1"], LireSur(reglee, "PRAGMA cell_size_check"));
+        Assert.Equal(["0"], LireSur(reglee, "PRAGMA mmap_size"));
+        Assert.Contains("prohibited", Assert.Throws<SqliteException>(() => LireSur(reglee, "SELECT * FROM Vue")).Message, StringComparison.Ordinal);
+        ExecuterSur(reglee, "INSERT INTO Notes VALUES ('le déclencheur ne s''exécute pas')");
+        Assert.Equal(["1"], LireSur(reglee, "SELECT COUNT(*) FROM Notes"));
+        // Mode défensif : le schéma ne devient pas inscriptible.
+        ExecuterSur(reglee, "PRAGMA writable_schema = ON");
+        Assert.Equal(["0"], LireSur(reglee, "PRAGMA writable_schema"));
+        // Aucune valeur de plus de 10 Mo, aucune base attachée.
+        Assert.Equal(18, Assert.Throws<SqliteException>(() => LireSur(reglee, "SELECT length(zeroblob(20000000))")).SqliteErrorCode & 0xFF);
+        Assert.Throws<SqliteException>(() => ExecuterSur(reglee, $"ATTACH DATABASE '{Path.Combine(_dossier, "autre.db")}' AS autre"));
     }
 
     [Fact]
@@ -186,11 +236,25 @@ public sealed class VerificationDUneCopieTests : IDisposable
         Executer(fichier, "PRAGMA journal_mode = DELETE");
     }
 
-    private static SqliteConnection Ouvrir(string fichier)
+    private static SqliteConnection Ouvrir(string fichier, SqliteOpenMode mode = SqliteOpenMode.ReadWrite)
     {
-        var connexion = new SqliteConnection(CopieDeLaBase.ChaineDeConnexion(fichier, SqliteOpenMode.ReadWrite));
+        var connexion = new SqliteConnection(CopieDeLaBase.ChaineDeConnexion(fichier, mode));
         connexion.Open();
         return connexion;
+    }
+
+    private static string[] LireSur(SqliteConnection connexion, string requete)
+    {
+        using var commande = connexion.CreateCommand();
+        commande.CommandText = requete;
+        using var lecture = commande.ExecuteReader();
+        var valeurs = new List<string>();
+        while (lecture.Read())
+        {
+            valeurs.Add(Convert.ToString(lecture.GetValue(0), System.Globalization.CultureInfo.InvariantCulture)!);
+        }
+
+        return [.. valeurs];
     }
 
     private static void Executer(string fichier, string instruction)
