@@ -1,0 +1,2 @@
+# Les scripts bash gardent leurs fins de ligne LF, même dans une copie Windows (core.autocrlf) : bash refuse le CR.
+*.sh text eol=lf

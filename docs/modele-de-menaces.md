@@ -1,8 +1,8 @@
 # Modèle de menaces
 
-- **Mis à jour le** : 2026-11-20, avec les sauvegardes de la base (#26)
-- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D9 et D10 ; [ADR-0003](adr/0003-hote-interface-webview2.md), « Règles d'accès » et « Durcissement de la fenêtre » ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md)
-- **Périmètre** : l'API locale, ses journaux et sa base, ses sauvegardes et ses réglages, la fenêtre hôte, et les textes saisis. Les offres et la sortie de l'IA, les clés d'IA et l'exe ajouteront leur section avec les stories qui les construisent.
+- **Mis à jour le** : 2026-11-21, avec l'exe construit dans la CI et la chaîne de publication de ses versions (#54)
+- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D9 et D10 ; [ADR-0003](adr/0003-hote-interface-webview2.md), « Règles d'accès » et « Durcissement de la fenêtre » ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) ; [ADR-0009](adr/0009-construction-et-publication-de-l-exe.md)
+- **Périmètre** : l'API locale, ses journaux et sa base, ses sauvegardes et ses réglages, la fenêtre hôte, les textes saisis, et l'exe distribué, de sa construction à son attestation. Les offres et la sortie de l'IA, et les clés d'IA, ajouteront leur section avec les stories qui les construisent.
 
 ## Ce qui est protégé
 
@@ -253,6 +253,33 @@ Ni le dossier de données, ni le dossier des sauvegardes, ni le nom d'une copie 
 - `interface/tests-fenetre/fenetre.test.ts`, dans la vraie fenêtre : la copie du lancement, le choix d'un dossier par le remplaçant du dialogue, le réglage écrit, puis la copie refaite à la fermeture ; aucun fichier du dossier de données, copies comprises, ne contient le jeton.
 - *À vérifier à la main* sur l'exe publié (ADR-0008, « À vérifier ») : le vrai dialogue de Windows, que le protocole CDP ne pilote pas, s'ouvre sur le dossier courant, et son annulation ne change rien.
 
+## Exe distribué
+
+L'exe d'un seul fichier se construit dans la CI, à chaque pull request et sur `main`, comme la publication le construira (#54, ADR-0009). À chaque construction, on contrôle ce qu'il emporte et ce qu'il garde de la machine qui l'a construit :
+
+- **Aucun état d'un autre run** : le workflow `exe.yml` n'a que la lecture du dépôt, ni secret ni cache. La restauration NuGet est verrouillée, l'interface s'installe depuis son fichier de verrouillage, et la publication ne réécrit aucun fichier suivi.
+- **Aucun chemin de la machine de construction** : `ContinuousIntegrationBuild` réécrit les chemins de symboles en `/_/`. Hors de la CI, ils portent le dossier de compilation, donc le nom du compte Windows du poste. `verifier-exe.ps1` lit le paquet de l'exe décompressé. Il y cherche le dossier du dépôt, le profil, le dossier temporaire et le nom du compte du runner, en UTF-8 comme en UTF-16.
+- **Rien de superflu à extraire** : le paquet n'embarque ni l'hôte natif de l'API (`Sollicito.Api.exe`), ni le module d'hébergement sous IIS (`aspnetcorev2_inprocess.dll`). Sous `%TEMP%\.net`, l'exe n'extrait plus que `e_sqlite3.dll` et deux copies de `WebView2Loader.dll` (voir « Limites »).
+- **Reproductible** : une seconde construction du même commit, dans un autre dossier, doit donner la même empreinte SHA-256.
+- **Des artefacts sur `main` seulement** : sur un push vers `main`, l'exe et son empreinte restent 7 jours en artefact du run. Ce n'est ni une version ni un exe attesté, et, sur un dépôt public, tout compte GitHub connecté peut le télécharger. Une pull request n'en produit aucun : venue d'un fork, elle ferait héberger sous le nom du projet un exe construit avec son propre code. La publication garde 7 jours l'exe candidat d'une version, public dès son run.
+
+### L'empreinte et l'attestation d'une version
+
+Chaque version joint à son exe son empreinte SHA-256 et le paquet de son attestation de provenance (#54, ADR-0009). L'empreinte prouve que le fichier téléchargé est celui de la version. L'attestation, signée par l'instance publique de Sigstore, prouve que l'exe a été construit par `publication.yml` de ce dépôt, sur l'étiquette `vX.Y.Z`.
+
+- **Le job qui atteste est à part** : seul à `id-token: write` et `attestations: write`, il ne récupère pas le dépôt et ne lance aucune construction. Le code des dépendances, qui tourne dans le job de construction, n'a donc jamais le jeton qui fait signer une attestation.
+- **Ce que l'attestation ne prouve pas** : qu'aucune dépendance n'était piégée. Un paquet npm ou NuGet piégé dans le job de construction peut modifier l'exe avant son envoi : le job à part l'attestera fidèlement. La seconde construction, faite avec les mêmes dépendances, ne le verrait pas. Contre ce risque restent les fichiers de verrouillage, l'âge minimal des paquets de pnpm, la seule source nuget.org et la restauration verrouillée.
+- **Une étiquette posée sur un commit non fusionné** : une personne qui a l'écriture du dépôt peut étiqueter `v1.0.1` le commit d'une branche jamais fusionnée, avec un `publication.yml` modifié, puis lancer ce workflow. Son attestation passerait `--source-ref refs/tags/v1.0.1`. La garde de la publication est logée dans la copie de l'étiquette : elle n'arrête que les erreurs, pas cette personne. La parade est un ruleset des étiquettes `v*`, réglage du mainteneur, à proposer au palier 5 (ADR-0009, « À vérifier »).
+- **Les entrées non fiables** : un nom d'étiquette peut contenir `$ ( ) ; | & ' "`. La garde lit `github.ref` entier, passé par `env:`, contre `^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`. Aucun `run:` ne reçoit `github.ref_name`, une entrée de workflow ou une sortie de release-please, que par `env:` et après ce motif.
+- **Les outils** : release-please-action v5.0.0 embarque release-please 17.6.0, sans les correctifs de dépendances parus depuis (17.7.0, 17.10.2) : à revoir au palier 5. `gh`, qui lance la publication, vérifie l'attestation et joint les fichiers, vient de l'image du runner, sans version fixée. `joindre-au-brouillon.sh` exige au moins la 2.102.0 : avant elle, `--signer-workflow` se lisait comme un préfixe et `--source-ref` sans la casse (avis GHSA-wjmr-j3rp-mh2g et GHSA-4mq3-hpgx-9cx8). Il ajoute aussi `--source-digest`, le commit de l'étiquette. La même version minimale vaut pour l'utilisateur qui vérifie l'exe (ADR-0009, « Vérifier l'exe »).
+
+*Contrôles* :
+
+- dans le job « Exe » de la CI (`.github/workflows/exe.yml`) : `verifier-exe.ps1`, qui exige au moins un chemin de symboles lu, et tous en `/_/`. Qu'un exe construit hors du mode CI le fasse échouer a été joué à la PR de #54, sur le poste ; son automatisation est dans #91. Puis `lancer-exe.ps1`, qui lance l'exe seul dans un dossier vide et exige sa base, son profil, son navigateur intégré et sa fenêtre, sans boîte de dialogue ; la préparation des fichiers d'une version d'essai ;
+- le job « Reproductibilité » ;
+- le job « Publication, à blanc » : `tester-la-garde.sh`, sur 13 refs admises et refusées, et `tester-la-version.sh`, qui contrôle la configuration de release-please. Il vérifie aussi, par liste d'autorisation, que les workflows de version et de publication n'ont que `workflow_dispatch`. Ce contrôle lit le YAML par yq 4.54.3, à empreinte vérifiée, n'admet à la racine que les clés d'un workflow, et en simples chaînes (`!!str`), comme dans le bloc `on`. Il est éprouvé sur 39 formes piégées, clés déguisées, fusions, leurres et sauts de ligne cachés compris ;
+- *à la première version, au palier 5* : la garde sur la vraie étiquette, l'attestation, sa vérification hors ligne et le condensé des fichiers joints.
+
 ## Textes saisis
 
 Les textes que l'utilisateur saisit (une entreprise, un poste, la note d'une étape) s'affichent comme du texte, jamais comme du HTML : l'interface les écrit par React, qui les échappe, et n'emploie nulle part `dangerouslySetInnerHTML` (ADR-0001, D9, « Contenu non fiable »). Les sauts de ligne d'une note s'affichent par le style (`white-space: pre-wrap`), sans balise. Ces textes ne paraissent dans aucun journal (voir « Règle des journaux »). Un script qui passerait par eux lirait le jeton dans la page (voir « Limites ») : la politique de sécurité du contenu double l'échappement.
@@ -310,7 +337,7 @@ Aucune entrée ne contient le nom du faux compte, ni le dossier temporaire du te
 - **Brouillon de relance (#14)** : la page demande l'ouverture du lien `mailto` à l'hôte par un message, soumis au même contrôle de la source que le canal du jeton (ADR-0003), comme le choix du dossier des sauvegardes (#26) ; tout autre schéma externe reste annulé.
 - **Restauration (#28)** : une copie restaurée remplace toute la base ; elle doit se vérifier avant, et la base en cours se copier d'abord. La liste à restaurer montre toutes les copies de Sollicito du dossier, celles d'une autre installation comprises.
 - **Interface en développement** : le serveur de développement de Vite sert une autre origine. L'API refuse ses écritures, et l'interface ne reçoit le jeton que dans la fenêtre.
-- **Exe** : le dossier d'extraction `%TEMP%\.net` (voir « Limites »), et un exe construit par la CI, dont les symboles ne portent pas le chemin d'un poste de développement (prototype de #9).
+- **Exe** : le dossier d'extraction `%TEMP%\.net` (voir « Limites ») ; au palier 5, le ruleset des étiquettes `v*` et la première exécution du chemin de publication, attestation comprise (voir « Exe distribué »).
 
 ## Sources
 

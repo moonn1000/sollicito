@@ -1,0 +1,142 @@
+# La publication d'une version (ADR-0009), lancée par le workflow de version sur l'étiquette vX.Y.Z, ou à la main
+# sur la même étiquette pour rattraper une panne passagère. Elle tourne avec la copie des workflows que porte
+# l'étiquette : un défaut se corrige par une nouvelle version, jamais en déplaçant l'étiquette.
+#   garde      : l'étiquette, refs/tags/vX.Y.Z, et son commit, sur main ;
+#   construire : l'exe, par le même workflow que la CI, en artefact « candidat » ;
+#   attester   : l'attestation de provenance, seul job à id-token et attestations ;
+#   joindre    : les fichiers au brouillon, seul job à contents: write.
+# Le mainteneur publie ensuite le brouillon à la main.
+# Les actions sont épinglées par empreinte de commit, leur version en commentaire.
+name: Publication
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publication-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  garde:
+    name: Garde
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Récupérer le dépôt, avec l'historique de main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Exiger une étiquette de version posée sur main
+        env:
+          REF: ${{ github.ref }}
+          COMMIT: ${{ github.sha }}
+        run: bash .github/scripts/garder-la-publication.sh "$REF" "$COMMIT"
+
+  construire:
+    name: Exe
+    needs: garde
+    permissions:
+      contents: read
+    uses: ./.github/workflows/exe.yml # zizmor: ignore[self-repository]
+    with:
+      artefact: candidat
+
+  # Écrit ici même : --signer-workflow vérifie le workflow où ce job est défini. Il ne récupère pas le dépôt.
+  attester:
+    name: Attester
+    needs: construire
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      id-token: write # le jeton OIDC, que Sigstore échange contre un certificat de signature
+      attestations: write # l'attestation, rangée dans le dépôt
+    outputs:
+      paquet: ${{ steps.paquet.outputs.nom }}
+    steps:
+      - name: Télécharger l'exe candidat
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.construire.outputs.artefact }}
+          path: candidat
+
+      - name: Vérifier l'empreinte et nommer l'exe de la version
+        env:
+          EMPREINTE: ${{ needs.construire.outputs.empreinte }}
+        run: |
+          if ! [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Refus : la publication ne part que d'une étiquette de version, refs/tags/vX.Y.Z."
+            exit 1
+          fi
+          cd candidat
+          sha256sum --check --strict Sollicito.exe.sha256
+          test "$(sha256sum Sollicito.exe | cut -d ' ' -f 1)" = "$EMPREINTE"
+          mv Sollicito.exe "Sollicito-${BASH_REMATCH[1]}-win-x64.exe"
+
+      - name: Attester la provenance de l'exe
+        id: attestation
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: candidat/Sollicito-*-win-x64.exe
+
+      - name: Ranger le paquet de l'attestation
+        id: paquet
+        env:
+          PAQUET: ${{ steps.attestation.outputs.bundle-path }}
+        run: |
+          mkdir -p attestation
+          cp "$PAQUET" attestation/attestation.sigstore.json
+          echo "nom=attestation-${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+
+      - name: Garder le paquet de l'attestation, 7 jours
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.paquet.outputs.nom }}
+          path: attestation
+          retention-days: 7
+          if-no-files-found: error
+
+  joindre:
+    name: Joindre au brouillon
+    needs: [construire, attester]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write # lire le brouillon, qui ne se voit qu'avec l'écriture, et y joindre les fichiers
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Télécharger l'exe candidat
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.construire.outputs.artefact }}
+          path: ${{ runner.temp }}/candidat
+
+      - name: Télécharger le paquet de l'attestation
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.attester.outputs.paquet }}
+          path: ${{ runner.temp }}/attestation
+
+      - name: Préparer les fichiers de la version
+        env:
+          EMPREINTE: ${{ needs.construire.outputs.empreinte }}
+        run: |
+          if ! [[ "$GITHUB_REF" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+            echo "Refus : la publication ne part que d'une étiquette de version, refs/tags/vX.Y.Z."
+            exit 1
+          fi
+          bash .github/scripts/preparer-les-fichiers.sh "${BASH_REMATCH[1]}" "$RUNNER_TEMP/candidat" "$EMPREINTE" "$RUNNER_TEMP/version"
+
+      - name: Vérifier le brouillon, l'empreinte et l'attestation, puis joindre
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/joindre-au-brouillon.sh "$RUNNER_TEMP/version" "$RUNNER_TEMP/attestation/attestation.sigstore.json"

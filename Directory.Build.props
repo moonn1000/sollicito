@@ -8,6 +8,12 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
+  <!-- Version du produit, portée par l'exe. La pull request de version de release-please la réécrit sur la ligne
+       annotée (release-please-config.json, extra-files ; ADR-0009) : 0.0.0 tant qu'aucune version n'est sortie. -->
+  <PropertyGroup>
+    <Version>0.0.0</Version> <!-- x-release-please-version -->
+  </PropertyGroup>
+
   <!-- Versions des paquets figées par un fichier de verrouillage par projet. En CI, une
        restauration qui changerait ces fichiers échoue au lieu de les réécrire. -->
   <PropertyGroup>

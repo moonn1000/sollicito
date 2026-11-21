@@ -1,6 +1,7 @@
 # Construit et teste la solution .NET et l'interface à chaque pull request vers main,
-# puis après chaque fusion, et pilote la vraie fenêtre par Playwright. Aucun secret : le
-# jeton du workflow ne peut que lire le dépôt.
+# puis après chaque fusion, pilote la vraie fenêtre par Playwright, et construit l'exe tel
+# que la publication le construira (exe.yml). Aucun secret : le jeton du workflow ne peut
+# que lire le dépôt.
 # Les actions sont épinglées par empreinte de commit, leur version en commentaire.
 name: CI
 
@@ -101,11 +102,80 @@ jobs:
       - name: Piloter la vraie fenêtre
         run: pnpm run test:fenetre
 
+  # L'exe autonome d'un seul fichier : construit, contrôlé, lancé ; gardé 7 jours en artefact sur les seuls push
+  # vers main, jamais pour une pull request (ADR-0009).
+  # Un workflow réutilisable du dépôt se lit au commit du run, jamais sur le disque du runner. La syntaxe « $/ »
+  # que propose zizmor date de juillet 2026, et actionlint 1.7.12 la refuse : « ./ » reste.
+  exe:
+    name: Exe
+    uses: ./.github/workflows/exe.yml # zizmor: ignore[self-repository]
+    with:
+      artefact: ${{ github.event_name == 'push' && 'non-publie' || '' }}
+
+  # Le même commit, construit dans un autre dossier : seule son empreinte sert.
+  exe-ailleurs:
+    name: Exe, autre dossier
+    uses: ./.github/workflows/exe.yml # zizmor: ignore[self-repository]
+    with:
+      dossier: ailleurs/sollicito
+      complet: false
+
+  reproductibilite:
+    name: Reproductibilité
+    needs: [exe, exe-ailleurs]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Comparer les empreintes des deux constructions
+        env:
+          PREMIERE: ${{ needs.exe.outputs.empreinte }}
+          SECONDE: ${{ needs.exe-ailleurs.outputs.empreinte }}
+        run: |
+          echo "Première construction : $PREMIERE"
+          echo "Seconde construction, autre dossier : $SECONDE"
+          if [ -z "$PREMIERE" ] || [ "$PREMIERE" != "$SECONDE" ]; then
+            echo "Les deux constructions du même commit ne donnent pas le même exe."
+            exit 1
+          fi
+
+  # La publication à blanc, sans id-token ni écriture : la garde, éprouvée sur des refs admises et refusées, et la
+  # configuration de release-please. La préparation des fichiers se fait dans le job « Exe ». Rien ne s'atteste,
+  # rien ne s'envoie.
+  publication-a-blanc:
+    name: Publication, à blanc
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Récupérer le dépôt, avec l'historique de main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Éprouver la garde de la publication
+        run: bash .github/scripts/tester-la-garde.sh
+
+      # Le contrôle des déclencheurs lit les workflows en YAML : yq 4.54.3, téléchargé, empreinte vérifiée.
+      - name: Installer yq 4.54.3
+        run: |
+          mkdir -p "$RUNNER_TEMP/outils"
+          curl --fail --silent --show-error --location --retry 3 --output "$RUNNER_TEMP/outils/yq" \
+            https://github.com/mikefarah/yq/releases/download/v4.54.3/yq_linux_amd64
+          echo "129534601871538efe0ba4c5e62a34fb1d5f469bcb975c4fddeb467d82974973  $RUNNER_TEMP/outils/yq" | sha256sum --check --strict
+          chmod +x "$RUNNER_TEMP/outils/yq"
+          "$RUNNER_TEMP/outils/yq" --version
+
+      - name: Contrôler la configuration de release-please
+        run: YQ="$RUNNER_TEMP/outils/yq" bash .github/scripts/tester-la-version.sh
+
   # Seule vérification à rendre obligatoire : elle échoue dès qu'un job ci-dessus n'a pas réussi.
   verdict:
     name: Verdict
     if: always()
-    needs: [dotnet, interface, fenetre]
+    needs: [dotnet, interface, fenetre, exe, exe-ailleurs, reproductibilite, publication-a-blanc]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
