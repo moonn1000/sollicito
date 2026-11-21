@@ -84,7 +84,11 @@ bloc "leurre en guillemets doubles, échappement" 'leurre: "\non:\n  workflow_di
 bloc "leurre en guillemets simples, clé explicite" "leurre: '\\non:\\n  workflow_dispatch:\\n'\\n? on\\n:\\n  push:\\n  workflow_dispatch:\\n"
 # Deux clés que YAML 1.1 lit comme « on » : un flottant sexagésimal qui vaut 1, et une fusion à la racine.
 bloc "clé sexagésimale 0:1." 'on:\n  workflow_dispatch:\n0:1.:\n  push:\n'
-bloc "clé de fusion à la racine" 'x: &t {"on": {push: {}}}\n<<: *t\non:\n  workflow_dispatch:\n'
+bloc "clé de fusion à la racine" 'env: &t {"on": {push: {}}}\n<<: *t\non:\n  workflow_dispatch:\n'
+# Une fusion obtenue par l'étiquette !!merge, sur une clé permise de la racine ou du bloc « on ».
+bloc "étiquette !!merge sur env" '!!merge env: {"on": {push: {}}}\non:\n  workflow_dispatch:\n'
+bloc "étiquette !!merge dans on" 'on:\n  !!merge workflow_dispatch: {push: {}}\n'
+bloc "étiquette verbatim de fusion" '!<tag:yaml.org,2002:merge> env: {"on": {push: {}}}\non:\n  workflow_dispatch:\n'
 bloc "« on » entre guillemets, push ajouté" '"on":\n  push:\n  workflow_dispatch:\n'
 bloc "clé true:" 'true:\n  push:\n  workflow_dispatch:\n'
 bloc "clé On:" 'On:\n  push:\n  workflow_dispatch:\n'

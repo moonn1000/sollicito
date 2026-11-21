@@ -2,7 +2,8 @@
 # Contrôle par liste d'autorisation (ADR-0009) : le bloc « on » du workflow donné n'a qu'un déclencheur,
 # workflow_dispatch. Le fichier est lu par un vrai analyseur YAML, yq (YAML 1.2, comme actionlint), et non ligne à
 # ligne : une clé explicite (« ? on »), une étiquette (« !!str on »), un échappement (« "\x6Fn" ») ou un leurre logé
-# dans une chaîne multiligne ne le trompent pas. Les sauts de ligne qu'un analyseur YAML 1.1 lirait comme des fins
+# dans une chaîne multiligne ne le trompent pas. Seules les clés d'un workflow sont admises à la racine, et toute clé
+# de la racine et du bloc « on » doit être une simple chaîne : ni fusion (<<, !!merge), ni nombre, ni booléen. Les sauts de ligne qu'un analyseur YAML 1.1 lirait comme des fins
 # de ligne, et pas yq (CR seul, NEL, LS, PS), sont refusés d'office. Toute forme inattendue échoue, au lieu de passer.
 #
 # Usage : controler-les-declencheurs.sh <workflow.yml>
@@ -42,6 +43,12 @@ permises='["name","run-name","on","permissions","env","defaults","concurrency","
 [[ "$(jq --argjson permises "$permises" '[.[] | select(. as $cle | $permises | index($cle) | not)] | length' <<< "$cles")" == 0 ]] ||
   refuser "le workflow a une clé de racine qui n'est pas celle d'un workflow."
 
+# Toute clé de la racine et du bloc « on » est une simple chaîne (!!str) : une étiquette !!merge, posée sur une clé
+# permise, ferait fusionner sa valeur par un lecteur YAML 1.1, qui y trouverait un autre « on ».
+[[ "$(lire '[keys[] | tag]' | jq '[.[] | select(. != "!!str")] | length')" == 0 ]] ||
+  refuser "le workflow a une clé de racine qui n'est pas une simple chaîne (étiquette, fusion)."
 [[ "$(lire '.on | type')" == '"!!map"' ]] || refuser "le bloc « on » doit être un mapping."
+[[ "$(lire '[.on | keys[] | tag]' | jq '[.[] | select(. != "!!str")] | length')" == 0 ]] ||
+  refuser "le bloc « on » a une clé qui n'est pas une simple chaîne (étiquette, fusion)."
 [[ "$(lire '.on | keys')" == '["workflow_dispatch"]' ]] || refuser "le bloc « on » n'admet que workflow_dispatch."
 echo "Déclencheurs conformes : workflow_dispatch seul."
