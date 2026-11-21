@@ -91,8 +91,11 @@ test("un brouillon refusé fait relire les relances : celle-ci n'était plus à 
 
   fireEvent.click(await screen.findByRole("button", { name: "Préparer le brouillon de la relance : Comptable, chez Lumière Verte SA" }));
 
-  expect((await screen.findByRole("alert")).textContent).toBe(MESSAGES_DU_BROUILLON.refuse);
   await vi.waitFor(() => expect(listerLesRelances).toHaveBeenCalledTimes(2));
+  // Le message reste, même quand la relecture retire la relance et son bouton.
+  expect((await screen.findByRole("status")).textContent).toBe(
+    "Un brouillon ne s'est pas ouvert : sa relance n'était plus à faire. La liste a été relue.",
+  );
 });
 
 test("les textes d'une relance s'affichent échappés, jamais comme du HTML", async () => {

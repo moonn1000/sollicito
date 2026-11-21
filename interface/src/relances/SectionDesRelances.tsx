@@ -19,6 +19,7 @@ export function SectionDesRelances({ client }: { client: ClientDeLApi }) {
   const [envoi, setEnvoi] = useState<"pret" | "en-cours" | "echec">("pret");
   const [message, setMessage] = useState<{ sorte: "annonce" | "alerte"; texte: string }>();
   const champ = useRef<HTMLInputElement>(null);
+  const envoiEnCours = useRef(false);
   const affichee = useRef(true);
 
   useEffect(() => {
@@ -43,7 +44,8 @@ export function SectionDesRelances({ client }: { client: ClientDeLApi }) {
 
   async function enregistrer(evenement: FormEvent) {
     evenement.preventDefault();
-    if (envoi === "en-cours") {
+    // Un ref, et non l'état : deux clics dans le même rendu n'envoient qu'une fois.
+    if (envoiEnCours.current) {
       return;
     }
 
@@ -55,6 +57,7 @@ export function SectionDesRelances({ client }: { client: ClientDeLApi }) {
       return;
     }
 
+    envoiEnCours.current = true;
     setEnvoi("en-cours");
     try {
       const resultat = await client.changerLeDelaiParDefaut(jours);
@@ -77,6 +80,8 @@ export function SectionDesRelances({ client }: { client: ClientDeLApi }) {
       if (affichee.current) {
         setEnvoi("echec");
       }
+    } finally {
+      envoiEnCours.current = false;
     }
   }
 

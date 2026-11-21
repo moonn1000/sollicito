@@ -95,7 +95,7 @@ export const MESSAGES_DU_BROUILLON: Record<IssueDuBrouillon, string> = {
   ouvert: "Le brouillon s'est ouvert dans votre messagerie : relisez-le, puis envoyez-le vous-même. Une fois envoyé, marquez la relance comme faite.",
   refuse: "Le brouillon ne s'est pas ouvert : cette relance n'est plus à faire.",
   impossible:
-    "Le brouillon ne s'est pas ouvert : aucune messagerie n'est associée aux liens « mailto » sur ce poste. Choisissez-en une dans les applications par défaut de Windows.",
+    "Le brouillon ne s'est pas ouvert : Windows n'a pas pu le passer à une messagerie. Vérifiez qu'une messagerie est choisie pour les liens « mailto » dans les applications par défaut de Windows.",
   sansReponse: "Le brouillon ne s'est pas ouvert : la fenêtre de Sollicito n'a pas répondu. Réessayez.",
 };
 

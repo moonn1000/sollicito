@@ -44,8 +44,12 @@ export function RelancesDuTableauDeBord({
     };
   }, [client, lectures]);
 
+  // Le message reste après la relecture, qui retire la relance close et le message de son bouton.
+  const [relue, setRelue] = useState(false);
+
   const relire = (issue: IssueDuBrouillon) => {
     if (issue === "refuse") {
+      setRelue(true);
       setLectures((nombre) => nombre + 1);
     }
   };
@@ -53,6 +57,11 @@ export function RelancesDuTableauDeBord({
   return (
     <section className="relances" aria-labelledby="titre-des-relances-du-tableau">
       <h3 id="titre-des-relances-du-tableau">Relances</h3>
+      {relue && (
+        <p className="annonce" role="status">
+          Un brouillon ne s'est pas ouvert : sa relance n'était plus à faire. La liste a été relue.
+        </p>
+      )}
       {chargement.etape === "chargement" && <p>Chargement des relances…</p>}
       {chargement.etape === "echec" && (
         <p className="alerte" role="alert">

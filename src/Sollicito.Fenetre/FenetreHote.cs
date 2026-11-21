@@ -25,6 +25,9 @@ internal sealed class FenetreHote : Form
     private readonly BrouillonsDesRelances _brouillons;
     private readonly WebView2 _vue = new() { Dock = DockStyle.Fill };
     private CoreWebView2Environment? _environnement;
+    // Les demandes de brouillon reçues pendant un autre, servies dans l'ordre ; au-delà, une demande est ignorée.
+    private const int BrouillonsEnAttenteAuPlus = 4;
+    private readonly Queue<int> _brouillonsEnAttente = new();
     private bool _choixEnCours;
     private bool _brouillonEnCours;
 
@@ -173,10 +176,23 @@ internal sealed class FenetreHote : Form
             _choixEnCours = true;
             BeginInvoke(ChoisirLeDossierDesSauvegardes);
         }
-        else if (ReglesDeLaFenetre.DemandeLeBrouillon(args.Source, args.WebMessageAsJson, _origine, out var relance) && !_brouillonEnCours)
+        else if (ReglesDeLaFenetre.DemandeLeBrouillon(args.Source, args.WebMessageAsJson, _origine, out var relance)
+            && _brouillonsEnAttente.Count < BrouillonsEnAttenteAuPlus)
         {
             // Un seul brouillon à la fois, ouvert après ce gestionnaire, comme le dialogue : le shell de Windows peut
-            // afficher sa propre fenêtre.
+            // afficher sa propre fenêtre. Une demande faite pendant un brouillon attend son tour, et reçoit sa réponse.
+            _brouillonsEnAttente.Enqueue(relance);
+            if (!_brouillonEnCours)
+            {
+                OuvrirLeBrouillonSuivant();
+            }
+        }
+    }
+
+    private void OuvrirLeBrouillonSuivant()
+    {
+        if (_brouillonsEnAttente.TryDequeue(out var relance))
+        {
             _brouillonEnCours = true;
             BeginInvoke(() => OuvrirLeBrouillon(relance));
         }
@@ -209,6 +225,7 @@ internal sealed class FenetreHote : Form
         if (!IsDisposed && _vue.CoreWebView2 is { } navigateur)
         {
             navigateur.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDuBrouillon(relance, issue));
+            OuvrirLeBrouillonSuivant();
         }
     }
 

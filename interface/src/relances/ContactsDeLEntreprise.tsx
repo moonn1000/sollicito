@@ -38,6 +38,7 @@ export function ContactsDeLEntreprise({
   const [edition, setEdition] = useState<Edition>({ sorte: "aucune" });
   const [message, setMessage] = useState<Message>();
   const [enCours, setEnCours] = useState(false);
+  const suppressionEnCours = useRef(false);
   const affichee = useRef(true);
   const titre = useRef<HTMLHeadingElement>(null);
 
@@ -63,10 +64,12 @@ export function ContactsDeLEntreprise({
   }
 
   async function supprimer(contact: ContactConnu) {
-    if (enCours) {
+    // Un ref, et non l'état : deux clics dans le même rendu ne suppriment qu'une fois.
+    if (suppressionEnCours.current) {
       return;
     }
 
+    suppressionEnCours.current = true;
     setEnCours(true);
     setMessage(undefined);
     try {
@@ -84,6 +87,7 @@ export function ContactsDeLEntreprise({
         void relireLesContacts();
       }
     } finally {
+      suppressionEnCours.current = false;
       if (affichee.current) {
         setEnCours(false);
       }
@@ -245,6 +249,7 @@ function FormulaireDUnContact({
   const [email, setEmail] = useState(depart.email);
   const [refus, setRefus] = useState<RefusDuContact>({});
   const [envoi, setEnvoi] = useState<"pret" | "en-cours" | "echec">("pret");
+  const envoiEnCours = useRef(false);
   const champs = { nom: useRef<HTMLInputElement>(null), email: useRef<HTMLInputElement>(null) };
 
   useEffect(() => {
@@ -253,10 +258,12 @@ function FormulaireDUnContact({
 
   async function soumettre(evenement: FormEvent) {
     evenement.preventDefault();
-    if (envoi === "en-cours") {
+    // Un ref, et non l'état : deux clics dans le même rendu n'envoient qu'une fois.
+    if (envoiEnCours.current) {
       return;
     }
 
+    envoiEnCours.current = true;
     setEnvoi("en-cours");
     try {
       const resultat = await envoyer({ nom, email });
@@ -270,6 +277,8 @@ function FormulaireDUnContact({
       (resultat.refus.nom !== undefined ? champs.nom : champs.email).current?.focus();
     } catch {
       setEnvoi("echec");
+    } finally {
+      envoiEnCours.current = false;
     }
   }
 

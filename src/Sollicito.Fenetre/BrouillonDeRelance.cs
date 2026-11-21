@@ -93,6 +93,6 @@ internal enum IssueDuBrouillon
     /// <summary>La relance n'existe pas, n'est plus à faire, ou son brouillon ne se construit pas : rien ne s'ouvre.</summary>
     Refuse,
 
-    /// <summary>Aucune messagerie n'est associée aux liens mailto sur le poste : rien ne s'ouvre.</summary>
+    /// <summary>Le shell de Windows n'a pas pu passer le lien à une messagerie, d'ordinaire faute d'en avoir une : rien ne s'ouvre.</summary>
     Impossible,
 }

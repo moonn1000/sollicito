@@ -57,14 +57,14 @@ Le délai par défaut vaut 7 jours d'usine, de 1 à 365. Il vit dans `reglages.j
 ### Le brouillon, ouvert par l'hôte à partir de la base
 
 - **La page** envoie à l'hôte `{"type":"ouvrirLeBrouillon","relance":<id>}`. Le message ne porte que l'identifiant de la relance, ni adresse ni texte, comme le choix du dossier des sauvegardes ne porte aucun chemin (ADR-0008). Sa source est contrôlée comme celle du canal du jeton. `relance` doit être un entier positif, et un autre champ n'est jamais lu. Un message d'une autre source ou d'une autre forme n'ouvre rien.
-- **L'hôte** agit après la fin du gestionnaire du message, un brouillon à la fois. Il demande les champs au service des relances, en mémoire et non par une route. Ce service lit la relance en base, et rend l'adresse du destinataire, l'objet et le corps. Seule une relance à faire a un brouillon.
+- **L'hôte** agit après la fin du gestionnaire du message, un brouillon à la fois : une demande reçue pendant un autre brouillon attend son tour, quatre au plus, et reçoit sa réponse. Il demande les champs au service des relances, en mémoire et non par une route. Ce service lit la relance en base, et rend l'adresse du destinataire, l'objet et le corps. Seule une relance à faire a un brouillon.
 - **Le lien** est construit par l'hôte seul :
   - `mailto:`, puis l'adresse, revérifiée par la règle du contact et encodée : tout sauf les caractères non réservés de la RFC 3986 et l'`@` ;
   - puis `?subject=…&body=…`, en UTF-8 encodé de même, chaque fin de ligne en `%0D%0A` ;
   - aucun autre en-tête : ni copie, ni copie cachée, ni pièce jointe.
 
   Seul un lien qui commence par `mailto:` va au shell de Windows (`UseShellExecute`). Une adresse lue en base qui ne passe plus la règle fait refuser le brouillon.
-- **L'issue** revient à la page, sans rien du brouillon : ouvert ; refusé (relance inconnue, close, ou brouillon qui ne se construit pas) ; impossible (aucune messagerie associée aux liens `mailto`). La page relit les relances quand il est refusé. Sans réponse de l'hôte dans les quinze secondes, elle cesse d'attendre.
+- **L'issue** revient à la page, sans rien du brouillon : ouvert ; refusé (relance inconnue, close, ou brouillon qui ne se construit pas) ; impossible (le shell de Windows n'a pas pu passer le lien à une messagerie, d'ordinaire faute d'en avoir une). La page relit les relances quand il est refusé. Sans réponse de l'hôte dans les quinze secondes, elle cesse d'attendre.
 - **La page n'ouvre jamais rien** : la navigation vers `mailto:` et `LaunchingExternalUriScheme` restent annulés (ADR-0003, ADR-0006).
 - **La version de test** note le lien dans `brouillons-ouverts.txt`, dans son dossier de données, au lieu de le lancer. Cet écart n'est pas compilé dans la version publiée.
 

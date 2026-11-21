@@ -280,6 +280,7 @@ function FormulaireDUneRelance({
   const [destinataire, setDestinataire] = useState(destinataireDeDepart === null ? "" : String(destinataireDeDepart));
   const [refus, setRefus] = useState<RefusDeLaRelance>({});
   const [envoi, setEnvoi] = useState<"pret" | "en-cours" | "echec">("pret");
+  const envoiEnCours = useRef(false);
   const champDuDelai = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -291,7 +292,8 @@ function FormulaireDUneRelance({
 
   async function soumettre(evenement: FormEvent) {
     evenement.preventDefault();
-    if (envoi === "en-cours") {
+    // Un ref, et non l'état : deux clics dans le même rendu n'envoient qu'une fois.
+    if (envoiEnCours.current) {
       return;
     }
 
@@ -301,6 +303,7 @@ function FormulaireDUneRelance({
       return;
     }
 
+    envoiEnCours.current = true;
     setEnvoi("en-cours");
     try {
       const refusRecus = await envoyer({ delai: jours, destinataire: destinataire === "" ? null : Number(destinataire) });
@@ -311,6 +314,8 @@ function FormulaireDUneRelance({
       }
     } catch {
       setEnvoi("echec");
+    } finally {
+      envoiEnCours.current = false;
     }
   }
 
