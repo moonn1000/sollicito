@@ -29,6 +29,9 @@ public sealed partial class SauvegardesDeLaBase
     /// <summary>Le temps au-delà duquel la copie de la fermeture est abandonnée : elle ne retient pas la fermeture.</summary>
     public static readonly TimeSpan DelaiDeLaCopieDeFermeture = TimeSpan.FromSeconds(10);
 
+    /// <summary>Le temps laissé à une copie de fermeture abandonnée pour s'interrompre et retirer son fichier provisoire.</summary>
+    public static readonly TimeSpan DelaiDeLInterruption = TimeSpan.FromSeconds(2);
+
     private readonly DossierDeLaBase _base;
     private readonly FichierDesReglages _reglages;
     private readonly FichierDeLaDerniereCopie _derniereCopieGardee;
@@ -86,10 +89,17 @@ public sealed partial class SauvegardesDeLaBase
             Charger();
             var dossier = DossierDesCopies;
             var noms = LireLesNoms(dossier);
-            // Après un échec, chaque essai refait la copie : un dossier revenu efface ainsi l'alerte.
+            // Après un échec, chaque essai refait la copie : un dossier revenu efface ainsi l'alerte. La copie retire
+            // d'abord les fichiers provisoires de l'installation.
             if (noms is null || _echec is not null || PlanDesCopies.ACopier(noms, _installation, Aujourdhui))
             {
                 await CopierAsync(dossier, annulation);
+            }
+            else if (noms.Any(nom => NomsDesCopies.EstUnProvisoireDe(nom, _installation)))
+            {
+                // La copie du jour est faite, mais un arrêt a laissé à côté le fichier provisoire d'une autre copie, celle
+                // d'une fermeture qui n'a pas pu le retirer : il se retire quand même.
+                await CopiesVerifiees.RetirerLesProvisoiresAsync(dossier, nom => NomsDesCopies.EstUnProvisoireDe(nom, _installation));
             }
 
             await PublierAsync();
@@ -123,23 +133,41 @@ public sealed partial class SauvegardesDeLaBase
     /// La copie de la fermeture : la copie du jour refaite, pour qu'elle garde la fin de la séance. Seul
     /// <see cref="DelaiDeLaCopieDeFermeture"/> la borne : au-delà, elle est abandonnée, la copie d'avant reste, et la
     /// méthode rend faux. Le jeton d'arrêt de l'hôte ne l'écourte pas : déjà annulé, il laisserait la copie finir après
-    /// la fermeture.
+    /// la fermeture. Abandonnée, la copie s'interrompt et retire son fichier provisoire avant la sortie du processus. Si
+    /// elle ne s'est pas arrêtée après <see cref="DelaiDeLInterruption"/>, ou si le fichier ne s'efface pas, il reste : la
+    /// vérification du lancement suivant le retire.
     /// </summary>
     public async Task<bool> FaireLaCopieDeFermetureAsync()
     {
+        using var interruption = new CancellationTokenSource();
+        // Sur un autre fil : les appels de SQLite ne rendent la main qu'une fois finis, et une base occupée les retient
+        // jusqu'au délai de ses commandes. Le délai de la fermeture court ainsi dès le début de la copie.
+        var copie = Task.Run(() => RefaireLaCopieDuJourAsync(interruption.Token), CancellationToken.None);
         try
         {
-            // Sur un autre fil : les appels de SQLite ne rendent la main qu'une fois finis, et une base occupée les
-            // retient jusqu'au délai de ses commandes. Le délai de la fermeture court ainsi dès le début de la copie.
-            await Task.Run(() => RefaireLaCopieDuJourAsync(CancellationToken.None), CancellationToken.None)
-                .WaitAsync(DelaiDeLaCopieDeFermeture, _horloge);
+            await copie.WaitAsync(DelaiDeLaCopieDeFermeture, _horloge);
             return true;
         }
         catch (TimeoutException)
         {
             CopieDeFermetureAbandonnee(_journal);
-            return false;
         }
+
+        await interruption.CancelAsync();
+        try
+        {
+            await copie.WaitAsync(DelaiDeLInterruption, _horloge);
+        }
+        catch (OperationCanceledException)
+        {
+            // La copie s'est arrêtée, son fichier provisoire retiré.
+        }
+        catch (TimeoutException)
+        {
+            CopieDeFermetureNonArretee(_journal);
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -394,4 +422,7 @@ public sealed partial class SauvegardesDeLaBase
 
     [LoggerMessage(EventId = 38, Level = LogLevel.Warning, Message = "Instant de la dernière copie non gardé ({TypeDErreur}).")]
     private static partial void DerniereCopieNonGardee(ILogger journal, string typeDErreur);
+
+    [LoggerMessage(EventId = 39, Level = LogLevel.Warning, Message = "Copie de la fermeture abandonnée, mais pas encore arrêtée : son fichier provisoire se retirera au prochain lancement.")]
+    private static partial void CopieDeFermetureNonArretee(ILogger journal);
 }

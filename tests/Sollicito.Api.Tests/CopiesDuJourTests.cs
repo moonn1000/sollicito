@@ -226,7 +226,7 @@ public sealed class CopiesDuJourTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Une_copie_de_fermeture_trop_longue_est_abandonnee_et_la_copie_d_avant_reste()
+    public async Task Une_copie_de_fermeture_qui_attend_une_base_occupee_est_abandonnee_puis_s_arrete_et_la_copie_d_avant_reste()
     {
         var horloge = new HorlogeAMinuterie(new DateTimeOffset(2026, 11, 18, 13, 30, 0, TimeSpan.Zero));
         var api = await LancerSurAsync(_dossier, horloge);
@@ -255,19 +255,89 @@ public sealed class CopiesDuJourTests : IAsyncLifetime
             var fermeture = api.DisposeAsync().AsTask();
             await Task.Delay(500, TestContext.Current.CancellationToken);
             Assert.False(fermeture.IsCompleted);
+            // Le délai échoit, puis l'horloge n'avance plus : la fermeture ne finit que si la copie s'arrête d'elle-même.
             horloge.Avancer(SauvegardesDeLaBase.DelaiDeLaCopieDeFermeture);
 
             await fermeture.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.Equal(TimeSpan.FromSeconds(10), SauvegardesDeLaBase.DelaiDeLaCopieDeFermeture);
             Assert.Equal(avant, File.GetLastWriteTimeUtc(copie));
+            Assert.Empty(Directory.EnumerateFiles(ParDefaut, "*.partielle"));
         }
         finally
         {
             verrou.Dispose();
         }
 
-        // La copie abandonnée finit seule, une fois la base rendue : on l'attend avant d'effacer le dossier.
-        await AttendreAsync(() => !Directory.EnumerateFiles(ParDefaut, "*.partielle").Any() && File.GetLastWriteTimeUtc(copie) > avant);
+        // La copie arrêtée ne reprend pas une fois la base rendue : la copie d'avant reste telle quelle.
+        await Task.Delay(1_000, TestContext.Current.CancellationToken);
+        Assert.Equal(avant, File.GetLastWriteTimeUtc(copie));
+        Assert.Empty(Directory.EnumerateFiles(ParDefaut, "*.partielle"));
+    }
+
+    [Fact]
+    public async Task Une_copie_de_fermeture_abandonnee_en_pleine_ecriture_s_interrompt_et_ne_laisse_aucun_fichier_provisoire()
+    {
+        var horloge = new HorlogeAMinuterie(new DateTimeOffset(2026, 11, 18, 13, 30, 0, TimeSpan.Zero));
+        var api = await LancerSurAsync(_dossier, horloge);
+        string copie;
+        DateTime avant;
+        try
+        {
+            await api.AttendreLaPremiereVerificationAsync();
+            copie = Path.Combine(ParDefaut, api.CopieDuJour(Le18));
+            avant = File.GetLastWriteTimeUtc(copie);
+            // Un lest de 128 Mo : la copie de la fermeture dure le temps que le délai échoie pendant qu'elle écrit.
+            using var connexion = Ouvrir(Base);
+            connexion.Executer("CREATE TABLE Lest (Octets BLOB)");
+            connexion.Executer("WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 512) INSERT INTO Lest SELECT randomblob(262144) FROM n");
+        }
+        catch
+        {
+            await api.DisposeAsync();
+            throw;
+        }
+
+        var fermeture = api.DisposeAsync().AsTask();
+        var debut = DateTime.UtcNow;
+        while (!Directory.EnumerateFiles(ParDefaut, "*.partielle").Any())
+        {
+            Assert.False(fermeture.IsCompleted, "La copie de la fermeture a fini avant que son fichier provisoire ne se voie : lest trop léger.");
+            Assert.True(DateTime.UtcNow - debut < TimeSpan.FromSeconds(30), "La copie de la fermeture n'a pas commencé.");
+            await Task.Delay(1, TestContext.Current.CancellationToken);
+        }
+
+        // Le délai échoit en pleine écriture, puis l'horloge n'avance plus : la fermeture ne finit que si la copie s'arrête
+        // d'elle-même, son fichier provisoire retiré.
+        horloge.Avancer(SauvegardesDeLaBase.DelaiDeLaCopieDeFermeture);
+        await fermeture.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
+        Assert.Empty(Directory.EnumerateFiles(ParDefaut, "*.partielle"));
+        Assert.Equal(avant, File.GetLastWriteTimeUtc(copie));
+        Assert.True(EstSaine(copie));
+    }
+
+    [Fact]
+    public async Task Un_fichier_provisoire_reste_d_une_fermeture_se_retire_au_lancement_suivant_meme_avec_la_copie_du_jour()
+    {
+        string reste;
+        await using (var api = await LancerSurAsync(_dossier, new HorlogeDeTest()))
+        {
+            await api.AttendreLaPremiereVerificationAsync();
+            reste = Path.Combine(ParDefaut, api.CopieDuJour(Le18) + ".0a1b2c3d.partielle");
+        }
+
+        // Le reste d'une copie que l'arrêt du processus a coupée, à côté de la copie du jour, qui existe déjà.
+        await File.WriteAllTextAsync(reste, "fictif", TestContext.Current.CancellationToken);
+        var autre = Path.Combine(ParDefaut, "sollicito-99aa88bb-2026-11-18.db.0a1b2c3d.partielle");
+        await File.WriteAllTextAsync(autre, "fictif", TestContext.Current.CancellationToken);
+
+        await using (var relancee = await LancerSurAsync(_dossier, new HorlogeDeTest()))
+        {
+            await relancee.AttendreLaPremiereVerificationAsync();
+
+            Assert.False(File.Exists(reste));
+            // Celui d'une autre installation reste : il n'est pas à ce poste.
+            Assert.True(File.Exists(autre));
+        }
     }
 
     [Fact]

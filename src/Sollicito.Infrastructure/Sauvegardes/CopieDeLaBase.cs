@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using Microsoft.Data.Sqlite;
+using SQLitePCL;
 
 namespace Sollicito.Infrastructure.Sauvegardes;
 
@@ -13,9 +15,18 @@ public static class CopieDeLaBase
     // Le chemin de la copie passe en paramètre, jamais dans le texte de la requête.
     private const string CopierVers = "VACUUM INTO $destination";
 
+    // Une base qu'une autre connexion occupe se réessaie jusqu'à ce délai, celui que Microsoft.Data.Sqlite donne d'office
+    // à une commande. Ses propres essais ne regardent pas l'annulation : ils se font donc par tranches d'une seconde,
+    // entre lesquelles elle se voit.
+    private static readonly TimeSpan AttenteDUneBaseOccupee = TimeSpan.FromSeconds(30);
+    private const int TrancheDAttenteEnSecondes = 1;
+    private static readonly TimeSpan EntreDeuxTranches = TimeSpan.FromMilliseconds(150);
+
     /// <summary>
     /// Écrit dans <paramref name="destination"/>, qui ne doit pas exister, un instantané de la base : tout ce qui y est
-    /// validé, même ce qui n'est encore que dans son journal WAL, et rien d'une écriture en cours.
+    /// validé, même ce qui n'est encore que dans son journal WAL, et rien d'une écriture en cours. L'annulation arrête la
+    /// copie, en pleine écriture (<c>sqlite3_interrupt</c>) comme quand elle attend une base occupée, et lève
+    /// <see cref="OperationCanceledException"/> : les appels de SQLite ne regardent pas le jeton d'eux-mêmes.
     /// </summary>
     public static async Task CopierAsync(string baseSource, string destination, CancellationToken annulation)
     {
@@ -24,8 +35,32 @@ public static class CopieDeLaBase
         await using var commande = connexion.CreateCommand();
         commande.CommandText = CopierVers;
         commande.Parameters.AddWithValue("$destination", destination);
-        await commande.ExecuteNonQueryAsync(annulation);
+        commande.CommandTimeout = TrancheDAttenteEnSecondes;
+        // sqlite3_interrupt se lance d'un autre fil, sans risque : SQLite l'a prévu pour cela.
+        using var interruption = annulation.Register(static poignee => raw.sqlite3_interrupt((sqlite3)poignee!), connexion.Handle);
+        var debut = Stopwatch.GetTimestamp();
+        while (true)
+        {
+            try
+            {
+                await commande.ExecuteNonQueryAsync(annulation);
+                break;
+            }
+            catch (SqliteException erreur) when (annulation.IsCancellationRequested)
+            {
+                throw new OperationCanceledException("La copie de la base a été interrompue.", erreur, annulation);
+            }
+            catch (SqliteException erreur) when (EstOccupee(erreur) && Stopwatch.GetElapsedTime(debut) < AttenteDUneBaseOccupee)
+            {
+                await Task.Delay(EntreDeuxTranches, annulation);
+            }
+        }
+
+        annulation.ThrowIfCancellationRequested();
     }
+
+    // SQLITE_BUSY et SQLITE_LOCKED, quel que soit leur code étendu : ceux que Microsoft.Data.Sqlite réessaie lui-même.
+    private static bool EstOccupee(SqliteException erreur) => (erreur.SqliteErrorCode & 0xFF) is raw.SQLITE_BUSY or raw.SQLITE_LOCKED;
 
     /// <summary>Vrai si le fichier se relit comme une base SQLite saine : <c>PRAGMA integrity_check</c> rend « ok ».</summary>
     public static async Task<bool> EstSaineAsync(string fichier, CancellationToken annulation)
