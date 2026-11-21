@@ -182,6 +182,7 @@ Les données vivent sous le profil de l'utilisateur, dans le dossier de données
 - la base, `sollicito.db`, que l'API crée ou met à jour au lancement, avant d'écouter ;
 - le profil du runtime WebView2, `WebView2\`, que la fenêtre fixe à la création de l'environnement ;
 - au palier 2, les sauvegardes, par défaut dans `Sauvegardes\` (#26) : leur dossier se règle, et l'utilisateur peut le placer sur un autre support, puisqu'une copie sur le même disque ne protège pas de sa panne (ADR-0001, D10) ;
+- au palier 3, ce qu'ajoute la restauration (#28, ADR-0012) : dans le dossier des sauvegardes par défaut, la copie d'avant chaque restauration, gardée hors de la rotation, et, devant une base abîmée, sa copie brute, ses fichiers tels quels, gardée mais pas restaurable ; dans le dossier de données, le temps d'une restauration, la copie de travail `sollicito.db.<marque>.restauration`, où la copie choisie se vérifie. Les copies du jour d'une autre installation, rangées dans le même dossier, se restaurent aussi, sans compter dans la dernière copie ni dans la rotation ;
 - au palier 2 aussi, les réglages de l'application, dans `reglages.json`, hors de la base, à commencer par le dossier des sauvegardes (#26) ;
 - au palier 4, les clés d'IA, chiffrées par Data Protection et DPAPI, rangées hors de la base : ni les sauvegardes ni les exports ne les emportent.
 

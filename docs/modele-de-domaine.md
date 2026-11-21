@@ -402,7 +402,11 @@ La fiche d'une candidature (#12) mène à sa modification et à sa suppression (
 Ni les réglages ni les sauvegardes ne sont des entités du domaine : rien d'eux n'entre dans la base (ADR-0008).
 
 - **Les réglages de l'application** vivent dans `reglages.json`, dans le dossier de données, à côté de la base, et non dedans : une copie ne les emporte pas, une restauration (#28) ne les change pas, et ils se lisent avant que la base ne soit migrée. Le premier est le dossier des sauvegardes (#26), le deuxième le délai par défaut des relances (#14), de 7 jours d'usine ; #43 y ajoutera le choix du fournisseur d'IA. Chaque réglage se lit et s'écrit à part : un délai mal écrit vaut 7 jours sans toucher au dossier des sauvegardes. Un fichier illisible en entier ne se réécrit qu'au choix d'un dossier des sauvegardes (ADR-0008, ADR-0011).
-- **Une sauvegarde** est une copie de toute la base, à sa date : une par jour d'utilisation, les sept dernières gardées, plus une avant chaque mise à jour de la base. Elle copie la base telle quelle, sans rien changer à ses données.
+- **Une sauvegarde** est une copie de toute la base, à sa date : une par jour d'utilisation, les sept dernières gardées, plus une avant chaque mise à jour de la base. Elle copie la base telle quelle, sans rien changer à ses données. La restauration (#28, ADR-0012) en ajoute d'autres sortes :
+  - **la copie d'avant une restauration**, de la base qu'une restauration remplace : gardée, hors de la rotation, et restaurable, c'est le retour en arrière ;
+  - **la copie brute** d'une base abîmée, ses fichiers tels quels : gardée, mais ni listée ni restaurable ; un outil de récupération peut s'en servir ;
+  - **les copies du jour d'une autre installation**, rangées dans le même dossier : restaurables, elles n'entrent ni dans la dernière copie, ni dans l'alerte, ni dans la rotation ;
+  - **la copie de travail** `.restauration`, dans le dossier de données, le temps d'une restauration : la copie choisie s'y recopie, s'y vérifie et s'y migre, puis elle s'efface.
 
 ## Ce que les stories en reprennent
 
