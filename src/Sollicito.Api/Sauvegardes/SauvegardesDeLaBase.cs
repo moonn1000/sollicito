@@ -421,7 +421,11 @@ public sealed partial class SauvegardesDeLaBase
         var nomsParDefaut = noms;
         if (_dossierChoisi is not null)
         {
-            // Un autre dossier est choisi : celui par défaut garde les copies d'avant, et les copies du jour d'avant le choix.
+            // Un autre dossier est choisi. Il peut garder lui aussi des copies d'avant : le dossier des sauvegardes d'une
+            // installation d'avant, recopié sur une clé, par exemple. Celui par défaut garde les copies d'avant de cette
+            // installation, et les copies du jour d'avant le choix.
+            copies.AddRange(Garder(dossier, PlanDesCopies.CopiesDAvantUneRestauration(noms ?? []), SorteDeCopie.AvantRestauration, LieuDUneCopie.DossierDesCopies));
+            copies.AddRange(Garder(dossier, PlanDesCopies.CopiesDAvantUneMiseAJour(noms ?? []), SorteDeCopie.AvantMiseAJour, LieuDUneCopie.DossierDesCopies));
             lieuParDefaut = LieuDUneCopie.DossierParDefaut;
             nomsParDefaut = LireLesNoms(parDefaut);
             copies.AddRange(Garder(parDefaut, PlanDesCopies.CopiesDuJour(nomsParDefaut ?? [], _installation), SorteDeCopie.DuJour, lieuParDefaut));
