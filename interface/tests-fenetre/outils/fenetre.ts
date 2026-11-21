@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { chromium, type Browser, type Page } from "playwright-core";
@@ -29,15 +29,28 @@ export interface FenetreLancee {
   sortie(): string;
   /** Ferme la fenêtre comme l'utilisateur (message WM_CLOSE), puis rend le code de sortie de l'exe. */
   fermer(): Promise<number | null>;
-  /** Arrête l'exe s'il tourne encore, puis supprime le dossier de données. */
+  /** Tue l'exe par son PID, sans rien lui laisser finir : un arrêt brutal (#28). Le dossier de données reste. */
+  tuer(): Promise<void>;
+  /** Arrête l'exe s'il tourne encore, puis supprime le dossier de données, s'il est celui que le lancement a créé. */
   nettoyer(): Promise<void>;
+}
+
+/** Ce qui règle un lancement de la version de test. */
+export interface OptionsDuLancement {
+  /** Un dossier de données à reprendre, sous le dossier temporaire ; le test le garde et le supprime lui-même. */
+  dossierDeDonnees?: string;
+  /** Des variables d'environnement de plus, comme le point d'arrêt de la restauration (#28). */
+  environnement?: Record<string, string>;
 }
 
 const DELAI_DE_LANCEMENT_EN_MS = 60_000;
 const DELAI_DE_FERMETURE_EN_MS = 20_000;
 
-/** Lance la version de test sur un dossier de données neuf, et attend que l'interface soit affichée. */
-export async function lancerLaFenetre(): Promise<FenetreLancee> {
+/**
+ * Lance la version de test sur un dossier de données neuf, ou sur celui que donne le test, et attend que l'interface
+ * soit affichée. Le dossier est toujours sous le dossier temporaire : jamais celui de l'utilisateur.
+ */
+export async function lancerLaFenetre(options: OptionsDuLancement = {}): Promise<FenetreLancee> {
   if (process.platform !== "win32") {
     throw new Error("La fenêtre de Sollicito ne tourne que sous Windows.");
   }
@@ -45,11 +58,16 @@ export async function lancerLaFenetre(): Promise<FenetreLancee> {
     throw new Error(`Version de test introuvable (${EXE_DE_TEST}) : lancez « pnpm run test:fenetre ».`);
   }
 
-  const dossierDeDonnees = await mkdtemp(join(tmpdir(), "sollicito-fenetre-"));
+  const dossierDeDonnees = options.dossierDeDonnees ?? (await mkdtemp(join(tmpdir(), "sollicito-fenetre-")));
+  if (!resolve(dossierDeDonnees).toLowerCase().startsWith(resolve(tmpdir()).toLowerCase())) {
+    throw new Error("La version de test ne se lance que sur un dossier de données temporaire.");
+  }
+  const cree = options.dossierDeDonnees === undefined;
   const portCdp = await portLibre();
   const processus = spawn(EXE_DE_TEST, [], {
     env: {
       ...process.env,
+      ...options.environnement,
       SOLLICITO_TEST_DOSSIER_DONNEES: dossierDeDonnees,
       SOLLICITO_TEST_PORT_CDP: String(portCdp),
     },
@@ -60,12 +78,19 @@ export async function lancerLaFenetre(): Promise<FenetreLancee> {
   processus.stderr?.setEncoding("utf8").on("data", (texte: string) => (sortie += texte));
   const fin = new Promise<number | null>((resoudre) => processus.once("exit", (code) => resoudre(code)));
 
-  const nettoyer = async () => {
+  // Par le PID de l'exe lancé ici, et ses processus enfants (le navigateur intégré) : jamais par le nom de l'image, un
+  // Sollicito de l'utilisateur pouvant tourner en même temps.
+  const tuer = async () => {
     if (processus.exitCode === null) {
       await executer("taskkill", ["/PID", String(processus.pid), "/T", "/F"]).catch(() => undefined);
       await Promise.race([fin, attendre(5_000)]);
     }
-    await rm(dossierDeDonnees, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 });
+  };
+  const nettoyer = async () => {
+    await tuer();
+    if (cree) {
+      await rm(dossierDeDonnees, { recursive: true, force: true, maxRetries: 20, retryDelay: 500 });
+    }
   };
 
   try {
@@ -88,6 +113,10 @@ export async function lancerLaFenetre(): Promise<FenetreLancee> {
         await navigateur.close();
         await executer("taskkill", ["/PID", String(processus.pid)]);
         return Promise.race([fin, attendre(DELAI_DE_FERMETURE_EN_MS).then(() => Promise.reject(new Error("L'exe ne s'est pas fermé.")))]);
+      },
+      tuer: async () => {
+        await navigateur.close().catch(() => undefined);
+        await tuer();
       },
       nettoyer,
     };
