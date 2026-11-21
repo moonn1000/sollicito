@@ -121,7 +121,8 @@ Deux écarts, sous `#if VERSION_DE_TEST`, jamais compilés dans la version publi
   - les copies d'avant une restauration restent sur le disque de la base, quel que soit le dossier choisi, et Sollicito ne les efface jamais ;
   - un script injecté qui a le jeton peut rouvrir le dialogue après chaque « Annuler », comme celui du choix d'un dossier (#88) ; il ne peut pas dire oui ;
   - une base qui ne s'ouvre plus du tout fait échouer le lancement : la fenêtre ne s'ouvre pas, et l'application ne peut pas restaurer (story à part) ;
-  - la copie brute d'une base abîmée ne se restaure pas depuis l'application.
+  - la copie brute d'une base abîmée ne se restaure pas depuis l'application ;
+  - la comparaison lit le texte des tables et des index tel que les migrations de l'exe l'écrivent : une mise à jour d'EF Core ou de SQLite qui changerait ce texte ferait refuser, comme étrangères, toutes les copies faites avant elle ; rien ne serait remplacé, mais la restauration ne marcherait plus. Un test restaure une copie de référence, faite par la version de #28 et figée dans les tests : une telle mise à jour fait échouer la CI.
 
 ## À vérifier
 
