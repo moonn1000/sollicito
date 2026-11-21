@@ -15,7 +15,9 @@ namespace Sollicito.Fenetre;
 /// navigations annulées notées dans un autre ;</item>
 /// <item>le dossier de téléchargement placé dans ce dossier, où tomberait un téléchargement admis ;</item>
 /// <item>une caméra et un micro simulés, pour que leur demande de permission ne dépende pas du poste ;</item>
-/// <item>ses messages d'erreur écrits sur la sortie d'erreur, sans boîte de dialogue (<see cref="Signalement"/>).</item>
+/// <item>ses messages d'erreur écrits sur la sortie d'erreur, sans boîte de dialogue (<see cref="Signalement"/>) ;</item>
+/// <item>le dialogue de dossier des sauvegardes remplacé par le dossier que le test écrit dans un fichier de ce
+/// dossier, sans dialogue (#26) ; sans ce fichier, le choix est annulé.</item>
 /// </list>
 /// </summary>
 internal static class VersionDeTest
@@ -25,6 +27,7 @@ internal static class VersionDeTest
     public const string FichierDesLiensOuverts = "liens-ouverts.txt";
     public const string FichierDesNavigationsAnnulees = "navigations-annulees.txt";
     public const string DossierDesTelechargements = "telechargements";
+    public const string FichierDuDossierAChoisir = "dossier-a-choisir.txt";
 
     public static Lancement Lancement()
     {
@@ -48,13 +51,21 @@ internal static class VersionDeTest
             arguments,
             new JournalDesLiens(Path.Combine(dossier, FichierDesLiensOuverts)),
             Path.Combine(dossier, DossierDesTelechargements),
-            adresse => File.AppendAllText(navigationsAnnulees, adresse + Environment.NewLine));
+            adresse => File.AppendAllText(navigationsAnnulees, adresse + Environment.NewLine),
+            new ChoixLuDansUnFichier(Path.Combine(dossier, FichierDuDossierAChoisir)));
     }
 
     /// <summary>Note chaque lien que la version publiée ouvrirait dans le navigateur par défaut.</summary>
     private sealed class JournalDesLiens(string fichier) : IOuvreurDeLiens
     {
         public void Ouvrir(Uri lien) => File.AppendAllText(fichier, lien.AbsoluteUri + Environment.NewLine);
+    }
+
+    /// <summary>Le dossier que le test a écrit dans le fichier, au lieu du dialogue ; sans fichier, le choix est annulé.</summary>
+    private sealed class ChoixLuDansUnFichier(string fichier) : IChoixDUnDossier
+    {
+        public string? Choisir(IWin32Window proprietaire, string dossierActuel) =>
+            File.Exists(fichier) ? File.ReadAllText(fichier).Trim() : null;
     }
 }
 #endif

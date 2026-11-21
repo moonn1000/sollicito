@@ -5,7 +5,9 @@ import { ModificationDUneCandidature } from "./candidatures/ModificationDUneCand
 import { SaisieDUneCandidature } from "./candidatures/SaisieDUneCandidature.tsx";
 import { TableauDeBord } from "./candidatures/TableauDeBord.tsx";
 import { HorsDeLaFenetre } from "./connexion.ts";
+import type { IssueDuChoixDuDossier } from "./hote/canalDeLHote.ts";
 import { MiseEnPage, type Ecran } from "./miseEnPage/MiseEnPage.tsx";
+import { EcranDesReglages } from "./reglages/EcranDesReglages.tsx";
 
 type Connexion =
   | { etat: "connexion" }
@@ -22,9 +24,16 @@ const MESSAGES: Record<Connexion["etat"], string> = {
 
 /**
  * L'interface : la connexion à l'API locale, puis le tableau de bord, l'écran de saisie, la fiche d'une candidature et
- * sa modification, dans la mise en page commune.
+ * sa modification, et les réglages (#26), dans la mise en page commune.
  */
-export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
+export function App({
+  connecter,
+  choisirLeDossierDesSauvegardes,
+}: {
+  connecter: () => Promise<ClientDeLApi>;
+  /** Ouvre le dialogue de dossier de la fenêtre hôte ; absent hors de la fenêtre. */
+  choisirLeDossierDesSauvegardes?: () => Promise<IssueDuChoixDuDossier>;
+}) {
   const [connexion, setConnexion] = useState<Connexion>({ etat: "connexion" });
   const [ecran, setEcran] = useState<Ecran>({ nom: "tableau" });
   const [annonce, setAnnonce] = useState<string>();
@@ -89,11 +98,20 @@ export function App({ connecter }: { connecter: () => Promise<ClientDeLApi> }) {
             annonce={annonce}
             nouvelleCandidature={() => naviguer({ nom: "saisie" })}
             ouvrirLaFiche={(candidature) => naviguer({ nom: "fiche", candidature })}
+            ouvrirLesReglages={() => naviguer({ nom: "reglages" })}
             prendreLeFocus={navigue}
           />
         );
       case "saisie":
         return <SaisieDUneCandidature client={connexion.client} quandEnregistree={quandEnregistree} />;
+      case "reglages":
+        return (
+          <EcranDesReglages
+            client={connexion.client}
+            choisirLeDossierDesSauvegardes={choisirLeDossierDesSauvegardes}
+            prendreLeFocus={navigue}
+          />
+        );
       case "fiche":
         return (
           <FicheDUneCandidature

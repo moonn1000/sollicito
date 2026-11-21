@@ -1,27 +1,33 @@
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Securite;
+using Sollicito.Application.Sauvegardes;
 
 namespace Sollicito.Fenetre;
 
 /// <summary>
 /// La fenêtre hôte de l'ADR-0003 : WebView2 dans une fenêtre WinForms, qui n'affiche que l'interface locale et ne
 /// laisse rien sortir vers une autre origine (ADR-0001, D9, « Fenêtre »). Elle remet le jeton à l'interface par son
-/// canal interne. Le contrôle WebView2 n'est touché que depuis le fil de la fenêtre, où arrivent tous ses événements.
+/// canal interne, et lui ouvre le dialogue de dossier des sauvegardes (#26, ADR-0008). Le contrôle WebView2 n'est
+/// touché que depuis le fil de la fenêtre, où arrivent tous ses événements.
 /// </summary>
 internal sealed class FenetreHote : Form
 {
     private readonly Uri _origine;
     private readonly JetonDeLancement _jeton;
     private readonly Lancement _lancement;
+    private readonly SauvegardesDeLaBase _sauvegardes;
     private readonly WebView2 _vue = new() { Dock = DockStyle.Fill };
     private CoreWebView2Environment? _environnement;
+    private bool _choixEnCours;
 
-    public FenetreHote(Uri origine, JetonDeLancement jeton, Lancement lancement)
+    public FenetreHote(Uri origine, JetonDeLancement jeton, Lancement lancement, SauvegardesDeLaBase sauvegardes)
     {
         _origine = origine;
         _jeton = jeton;
         _lancement = lancement;
+        _sauvegardes = sauvegardes;
         Text = "Sollicito";
         ClientSize = new Size(1200, 800);
         MinimumSize = new Size(640, 480);
@@ -145,12 +151,51 @@ internal sealed class FenetreHote : Form
         }
     }
 
-    // Canal du jeton : seul un message dont la source est l'interface le reçoit (ADR-0003, « Canal du jeton »).
+    // Canal du jeton : seul un message dont la source est l'interface le reçoit (ADR-0003, « Canal du jeton »). Le choix
+    // du dossier des sauvegardes passe par le même contrôle (#26).
     private void SurMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
     {
         if (ReglesDeLaFenetre.DemandeLeJeton(args.Source, args.WebMessageAsJson, _origine))
         {
             _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDuJeton(_jeton.Valeur()));
+        }
+        else if (ReglesDeLaFenetre.DemandeLeChoixDuDossier(args.Source, args.WebMessageAsJson, _origine) && !_choixEnCours)
+        {
+            // Un seul dialogue à la fois, ouvert après ce gestionnaire : un dialogue modal ouvert pendant un événement de
+            // WebView2 relancerait la boucle des messages au milieu de cet événement (modèle de threads de WebView2).
+            _choixEnCours = true;
+            BeginInvoke(ChoisirLeDossierDesSauvegardes);
+        }
+    }
+
+    // Le dialogue de dossier, puis une copie dans le dossier choisi, qui en fait celui des sauvegardes si elle réussit. La
+    // page reçoit l'issue, sans chemin, et relit l'état par l'API.
+    private async void ChoisirLeDossierDesSauvegardes()
+    {
+        var issue = IssueDuChoixDuDossier.Refuse;
+        try
+        {
+            var choisi = _lancement.ChoixDUnDossier.Choisir(this, _sauvegardes.Etat.Dossier);
+            issue = choisi is null
+                ? IssueDuChoixDuDossier.Annule
+                : await _sauvegardes.ChoisirLeDossierAsync(choisi, CancellationToken.None) == IssueDuChoix.Choisi
+                    ? IssueDuChoixDuDossier.Choisi
+                    : IssueDuChoixDuDossier.Refuse;
+        }
+        catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException or InvalidOperationException
+            or ArgumentException or System.Runtime.InteropServices.ExternalException or System.Security.SecurityException)
+        {
+            // Rien ne change : l'ancien dossier reste. ExternalException couvre les erreurs du dialogue de Windows
+            // (COMException, Win32Exception) : elles ne ferment pas Sollicito.
+        }
+        finally
+        {
+            _choixEnCours = false;
+        }
+
+        if (!IsDisposed && _vue.CoreWebView2 is { } navigateur)
+        {
+            navigateur.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDuChoixDuDossier(issue));
         }
     }
 

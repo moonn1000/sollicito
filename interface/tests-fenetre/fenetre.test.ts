@@ -3,7 +3,7 @@
 // protocole CDP ; les réglages propres à la version publiée se vérifient à la main.
 // Lancement : `pnpm run test:fenetre`, sous Windows. Les tests se suivent dans l'ordre : le dernier ferme la fenêtre.
 import { existsSync } from "node:fs";
-import { readdir, readFile, rename } from "node:fs/promises";
+import { mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Request } from "playwright-core";
 import { afterAll, beforeAll, expect, test } from "vitest";
@@ -16,6 +16,8 @@ const FORME_DU_JETON = /^[A-Za-z0-9_-]{43}$/;
 let fenetre: FenetreLancee;
 let temoin: Temoin;
 let jetonRemis = "";
+// La copie du jour dans le dossier choisi, et sa date d'écriture avant la fermeture (#26).
+let copieChoisie = { chemin: "", ecriteLe: 0 };
 
 beforeAll(async () => {
   temoin = await demarrerLeTemoin();
@@ -358,6 +360,42 @@ test("la candidature et son étape se corrigent depuis la fiche, puis la candida
   expect(await page.locator("main img").count()).toBe(0);
 });
 
+test("la base se copie au lancement, puis dans le dossier choisi par le dialogue de l'hôte, sans qu'aucun chemin ne vienne de la page", async () => {
+  const { page, dossierDeDonnees } = fenetre;
+  // Au lancement, la copie du jour s'est faite dans le dossier par défaut, celui du dossier de données.
+  const parDefaut = join(dossierDeDonnees, "Sauvegardes");
+  const copiesDuJour = async (dossier: string) =>
+    existsSync(dossier) ? (await readdir(dossier)).filter((nom) => /^sollicito-[0-9a-f]{8}-\d{4}-\d{2}-\d{2}\.db$/u.test(nom)) : [];
+  for (let essai = 1; (await copiesDuJour(parDefaut)).length === 0; essai++) {
+    expect(essai).toBeLessThan(80);
+    await attendre(250);
+  }
+  const [copie] = await copiesDuJour(parDefaut);
+  // Un même dossier s'écrit de deux façons sous Windows : le runner de la CI donne son dossier temporaire en nom court
+  // (RUNNER~1), et l'application garde le dossier choisi en nom long. On compare donc des chemins rendus canoniques.
+  const canonique = async (chemin: string | null) => realpath(chemin ?? "");
+
+  // Le dialogue de la version de test lit le dossier à choisir dans un fichier du dossier de données.
+  const choisi = join(dossierDeDonnees, "cle-usb-fictive");
+  await mkdir(choisi);
+  await writeFile(join(dossierDeDonnees, "dossier-a-choisir.txt"), choisi, "utf8");
+  await page.getByRole("button", { name: "Réglages" }).click();
+  const section = page.getByRole("region", { name: "Sauvegardes" });
+  await section.getByText("Les copies ne sont pas chiffrées : toute personne qui accède à leur dossier peut les lire.").waitFor();
+  expect(await canonique(await section.locator("dl.resume dd").first().textContent())).toBe(await canonique(parDefaut));
+  await section.getByRole("button", { name: "Choisir un autre dossier…" }).click();
+
+  await section.getByText("Dossier des sauvegardes changé : une copie vient d'y être faite. Les copies de l'ancien dossier y restent.").waitFor();
+  expect(await canonique(await section.locator("dl.resume dd").first().textContent())).toBe(await canonique(choisi));
+  expect(await copiesDuJour(choisi)).toEqual([copie]);
+  expect(await copiesDuJour(parDefaut)).toEqual([copie]);
+  // Le réglage vit dans le dossier de données, hors de la base.
+  const reglages = JSON.parse(await readFile(join(dossierDeDonnees, "reglages.json"), "utf8")) as Record<string, string>;
+  expect(Object.keys(reglages)).toEqual(["dossierDesSauvegardes"]);
+  expect(await canonique(reglages.dossierDesSauvegardes ?? null)).toBe(await canonique(choisi));
+  copieChoisie = { chemin: join(choisi, copie!), ecriteLe: (await stat(join(choisi, copie!))).mtimeMs };
+});
+
 test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fichier", async () => {
   const { origineDeLApi, dossierDeDonnees } = fenetre;
 
@@ -368,8 +406,10 @@ test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fich
   expect(jetonRemis).toMatch(FORME_DU_JETON);
   expect(await fichiersQuiContiennent(await profilRelache(dossierDeDonnees), jetonRemis)).toEqual([]);
   expect(await fichiersQuiContiennent(join(dossierDeDonnees, "telechargements"), jetonRemis)).toEqual([]);
-  // Ni la base, ni rien d'autre dans le dossier de données.
+  // Ni la base, ni rien d'autre dans le dossier de données, copies de la base comprises.
   expect(await fichiersQuiContiennent(dossierDeDonnees, jetonRemis)).toEqual([]);
+  // À la fermeture, la copie du jour s'est refaite dans le dossier choisi (#26).
+  expect((await stat(copieChoisie.chemin)).mtimeMs).toBeGreaterThan(copieChoisie.ecriteLe);
 });
 
 // Le navigateur intégré finit de s'arrêter après l'exe, et écrit encore dans le profil. Le dossier du profil ne se

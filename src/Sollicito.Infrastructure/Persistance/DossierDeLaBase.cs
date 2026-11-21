@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Sollicito.Application.Sauvegardes;
 
 namespace Sollicito.Infrastructure.Persistance;
 
@@ -17,8 +18,20 @@ public sealed record DossierDeLaBase(string Chemin)
         ? Chemin
         : throw new ArgumentException("Le dossier de la base doit être un chemin absolu.", nameof(Chemin));
 
+    /// <summary>Le nom du dossier des sauvegardes par défaut, dans le dossier de la base (ADR-0001, D10).</summary>
+    public const string NomDuDossierDesSauvegardes = "Sauvegardes";
+
     /// <summary>Le chemin du fichier de la base.</summary>
     public string Fichier => Path.Combine(Chemin, NomDuFichier);
+
+    /// <summary>
+    /// Le dossier des sauvegardes par défaut, sur le disque de la base : les copies du jour y vont tant qu'aucun autre
+    /// n'est choisi, et les copies d'avant une mise à jour toujours (ADR-0008).
+    /// </summary>
+    public string DossierDesSauvegardes => Path.Combine(Chemin, NomDuDossierDesSauvegardes);
+
+    /// <summary>Le fichier des réglages de l'application, hors de la base (ADR-0008).</summary>
+    public string FichierDesReglages => Path.Combine(Chemin, ReglagesDeLApplication.NomDuFichier);
 
     /// <summary>
     /// La chaîne de connexion à la base. Sans regroupement des connexions : une fois la base refermée, plus rien ne

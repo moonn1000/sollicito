@@ -5,8 +5,27 @@ import type {
   ClientDeLApi,
   EntrepriseConnue,
   EtapeLue,
+  EtatDesSauvegardes,
   FicheDUneCandidature,
 } from "../api/clientDeLApi.ts";
+
+/** Un dossier de données fictif, sous un compte fictif. */
+export const DOSSIER_PAR_DEFAUT_FICTIF = "C:\\Users\\Compte.Fictif\\AppData\\Local\\Sollicito\\Sauvegardes";
+
+/** L'état fictif de sauvegardes qui vont bien : le dossier par défaut, une copie du jour, le 18/11/2026 à 14:30. */
+export function sauvegardesFictives(modifications: Partial<EtatDesSauvegardes> = {}): EtatDesSauvegardes {
+  return {
+    dossier: DOSSIER_PAR_DEFAUT_FICTIF,
+    parDefaut: true,
+    dossierParDefaut: DOSSIER_PAR_DEFAUT_FICTIF,
+    derniereCopie: "2026-11-18T13:30:00Z",
+    copies: [{ nom: "sollicito-1a2b3c4d-2026-11-18.db", sorte: "DuJour", faiteLe: "2026-11-18T13:30:00Z" }],
+    reglageIllisible: false,
+    echec: null,
+    verifie: true,
+    ...modifications,
+  };
+}
 
 /** Une candidature fictive. */
 export function candidatureFictive(modifications: Partial<Candidature> = {}): Candidature {
@@ -98,6 +117,9 @@ export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
       fiche: ficheFictive({ id: candidature, entreprise: { id: 9, nom: saisie.entreprise.trim() }, poste: saisie.poste.trim() }),
     })),
     supprimerUneCandidature: vi.fn<ClientDeLApi["supprimerUneCandidature"]>(async () => undefined),
+    lireLesSauvegardes: vi.fn<ClientDeLApi["lireLesSauvegardes"]>(async () => sauvegardesFictives()),
+    sauvegarderMaintenant: vi.fn<ClientDeLApi["sauvegarderMaintenant"]>(async () => sauvegardesFictives()),
+    revenirAuDossierParDefaut: vi.fn<ClientDeLApi["revenirAuDossierParDefaut"]>(async () => ({ issue: "fait", etat: sauvegardesFictives() })),
     ...modifications,
   } satisfies ClientDeLApi;
 }

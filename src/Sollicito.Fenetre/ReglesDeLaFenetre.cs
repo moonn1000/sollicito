@@ -41,7 +41,34 @@ internal static class ReglesDeLaFenetre
     /// Vrai si le message vient de l'interface (la source est de son origine) et signale qu'elle est prête : la
     /// fenêtre lui remet alors le jeton. Un message mal formé ou d'un autre type ne reçoit rien.
     /// </summary>
-    public static bool DemandeLeJeton(string? source, string? messageEnJson, Uri origine)
+    public static bool DemandeLeJeton(string? source, string? messageEnJson, Uri origine) =>
+        EstUnMessageDeLInterface(source, messageEnJson, origine, "prete");
+
+    /// <summary>
+    /// Vrai si le message vient de l'interface et demande le choix du dossier des sauvegardes (#26) : la fenêtre ouvre
+    /// alors le dialogue de dossier de Windows. Sous le même contrôle de la source que le canal du jeton ; un message
+    /// mal formé ou d'un autre type n'ouvre rien. Le message ne porte aucun chemin : seul le dialogue en donne un.
+    /// </summary>
+    public static bool DemandeLeChoixDuDossier(string? source, string? messageEnJson, Uri origine) =>
+        EstUnMessageDeLInterface(source, messageEnJson, origine, "choisirLeDossierDesSauvegardes");
+
+    /// <summary>Le message qui remet le jeton à l'interface.</summary>
+    public static string MessageDuJeton(string jeton) => JsonSerializer.Serialize(new { type = "jeton", jeton });
+
+    /// <summary>Le message qui rend à l'interface l'issue du choix du dossier, sans chemin : la page relit l'état par l'API.</summary>
+    public static string MessageDuChoixDuDossier(IssueDuChoixDuDossier issue) => JsonSerializer.Serialize(new
+    {
+        type = "dossierDesSauvegardes",
+        issue = issue switch
+        {
+            IssueDuChoixDuDossier.Choisi => "choisi",
+            IssueDuChoixDuDossier.Annule => "annule",
+            _ => "refuse",
+        },
+    });
+
+    // Un message de l'interface, du type attendu : une source de l'origine, un objet JSON, un type en texte.
+    private static bool EstUnMessageDeLInterface(string? source, string? messageEnJson, Uri origine, string typeAttendu)
     {
         if (!EstDeLOrigine(source, origine) || string.IsNullOrEmpty(messageEnJson))
         {
@@ -54,14 +81,24 @@ internal static class ReglesDeLaFenetre
             return message.RootElement.ValueKind == JsonValueKind.Object
                 && message.RootElement.TryGetProperty("type", out var type)
                 && type.ValueKind == JsonValueKind.String
-                && type.ValueEquals("prete");
+                && type.ValueEquals(typeAttendu);
         }
         catch (JsonException)
         {
             return false;
         }
     }
+}
 
-    /// <summary>Le message qui remet le jeton à l'interface.</summary>
-    public static string MessageDuJeton(string jeton) => JsonSerializer.Serialize(new { type = "jeton", jeton });
+/// <summary>L'issue du choix du dossier des sauvegardes, telle que la fenêtre la rend à l'interface.</summary>
+internal enum IssueDuChoixDuDossier
+{
+    /// <summary>Une copie s'est faite dans le dossier choisi : c'est désormais celui des sauvegardes.</summary>
+    Choisi,
+
+    /// <summary>L'utilisateur a fermé le dialogue sans choisir : rien ne change.</summary>
+    Annule,
+
+    /// <summary>La copie n'a pas pu se faire dans le dossier choisi : l'ancien reste.</summary>
+    Refuse,
 }

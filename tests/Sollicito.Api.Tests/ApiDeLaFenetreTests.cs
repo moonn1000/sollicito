@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Sollicito.Api.Donnees;
+using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Securite;
 using Sollicito.Api.Tests.Outils;
 using Sollicito.Infrastructure.Persistance;
+using Sollicito.Infrastructure.Sauvegardes;
 
 namespace Sollicito.Api.Tests;
 
@@ -45,14 +47,24 @@ public sealed class ApiDeLaFenetreTests
                 [page.StatusCode, sansJeton.StatusCode, avecJeton.StatusCode, refusee.StatusCode]);
             Assert.Equal(InterfaceDeTest.Page, await page.Content.ReadAsStringAsync(annulation));
             Assert.Equal(dossier, app.Environment.ContentRootPath.TrimEnd(Path.DirectorySeparatorChar));
-            // La base se crée au lancement, dans le dossier de données que donne la fenêtre, à côté du verrou du dossier.
+            // La base se crée au lancement, dans le dossier de données que donne la fenêtre, à côté du verrou du dossier ;
+            // une fois la copie du lancement faite (#26), l'instant de la dernière copie s'y garde aussi.
+            var sauvegardes = app.Services.GetRequiredService<SauvegardesDeLaBase>();
+            for (var essai = 1; !sauvegardes.Etat.Verifie; essai++)
+            {
+                Assert.True(essai < 300, "La vérification du lancement ne s'est pas faite.");
+                await Task.Delay(20, annulation);
+            }
+
             Assert.Equal(
-                [DossierDeLaBase.NomDuFichier, VerrouDeLInstance.NomDuFichier],
+                [FichierDeLaDerniereCopie.NomDuFichier, DossierDeLaBase.NomDuFichier, VerrouDeLInstance.NomDuFichier],
                 Directory.GetFiles(dossier).Select(Path.GetFileName).Order(StringComparer.Ordinal));
+            Assert.Equal([DossierDeLaBase.NomDuDossierDesSauvegardes], Directory.GetDirectories(dossier).Select(Path.GetFileName));
         }
         finally
         {
-            Directory.Delete(dossier, recursive: true);
+            // Avec réessai : un antivirus peut tenir un instant la base ou une copie tout juste écrite (#26).
+            await AppelsDesSauvegardes.SupprimerAsync(dossier);
         }
     }
 
@@ -80,7 +92,8 @@ public sealed class ApiDeLaFenetreTests
         {
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", avant[0]);
             Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", avant[1]);
-            Directory.Delete(dossier, recursive: true);
+            // Avec réessai : un antivirus peut tenir un instant la base ou une copie tout juste écrite (#26).
+            await AppelsDesSauvegardes.SupprimerAsync(dossier);
         }
     }
 }

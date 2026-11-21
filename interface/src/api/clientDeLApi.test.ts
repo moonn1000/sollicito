@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vitest";
 import { JETON_FICTIF } from "../tests/canalSimule.ts";
-import { candidatureFictive, ficheFictive } from "../tests/clientSimule.ts";
+import { candidatureFictive, ficheFictive, sauvegardesFictives } from "../tests/clientSimule.ts";
 import { creerClientDeLApi, EN_TETE_DU_JETON, ErreurDeLApi } from "./clientDeLApi.ts";
 
 const SAISIE = { entreprise: "Lumière Verte SA", poste: "Comptable", envoyeeLe: "2026-03-27T23:30" };
@@ -271,4 +271,47 @@ test("sans accord, un nom à corriger revient avec l'entreprise et le nombre de 
       new ErreurDeLApi(409),
     );
   }
+});
+
+test("l'état des sauvegardes se lit en GET, avec le jeton", async () => {
+  const etat = sauvegardesFictives();
+  const envoyer = apiQuiRepond(Response.json(etat));
+
+  await expect(creerClientDeLApi(JETON_FICTIF, envoyer).lireLesSauvegardes()).resolves.toEqual(etat);
+
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/sauvegardes");
+  expect(options?.method).toBeUndefined();
+  expect(new Headers(options?.headers).get(EN_TETE_DU_JETON)).toBe(JETON_FICTIF);
+});
+
+test("« Sauvegarder maintenant » part en POST, sans corps, et rend l'état à jour", async () => {
+  const etat = sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-18T13:30:00Z" } });
+  const envoyer = apiQuiRepond(Response.json(etat));
+
+  await expect(creerClientDeLApi(JETON_FICTIF, envoyer).sauvegarderMaintenant()).resolves.toEqual(etat);
+
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/sauvegardes");
+  expect(options?.method).toBe("POST");
+  expect(options?.body).toBeUndefined();
+});
+
+test("le retour au dossier par défaut rend l'état à jour, ou le motif d'un refus ; aucun chemin ne part", async () => {
+  const fait = apiQuiRepond(Response.json(sauvegardesFictives()));
+  const refuse = apiQuiRepond(
+    Response.json({ title: "Le dossier des sauvegardes n'a pas changé : Sollicito n'a pas pu y faire de copie.", status: 409 }, { status: 409 }),
+  );
+  const enPanne = apiQuiRepond(new Response(null, { status: 500 }));
+
+  await expect(creerClientDeLApi(JETON_FICTIF, fait).revenirAuDossierParDefaut()).resolves.toEqual({ issue: "fait", etat: sauvegardesFictives() });
+  await expect(creerClientDeLApi(JETON_FICTIF, refuse).revenirAuDossierParDefaut()).resolves.toEqual({
+    issue: "refuse",
+    motif: "Le dossier des sauvegardes n'a pas changé : Sollicito n'a pas pu y faire de copie.",
+  });
+  await expect(creerClientDeLApi(JETON_FICTIF, enPanne).revenirAuDossierParDefaut()).rejects.toEqual(new ErreurDeLApi(500));
+  const [adresse, options] = fait.mock.calls[0]!;
+  expect(adresse).toBe("/api/sauvegardes/dossier-par-defaut");
+  expect(options?.method).toBe("POST");
+  expect(options?.body).toBeUndefined();
 });
