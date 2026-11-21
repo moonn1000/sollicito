@@ -77,10 +77,14 @@ bloc "CR seul avant push" 'on:\n  workflow_dispatch:\n# c\r  push:\n'
 bloc "NEL avant push" 'on:\n  workflow_dispatch: # c\xc2\x85  push:\n'
 bloc "LS avant push" 'on:\n  workflow_dispatch: # c\xe2\x80\xa8  push:\n'
 bloc "PS avant push" 'on:\n  workflow_dispatch: # c\xe2\x80\xa9  push:\n'
-bloc "leurre en guillemets doubles, clé explicite" 'leurre: "\non:\n  workflow_dispatch:\n  "\n? on\n:\n  push:\n  workflow_dispatch:\n'
-bloc "leurre en guillemets doubles, !!str on" 'leurre: "\non:\n  workflow_dispatch:\n  "\n!!str on:\n  push:\n  workflow_dispatch:\n'
-bloc "leurre en guillemets doubles, échappement" 'leurre: "\non:\n  workflow_dispatch:\n  "\n"\\x6Fn":\n  push:\n  workflow_dispatch:\n'
-bloc "leurre en guillemets simples, clé explicite" "leurre: '\\non:\\n  workflow_dispatch:\\n  '\\n? on\\n:\\n  push:\\n  workflow_dispatch:\\n"
+# Les leurres ferment leur chaîne en colonne 0 : la forme qui trompait la lecture ligne à ligne.
+bloc "leurre en guillemets doubles, clé explicite" 'leurre: "\non:\n  workflow_dispatch:\n"\n? on\n:\n  push:\n  workflow_dispatch:\n'
+bloc "leurre en guillemets doubles, !!str on" 'leurre: "\non:\n  workflow_dispatch:\n"\n!!str on:\n  push:\n  workflow_dispatch:\n'
+bloc "leurre en guillemets doubles, échappement" 'leurre: "\non:\n  workflow_dispatch:\n"\n"\\x6Fn":\n  push:\n  workflow_dispatch:\n'
+bloc "leurre en guillemets simples, clé explicite" "leurre: '\\non:\\n  workflow_dispatch:\\n'\\n? on\\n:\\n  push:\\n  workflow_dispatch:\\n"
+# Deux clés que YAML 1.1 lit comme « on » : un flottant sexagésimal qui vaut 1, et une fusion à la racine.
+bloc "clé sexagésimale 0:1." 'on:\n  workflow_dispatch:\n0:1.:\n  push:\n'
+bloc "clé de fusion à la racine" 'x: &t {"on": {push: {}}}\n<<: *t\non:\n  workflow_dispatch:\n'
 bloc "« on » entre guillemets, push ajouté" '"on":\n  push:\n  workflow_dispatch:\n'
 bloc "clé true:" 'true:\n  push:\n  workflow_dispatch:\n'
 bloc "clé On:" 'On:\n  push:\n  workflow_dispatch:\n'

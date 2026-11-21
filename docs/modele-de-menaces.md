@@ -277,7 +277,7 @@ Chaque version joint à son exe son empreinte SHA-256 et le paquet de son attest
 
 - dans le job « Exe » de la CI (`.github/workflows/exe.yml`) : `verifier-exe.ps1`, qui exige au moins un chemin de symboles lu, et tous en `/_/`. Qu'un exe construit hors du mode CI le fasse échouer a été joué à la PR de #54, sur le poste ; son automatisation est dans #91. Puis `lancer-exe.ps1`, qui lance l'exe seul dans un dossier vide et exige sa base, son profil, son navigateur intégré et sa fenêtre, sans boîte de dialogue ; la préparation des fichiers d'une version d'essai ;
 - le job « Reproductibilité » ;
-- le job « Publication, à blanc » : `tester-la-garde.sh`, sur 13 refs admises et refusées, et `tester-la-version.sh`, qui contrôle la configuration de release-please. Il vérifie aussi, par liste d'autorisation, que les workflows de version et de publication n'ont que `workflow_dispatch`. Ce contrôle lit le YAML par yq 4.54.3, à empreinte vérifiée, et il est éprouvé sur 34 formes piégées, clés déguisées, leurres et sauts de ligne cachés compris ;
+- le job « Publication, à blanc » : `tester-la-garde.sh`, sur 13 refs admises et refusées, et `tester-la-version.sh`, qui contrôle la configuration de release-please. Il vérifie aussi, par liste d'autorisation, que les workflows de version et de publication n'ont que `workflow_dispatch`. Ce contrôle lit le YAML par yq 4.54.3, à empreinte vérifiée, n'admet à la racine que les clés d'un workflow, et il est éprouvé sur 36 formes piégées, clés déguisées, leurres et sauts de ligne cachés compris ;
 - *à la première version, au palier 5* : la garde sur la vraie étiquette, l'attestation, sa vérification hors ligne et le condensé des fichiers joints.
 
 ## Textes saisis

@@ -36,6 +36,11 @@ cles="$(lire 'keys')" || refuser "le workflow ne se lit pas en YAML."
 douteuses='^(y|Y|yes|Yes|YES|n|N|no|No|NO|true|True|TRUE|false|False|FALSE|On|ON|off|Off|OFF)$'
 [[ "$(jq --arg motif "$douteuses" '[.[] | select(test($motif))] | length' <<< "$cles")" == 0 ]] ||
   refuser "le workflow a une clé que YAML 1.1 lirait comme un booléen."
+# Les seules clés de racine d'un workflow : une clé de fusion (<<), un nombre que YAML 1.1 lirait comme 1 donc
+# comme « on » (0:1.), ou toute autre clé inattendue sont refusés.
+permises='["name","run-name","on","permissions","env","defaults","concurrency","jobs"]'
+[[ "$(jq --argjson permises "$permises" '[.[] | select(. as $cle | $permises | index($cle) | not)] | length' <<< "$cles")" == 0 ]] ||
+  refuser "le workflow a une clé de racine qui n'est pas celle d'un workflow."
 
 [[ "$(lire '.on | type')" == '"!!map"' ]] || refuser "le bloc « on » doit être un mapping."
 [[ "$(lire '.on | keys')" == '["workflow_dispatch"]' ]] || refuser "le bloc « on » n'admet que workflow_dispatch."
