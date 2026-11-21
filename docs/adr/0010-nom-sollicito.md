@@ -27,7 +27,7 @@ Ce relevé n'est pas un avis juridique.
   - **BX 1465732**, figurative, déposée le 10/06/2022 : classe 41 (formations en ligne aux candidatures).
 
   Les autres sont refusées (« Sollicitatieschijf », 1996 ; « www.sollicitatienet.nl », 2001 ; une figurative de 2000), ou sans rapport : la marque de l'Union européenne SOLLICIT (017986175), classes 1 et 5, et deux marques internationales de cosmétiques.
-- **TMview**, de l'EUIPO, refuse les requêtes automatiques (« Request Rejected »). Il n'a pas été consulté : les marques de l'EUIPO sont dans la Global Brand Database, et celles du Benelux dans le registre du BOIP.
+- **TMview**, de l'EUIPO, refuse les requêtes automatiques (« Request Rejected »). Il n'a pas été consulté : les marques de l'EUIPO sont dans la Global Brand Database, et celles du Benelux dans le registre du BOIP. Le mainteneur le consultera à la main au palier 5, avec la décision sur le nom.
 
 ### Projets et noms existants
 
@@ -61,7 +61,7 @@ La décision revient au mainteneur, au palier 5, avant la fusion de la pull requ
 ## À vérifier
 
 - **Refaire la recherche juste avant la 1.0.0** : un dépôt de marque récent n'apparaît dans les registres qu'après quelques semaines.
-- **TMview à la main** : le mainteneur peut le consulter dans son navigateur, pour un regard d'ensemble sur les offices de l'Union.
+- **TMview à la main** : le mainteneur le consulte dans son navigateur au palier 5, avec la décision sur le nom, pour un regard d'ensemble sur les offices de l'Union.
 
 ## Sources
 
