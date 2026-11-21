@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ClientDeLApi, EtatDesSauvegardes } from "../api/clientDeLApi.ts";
 import { ANNONCE_DE_LA_COPIE, texteDeLAlerte } from "./affichage.ts";
 
@@ -35,8 +35,9 @@ export function AlerteDesSauvegardes({
   const occupe = useRef(false);
   // Change à chaque « Réessayer » réussi : une lecture partie avant sa réponse rapporterait l'état d'avant lui.
   const essaisReussis = useRef(0);
-  // L'alerte que montre l'écran, relue par un « Réessayer » qui répond plus tard.
-  const alerteAffichee = useRef<string | undefined>(undefined);
+  // L'état le plus récent, lu ou rendu par un essai, même si l'écran ne l'a pas encore montré : un « Réessayer » qui
+  // échoue range son message sous son alerte.
+  const etatLePlusRecent = useRef<EtatDesSauvegardes | undefined>(undefined);
 
   useEffect(() => {
     let affichee = true;
@@ -58,6 +59,7 @@ export function AlerteDesSauvegardes({
           }
 
           if (essai === essaisReussis.current) {
+            etatLePlusRecent.current = lu;
             setEtat(lu);
           }
 
@@ -84,12 +86,13 @@ export function AlerteDesSauvegardes({
     try {
       const apres = await client.sauvegarderMaintenant();
       essaisReussis.current += 1;
+      etatLePlusRecent.current = apres;
       setEtat(apres);
       setAnnonce(texteDeLAlerte(apres) === undefined ? { texte: ANNONCE_DE_LA_COPIE, sous: undefined } : undefined);
     } catch {
-      // Sous l'alerte affichée quand l'essai répond : une relecture a pu la changer pendant qu'il attendait. Partie
-      // entre-temps, elle ne laisse rien à réessayer, et le message ne reste pas seul.
-      const sous = alerteAffichee.current;
+      // Sous l'alerte de l'état le plus récent : une relecture a pu la changer pendant que l'essai attendait, jusque dans
+      // le même tour. Partie entre-temps, elle ne laisse rien à réessayer, et le message ne reste pas seul.
+      const sous = etatLePlusRecent.current === undefined ? undefined : texteDeLAlerte(etatLePlusRecent.current);
       setAnnonce(sous === undefined ? undefined : { texte: ECHEC_DE_L_ESSAI, sous });
     } finally {
       occupe.current = false;
@@ -98,11 +101,6 @@ export function AlerteDesSauvegardes({
   };
 
   const alerte = etat === undefined ? undefined : texteDeLAlerte(etat);
-  // Avant que l'écran ne se peigne : un essai qui répond ensuite lit l'alerte qu'on voit.
-  useLayoutEffect(() => {
-    alerteAffichee.current = alerte;
-  });
-
   // Une relecture qui change l'alerte (venue, partie ou autre) emporte l'annonce d'un essai d'avant : elle ne dirait plus
   // ce qui est à l'écran, et ne doit pas revenir avec une alerte qui repart.
   if (annonce !== undefined && annonce.sous !== alerte) {
