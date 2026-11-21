@@ -162,9 +162,10 @@ finally {
         # L'arbre entier : Sollicito.exe et les processus du navigateur intégré.
         & taskkill.exe /PID $processus.Id /T /F | Out-Null
     }
-    if (-not $processus.WaitForExit(30000)) {
-        Write-Host "Sollicito.exe ne s'est pas arrêté dans les 30 s."
-    }
+    $script:arrete = $processus.WaitForExit(30000)
+}
+if (-not $script:arrete) {
+    throw "Sollicito.exe ne s'est pas arrêté dans les 30 s qui ont suivi taskkill."
 }
 Write-Host 'Lancement de fumée réussi ; arbre des processus arrêté.'
 # Explicite : sinon le code de sortie serait celui de la dernière commande externe lancée (taskkill).

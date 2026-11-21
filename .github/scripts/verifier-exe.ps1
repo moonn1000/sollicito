@@ -151,6 +151,12 @@ foreach ($candidat in $candidats) {
         if (-not $motifs.Contains($forme)) { $motifs.Add($forme) }
     }
 }
+# Un nom de compte court se cherche entre séparateurs de chemin : seul, il apparaîtrait partout.
+if (-not [string]::IsNullOrWhiteSpace($env:USERNAME) -and $env:USERNAME.Length -lt 4) {
+    foreach ($forme in @("\$($env:USERNAME)\", "/$($env:USERNAME)/")) {
+        if (-not $motifs.Contains($forme)) { $motifs.Add($forme) }
+    }
+}
 Write-Host "Chaînes cherchées : $($motifs.Count) (dossier du dépôt, profil, dossier temporaire, nom du compte)."
 
 function Chercher-Chemins([byte[]]$contenu, [string]$ou) {
