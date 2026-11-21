@@ -41,7 +41,7 @@ public static class MiseAJourDeLaBase
             throw new MiseAJourDeLaBaseEchouee(RaisonDeLEchec.CopieDAvant, erreur.GetType().Name);
         }
 
-        var copieDeTravail = Path.Combine(dossier.Chemin, $"{DossierDeLaBase.NomDuFichier}.{Guid.NewGuid():N}.migration");
+        var copieDeTravail = Path.Combine(dossier.Chemin, RestesDUnArret.NomDUneCopieDeTravail());
         try
         {
             File.Copy(copieDAvant, copieDeTravail);

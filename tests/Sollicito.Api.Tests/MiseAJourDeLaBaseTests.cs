@@ -143,11 +143,13 @@ public sealed class MiseAJourDeLaBaseTests : IAsyncLifetime
 
         // Ce que laisse un arrêt brutal en pleine mise à jour : la copie de travail et son journal, et les fichiers
         // provisoires des réglages. À côté, des fichiers qui ne sont pas à Sollicito, et le journal de la base elle-même.
+        // Les copies de travail se nomment comme MiseAJourDeLaBase les nomme : un changement de leur forme se verrait ici.
+        var copieDeTravail = RestesDUnArret.NomDUneCopieDeTravail();
         string[] restes =
         [
-            "sollicito.db.0123456789abcdef0123456789abcdef.migration",
-            "sollicito.db.0123456789abcdef0123456789abcdef.migration-journal",
-            "sollicito.db.fedcba9876543210fedcba9876543210.migration-journal",
+            copieDeTravail,
+            copieDeTravail + "-journal",
+            RestesDUnArret.NomDUneCopieDeTravail() + "-journal",
             "reglages.json.0123456789abcdef0123456789abcdef.provisoire",
             "sauvegardes.json.0123456789abcdef0123456789abcdef.provisoire",
         ];

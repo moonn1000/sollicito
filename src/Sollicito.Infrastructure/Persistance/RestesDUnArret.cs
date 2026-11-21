@@ -15,6 +15,12 @@ public static partial class RestesDUnArret
     private static readonly string[] SuffixesDUnReste = ["", "-journal", "-wal", "-shm"];
 
     /// <summary>
+    /// Le nom d'une nouvelle copie de travail d'une mise à jour, dans le dossier de données : la base, puis une marque tirée
+    /// au hasard. <see cref="RetirerAsync"/> reconnaît ce nom, et lui seul.
+    /// </summary>
+    public static string NomDUneCopieDeTravail() => $"{DossierDeLaBase.NomDuFichier}.{Guid.NewGuid():N}.migration";
+
+    /// <summary>
     /// Retire ces restes, et rend le nombre de ceux qui ont disparu : une copie et ses journaux comptent pour un. À
     /// n'appeler que sous le <see cref="VerrouDeLInstance"/> du dossier, avant toute mise à jour : aucune opération de
     /// Sollicito ne peut alors les tenir. Un reste qu'un autre programme tient reste, jusqu'au lancement suivant.

@@ -25,11 +25,12 @@ public sealed class RestesDUnArretTests : IDisposable
     [Fact]
     public async Task Une_copie_et_ses_journaux_comptent_pour_un_et_un_reste_tenu_ne_compte_pas()
     {
+        var copieDeTravail = RestesDUnArret.NomDUneCopieDeTravail();
         string[] restes =
         [
-            "sollicito.db.0123456789abcdef0123456789abcdef.migration",
-            "sollicito.db.0123456789abcdef0123456789abcdef.migration-journal",
-            "sollicito.db.0123456789abcdef0123456789abcdef.migration-wal",
+            copieDeTravail,
+            copieDeTravail + "-journal",
+            copieDeTravail + "-wal",
             "reglages.json.0123456789abcdef0123456789abcdef.provisoire",
             "sauvegardes.json.fedcba9876543210fedcba9876543210.provisoire",
         ];
