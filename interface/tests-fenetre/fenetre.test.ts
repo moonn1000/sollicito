@@ -273,6 +273,8 @@ test("une candidature saisie dans la fenêtre s'enregistre dans la base du dossi
 
   // L'écriture est passée par le contrôle de l'origine : c'est le navigateur intégré qui a posé l'en-tête Origin.
   await page.getByText(`Candidature enregistrée : Comptable, chez ${entreprise}.`).waitFor();
+  // L'annonce paraît dès le retour au tableau de bord, la liste quand sa lecture revient : on attend sa première ligne.
+  await page.getByRole("row").nth(1).waitFor();
   const cellules = await page.getByRole("row").nth(1).getByRole("cell").allTextContents();
   // L'heure saisie revient telle quelle : l'API l'a lue dans le fuseau du poste, l'interface l'affiche dans le même.
   expect(cellules).toEqual([entreprise, "Comptable", "27/03/2026 23:30", "Envoyée"]);
