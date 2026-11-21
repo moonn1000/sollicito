@@ -127,6 +127,6 @@ internal sealed partial class PreparationDeLaBase(
     [LoggerMessage(EventId = 15, Level = LogLevel.Error, Message = "Mise à jour de la base échouée ({Raison}, {TypeDErreur}) : la base est restée telle qu'avant.")]
     private static partial void MiseAJourEchouee(ILogger journal, RaisonDeLEchec raison, string typeDErreur);
 
-    [LoggerMessage(EventId = 16, Level = LogLevel.Warning, Message = "Restes d'un arrêt brutal retirés du dossier de données : {Restes} fichier(s).")]
+    [LoggerMessage(EventId = 16, Level = LogLevel.Warning, Message = "Restes d'un arrêt brutal retirés du dossier de données : {Restes} reste(s).")]
     private static partial void RestesRetires(ILogger journal, int restes);
 }

@@ -11,9 +11,13 @@ namespace Sollicito.Infrastructure.Persistance;
 /// </summary>
 public static partial class RestesDUnArret
 {
+    // Le fichier lui-même, puis les journaux que SQLite range à côté d'une base.
+    private static readonly string[] SuffixesDUnReste = ["", "-journal", "-wal", "-shm"];
+
     /// <summary>
-    /// Retire ces restes, et rend leur nombre. À n'appeler que sous le <see cref="VerrouDeLInstance"/> du dossier, avant
-    /// toute mise à jour : aucune autre opération ne peut alors les tenir.
+    /// Retire ces restes, et rend le nombre de ceux qui ont disparu : une copie et ses journaux comptent pour un. À
+    /// n'appeler que sous le <see cref="VerrouDeLInstance"/> du dossier, avant toute mise à jour : aucune opération de
+    /// Sollicito ne peut alors les tenir. Un reste qu'un autre programme tient reste, jusqu'au lancement suivant.
     /// </summary>
     public static async Task<int> RetirerAsync(DossierDeLaBase dossier)
     {
@@ -29,19 +33,27 @@ public static partial class RestesDUnArret
             return 0;
         }
 
-        var retires = 0;
+        // La copie et ses journaux d'un bloc : un journal resté seul désigne la même copie.
+        var restes = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var nom in noms)
         {
-            var copie = CopieDeTravail().Match(nom);
-            if (copie.Success)
+            if (CopieDeTravail().Match(nom) is { Success: true } copie)
             {
-                // La copie et ses journaux d'un bloc ; un journal resté seul désigne la même copie.
-                await CopiesVerifiees.EffacerAsync(Path.Combine(dossier.Chemin, copie.Groups["copie"].Value));
-                retires++;
+                restes.Add(copie.Groups["copie"].Value);
             }
             else if (FichierProvisoire().IsMatch(nom))
             {
-                await CopiesVerifiees.EffacerAsync(Path.Combine(dossier.Chemin, nom));
+                restes.Add(nom);
+            }
+        }
+
+        var retires = 0;
+        foreach (var reste in restes)
+        {
+            var chemin = Path.Combine(dossier.Chemin, reste);
+            await CopiesVerifiees.EffacerAsync(chemin);
+            if (!SuffixesDUnReste.Any(suffixe => File.Exists(chemin + suffixe)))
+            {
                 retires++;
             }
         }
