@@ -261,13 +261,24 @@ L'exe d'un seul fichier se construit dans la CI, à chaque pull request et sur `
 - **Aucun chemin de la machine de construction** : `ContinuousIntegrationBuild` réécrit les chemins de symboles en `/_/`. Hors de la CI, ils portent le dossier de compilation, donc le nom du compte Windows du poste. `verifier-exe.ps1` lit le paquet de l'exe décompressé. Il y cherche le dossier du dépôt, le profil, le dossier temporaire et le nom du compte du runner, en UTF-8 comme en UTF-16.
 - **Rien de superflu à extraire** : le paquet n'embarque ni l'hôte natif de l'API (`Sollicito.Api.exe`), ni le module d'hébergement sous IIS (`aspnetcorev2_inprocess.dll`). Sous `%TEMP%\.net`, l'exe n'extrait plus que `e_sqlite3.dll` et deux copies de `WebView2Loader.dll` (voir « Limites »).
 - **Reproductible** : une seconde construction du même commit, dans un autre dossier, doit donner la même empreinte SHA-256.
-- **Un exe d'essai** : l'exe et son empreinte restent 7 jours en artefact du run. Ce n'est ni une version ni un exe attesté. Sur un dépôt public, tout compte GitHub connecté peut le télécharger.
+- **Des artefacts sur `main` seulement** : sur un push vers `main`, l'exe et son empreinte restent 7 jours en artefact du run. Ce n'est ni une version ni un exe attesté, et, sur un dépôt public, tout compte GitHub connecté peut le télécharger. Une pull request n'en produit aucun : venue d'un fork, elle ferait héberger sous le nom du projet un exe construit avec son propre code. La publication garde 7 jours l'exe candidat d'une version, public dès son run.
 
-*Contrôles*, dans le job « Exe » de la CI (`.github/workflows/exe.yml`) :
+### L'empreinte et l'attestation d'une version
 
-- `verifier-exe.ps1`, qu'un exe construit hors du mode CI fait échouer ;
-- `lancer-exe.ps1`, qui lance l'exe seul dans un dossier vide et exige sa base, son profil, son navigateur intégré et sa fenêtre, sans boîte de dialogue ;
-- le job « Reproductibilité ».
+Chaque version joint à son exe son empreinte SHA-256 et le paquet de son attestation de provenance (#54, ADR-0009). L'empreinte prouve que le fichier téléchargé est celui de la version. L'attestation, signée par l'instance publique de Sigstore, prouve que l'exe a été construit par `publication.yml` de ce dépôt, sur l'étiquette `vX.Y.Z`.
+
+- **Le job qui atteste est à part** : seul à `id-token: write` et `attestations: write`, il ne récupère pas le dépôt et ne lance aucune construction. Le code des dépendances, qui tourne dans le job de construction, n'a donc jamais le jeton qui fait signer une attestation.
+- **Ce que l'attestation ne prouve pas** : qu'aucune dépendance n'était piégée. Un paquet npm ou NuGet piégé dans le job de construction peut modifier l'exe avant son envoi : le job à part l'attestera fidèlement. La seconde construction, faite avec les mêmes dépendances, ne le verrait pas. Contre ce risque restent les fichiers de verrouillage, l'âge minimal des paquets de pnpm, la seule source nuget.org et la restauration verrouillée.
+- **Une étiquette posée sur un commit non fusionné** : une personne qui a l'écriture du dépôt peut étiqueter `v1.0.1` le commit d'une branche jamais fusionnée, avec un `publication.yml` modifié, puis lancer ce workflow. Son attestation passerait `--source-ref refs/tags/v1.0.1`. La garde de la publication est logée dans la copie de l'étiquette : elle n'arrête que les erreurs, pas cette personne. La parade est un ruleset des étiquettes `v*`, réglage du mainteneur, à proposer au palier 5 (ADR-0009, « À vérifier »).
+- **Les entrées non fiables** : un nom d'étiquette peut contenir `$ ( ) ; | & ' "`. La garde lit `github.ref` entier, passé par `env:`, contre `^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`. Aucun `run:` ne reçoit `github.ref_name`, une entrée de workflow ou une sortie de release-please, que par `env:` et après ce motif.
+- **Les outils** : release-please-action v5.0.0 embarque release-please 17.6.0, sans les correctifs de dépendances parus depuis (17.7.0, 17.10.2) : à revoir au palier 5. `gh`, qui lance la publication, vérifie l'attestation et joint les fichiers, vient de l'image du runner, sans version fixée.
+
+*Contrôles* :
+
+- dans le job « Exe » de la CI (`.github/workflows/exe.yml`) : `verifier-exe.ps1`, qu'un exe construit hors du mode CI fait échouer ; `lancer-exe.ps1`, qui lance l'exe seul dans un dossier vide et exige sa base, son profil, son navigateur intégré et sa fenêtre, sans boîte de dialogue ; la préparation des fichiers d'une version d'essai ;
+- le job « Reproductibilité » ;
+- le job « Publication, à blanc » : `tester-la-garde.sh`, sur 13 refs admises et refusées, et `tester-la-version.sh`, qui contrôle la configuration de release-please et le seul déclencheur, `workflow_dispatch`, du workflow de version ;
+- *à la première version, au palier 5* : la garde sur la vraie étiquette, l'attestation, sa vérification hors ligne et le condensé des fichiers joints.
 
 ## Textes saisis
 
@@ -326,7 +337,7 @@ Aucune entrée ne contient le nom du faux compte, ni le dossier temporaire du te
 - **Brouillon de relance (#14)** : la page demande l'ouverture du lien `mailto` à l'hôte par un message, soumis au même contrôle de la source que le canal du jeton (ADR-0003), comme le choix du dossier des sauvegardes (#26) ; tout autre schéma externe reste annulé.
 - **Restauration (#28)** : une copie restaurée remplace toute la base ; elle doit se vérifier avant, et la base en cours se copier d'abord. La liste à restaurer montre toutes les copies de Sollicito du dossier, celles d'une autre installation comprises.
 - **Interface en développement** : le serveur de développement de Vite sert une autre origine. L'API refuse ses écritures, et l'interface ne reçoit le jeton que dans la fenêtre.
-- **Exe** : le dossier d'extraction `%TEMP%\.net` (voir « Limites ») ; l'empreinte et l'attestation de provenance de chaque version publiée (#54, ADR-0009).
+- **Exe** : le dossier d'extraction `%TEMP%\.net` (voir « Limites ») ; au palier 5, le ruleset des étiquettes `v*` et la première exécution du chemin de publication, attestation comprise (voir « Exe distribué »).
 
 ## Sources
 

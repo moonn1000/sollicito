@@ -12,7 +12,8 @@ Chaque décision d'architecture qui compte est consignée ici, avec son contexte
 | [0006](0006-requetes-et-liens-de-la-fenetre.md) | La fenêtre retient ses requêtes vers une autre origine | Acceptée | 2026-11-19 |
 | [0007](0007-historique-en-vigueur-et-nom-corrige.md) | Étapes corrigées et historique en vigueur, nom d'entreprise corrigé et entreprises proposées | Acceptée | 2026-11-20 |
 | [0008](0008-sauvegardes-de-la-base.md) | Sauvegardes de la base, migration sur une copie et premier réglage | Acceptée | 2026-11-20 |
-| [0009](0009-construction-et-publication-de-l-exe.md) | Construction et publication de l'exe | Acceptée | 2026-11-21 |
+| [0009](0009-construction-et-publication-de-l-exe.md) | Construction et publication de l'exe | Acceptée ; textes de release-please et noms des fichiers joints à valider au palier 5 | 2026-11-21 |
+| [0010](0010-nom-sollicito.md) | Le nom « Sollicito » | Proposée ; décision du mainteneur au palier 5 | 2026-11-21 |
 
 ## Format
 
