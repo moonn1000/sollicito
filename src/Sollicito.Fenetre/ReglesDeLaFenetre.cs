@@ -52,8 +52,45 @@ internal static class ReglesDeLaFenetre
     public static bool DemandeLeChoixDuDossier(string? source, string? messageEnJson, Uri origine) =>
         EstUnMessageDeLInterface(source, messageEnJson, origine, "choisirLeDossierDesSauvegardes");
 
+    /// <summary>
+    /// Vrai si le message vient de l'interface et demande le brouillon d'une relance (#14, ADR-0011) : la fenêtre
+    /// l'ouvre alors dans la messagerie de l'utilisateur. Sous le même contrôle de la source que le canal du jeton. Le
+    /// message ne porte que l'identifiant de la relance, un entier positif : un autre champ n'est jamais lu, et un message
+    /// mal formé, d'un autre type, ou sans identifiant, n'ouvre rien.
+    /// </summary>
+    public static bool DemandeLeBrouillon(string? source, string? messageEnJson, Uri origine, out int relance)
+    {
+        relance = 0;
+        if (!EstUnMessageDeLInterface(source, messageEnJson, origine, "ouvrirLeBrouillon"))
+        {
+            return false;
+        }
+
+        using var message = JsonDocument.Parse(messageEnJson!, new JsonDocumentOptions { MaxDepth = 8 });
+        return message.RootElement.TryGetProperty("relance", out var identifiant)
+            && identifiant.ValueKind == JsonValueKind.Number
+            && identifiant.TryGetInt32(out relance)
+            && relance > 0;
+    }
+
     /// <summary>Le message qui remet le jeton à l'interface.</summary>
     public static string MessageDuJeton(string jeton) => JsonSerializer.Serialize(new { type = "jeton", jeton });
+
+    /// <summary>
+    /// Le message qui rend à l'interface l'issue de l'ouverture du brouillon de cette relance, sans rien du brouillon :
+    /// ni adresse, ni texte.
+    /// </summary>
+    public static string MessageDuBrouillon(int relance, IssueDuBrouillon issue) => JsonSerializer.Serialize(new
+    {
+        type = "brouillonDeRelance",
+        relance,
+        issue = issue switch
+        {
+            IssueDuBrouillon.Ouvert => "ouvert",
+            IssueDuBrouillon.Impossible => "impossible",
+            _ => "refuse",
+        },
+    });
 
     /// <summary>Le message qui rend à l'interface l'issue du choix du dossier, sans chemin : la page relit l'état par l'API.</summary>
     public static string MessageDuChoixDuDossier(IssueDuChoixDuDossier issue) => JsonSerializer.Serialize(new

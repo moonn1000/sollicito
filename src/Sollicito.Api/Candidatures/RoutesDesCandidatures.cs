@@ -193,8 +193,8 @@ internal static class RoutesDesCandidatures
 
     // La fiche à jour (200), les refus d'une saisie (400), une candidature introuvable (404), une action que l'état de
     // la candidature ne permet pas (409, avec son motif en détail). Le titre est celui du refus, 400 ou 409, sauf titre
-    // propre au 409.
-    private static Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult> Repondre(
+    // propre au 409. Les routes des relances (#14) répondent de même.
+    internal static Results<Ok<FicheDUneCandidature>, ValidationProblem, ProblemHttpResult> Repondre(
         ResultatDuSuivi resultat,
         string titreDuRefus,
         string? titreDuConflit = null) =>

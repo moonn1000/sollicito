@@ -19,7 +19,7 @@ public sealed class MiseAJourDeLaBaseTests : IAsyncLifetime
 
     private DossierDeLaBase DossierDeLaBase => new(_dossier);
 
-    private string CopieDAvant => Path.Combine(DossierDeLaBase.DossierDesSauvegardes, NomsDesCopies.AvantMiseAJour(BaseDe12.MigrationSuivante));
+    private string CopieDAvant => Path.Combine(DossierDeLaBase.DossierDesSauvegardes, NomsDesCopies.AvantMiseAJour(BaseDe12.DerniereMigration));
 
     public ValueTask InitializeAsync() => ValueTask.CompletedTask;
 
@@ -36,7 +36,7 @@ public sealed class MiseAJourDeLaBaseTests : IAsyncLifetime
             var etat = await api.AttendreLaPremiereVerificationAsync();
 
             // La base est à jour, en mode WAL, et ses dates n'ont pas bougé.
-            Assert.Equal(BaseDe12.MigrationSuivante, MigrationsDe(DossierDeLaBase.Fichier)[^1]);
+            Assert.Equal(BaseDe12.DerniereMigration, MigrationsDe(DossierDeLaBase.Fichier)[^1]);
             Assert.Equal("wal", ModeDuJournal(DossierDeLaBase.Fichier));
             var fiche = await api.FicheAsync(1);
             Assert.Equal("2026-11-02T09:00:00Z", fiche["envoyeeLe"]!.GetValue<string>());
@@ -110,7 +110,7 @@ public sealed class MiseAJourDeLaBaseTests : IAsyncLifetime
         // Une seule copie d'avant cette mise à jour : celle du dernier essai, qui porte la candidature de plus.
         Assert.Single(Fichiers(DossierDeLaBase.DossierDesSauvegardes), nom => nom.StartsWith("sollicito-avant-", StringComparison.Ordinal));
         Assert.Equal(["Comptable", "Brasseuse", "Contrôleuse de gestion"], PostesDe(CopieDAvant));
-        Assert.Equal(BaseDe12.MigrationSuivante, MigrationsDe(DossierDeLaBase.Fichier)[^1]);
+        Assert.Equal(BaseDe12.DerniereMigration, MigrationsDe(DossierDeLaBase.Fichier)[^1]);
     }
 
     [Fact]
@@ -118,7 +118,7 @@ public sealed class MiseAJourDeLaBaseTests : IAsyncLifetime
     {
         await BaseDe12.PeuplerAsync(DossierDeLaBase);
         Directory.CreateDirectory(DossierDeLaBase.DossierDesSauvegardes);
-        var reste = Path.Combine(DossierDeLaBase.DossierDesSauvegardes, NomsDesCopies.AvantMiseAJour(BaseDe12.MigrationSuivante) + ".0a1b2c3d.partielle");
+        var reste = Path.Combine(DossierDeLaBase.DossierDesSauvegardes, NomsDesCopies.AvantMiseAJour(BaseDe12.DerniereMigration) + ".0a1b2c3d.partielle");
         var autre = Path.Combine(DossierDeLaBase.DossierDesSauvegardes, "notes-personnelles.txt");
         await File.WriteAllTextAsync(reste, "fictif", TestContext.Current.CancellationToken);
         await File.WriteAllTextAsync(autre, "fictif", TestContext.Current.CancellationToken);

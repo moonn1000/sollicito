@@ -111,7 +111,7 @@ public sealed class ModificationDesCandidatures(IDepotDesCandidatures depot, Tim
         }
 
         await ecriture.ValiderAsync(annulation);
-        return new ResultatDuSuivi.Fait(FicheDUneCandidature.De(new CandidatureSuivie(candidature, new EntrepriseConnue(entreprise.Id, entreprise.Nom))));
+        return new ResultatDuSuivi.Fait(FicheDUneCandidature.De(suivie with { Entreprise = new EntrepriseConnue(entreprise.Id, entreprise.Nom) }));
     }
 
     /// <summary>

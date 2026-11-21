@@ -7,13 +7,15 @@ namespace Sollicito.Fenetre;
 /// <param name="DossierDesTelechargements">Le dossier où tomberait un téléchargement ; celui du profil dans la version publiée.</param>
 /// <param name="NoterUneNavigationAnnulee">Ce qui note chaque navigation annulée ; rien dans la version publiée.</param>
 /// <param name="ChoixDUnDossier">Ce qui fait choisir le dossier des sauvegardes : le dialogue de Windows dans la version publiée.</param>
+/// <param name="OuvreurDeBrouillons">Ce qui ouvre le brouillon d'une relance : la messagerie par défaut dans la version publiée.</param>
 internal sealed record Lancement(
     string DossierDeDonnees,
     string? ArgumentsDuNavigateur,
     IOuvreurDeLiens OuvreurDeLiens,
     string? DossierDesTelechargements,
     Action<string>? NoterUneNavigationAnnulee,
-    IChoixDUnDossier ChoixDUnDossier)
+    IChoixDUnDossier ChoixDUnDossier,
+    IOuvreurDeBrouillons OuvreurDeBrouillons)
 {
     /// <summary>Le lancement de cet exe.</summary>
     public static Lancement Lire()
@@ -27,7 +29,8 @@ internal sealed record Lancement(
             new OuvreurParLeShell(),
             DossierDesTelechargements: null,
             NoterUneNavigationAnnulee: null,
-            new ChoixParLeDialogue());
+            new ChoixParLeDialogue(),
+            new OuvreurDeBrouillonsParLeShell());
 #endif
     }
 }

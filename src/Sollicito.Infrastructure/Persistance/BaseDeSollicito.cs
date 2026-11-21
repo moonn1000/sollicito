@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Sollicito.Domain.Candidatures;
+using Sollicito.Domain.Contacts;
 using Sollicito.Domain.Entreprises;
+using Sollicito.Domain.Relances;
 using Sollicito.Domain.Textes;
 
 namespace Sollicito.Infrastructure.Persistance;
@@ -23,6 +25,12 @@ public sealed class BaseDeSollicito(DbContextOptions<BaseDeSollicito> options) :
     /// candidature : une entité, trois sortes ») : une colonne <c>Sorte</c> dit laquelle.
     /// </summary>
     public DbSet<EvenementDeCandidature> EvenementsDeCandidature => Set<EvenementDeCandidature>();
+
+    /// <summary>Les contacts des entreprises (#14, absorbe #30).</summary>
+    public DbSet<Contact> Contacts => Set<Contact>();
+
+    /// <summary>Les relances des candidatures (#14).</summary>
+    public DbSet<Relance> Relances => Set<Relance>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -60,11 +68,43 @@ public sealed class BaseDeSollicito(DbContextOptions<BaseDeSollicito> options) :
             // candidature les tient dans un champ, qu'elle seule complète.
             candidature.HasMany(c => c.Evenements).WithOne().HasForeignKey(ColonneDeLaCandidature).IsRequired().OnDelete(DeleteBehavior.Cascade);
             candidature.Navigation(c => c.Evenements).UsePropertyAccessMode(PropertyAccessMode.Field);
-            // Calculés par le domaine à partir des événements et du statut : rien de plus en base.
+            // Ses relances aussi (#14) : supprimer la candidature les supprime.
+            candidature.HasMany(c => c.Relances).WithOne().HasForeignKey(ColonneDeLaCandidature).IsRequired().OnDelete(DeleteBehavior.Cascade);
+            candidature.Navigation(c => c.Relances).UsePropertyAccessMode(PropertyAccessMode.Field);
+            // Calculés par le domaine à partir des événements, des relances et du statut : rien de plus en base.
             candidature.Ignore(c => c.Historique);
             candidature.Ignore(c => c.PassagesPermis);
             candidature.Ignore(c => c.ChangementACorriger);
             candidature.Ignore(c => c.PremierEvenement);
+            candidature.Ignore(c => c.EstClose);
+            candidature.Ignore(c => c.RelanceAFaire);
+        });
+
+        modelBuilder.Entity<Contact>(contact =>
+        {
+            contact.ToTable("Contacts");
+            contact.HasKey(c => c.Id);
+            contact.Property(c => c.Nom).HasMaxLength(TexteDUneLigne.LongueurMaximale);
+            contact.Property(c => c.Email).HasMaxLength(AdresseElectronique.LongueurMaximale);
+            // Un contact appartient à une seule entreprise, qui ne se supprime pas tant qu'il en a.
+            contact.HasOne<Entreprise>().WithMany().HasForeignKey(c => c.EntrepriseId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Relance>(relance =>
+        {
+            relance.ToTable("Relances");
+            relance.HasKey(r => r.Id);
+            relance.Property(r => r.Etat).HasConversion<string>().HasMaxLength(20);
+            relance.Ignore(r => r.EstAFaire);
+            // Supprimer un contact le retire de toutes ses relances, à faire comme closes : elles restent, sans destinataire.
+            relance.HasOne<Contact>().WithMany().HasForeignKey(r => r.DestinataireId).OnDelete(DeleteBehavior.SetNull);
+            // Une seule relance à faire par candidature : la base elle-même refuse la seconde.
+            relance.HasIndex(ColonneDeLaCandidature)
+                .IsUnique()
+                .HasFilter("\"Etat\" = 'AFaire'")
+                .HasDatabaseName("IX_Relances_UneAFaireParCandidature");
+            // Le tableau de bord lit les relances à faire par leur échéance.
+            relance.HasIndex(r => new { r.Etat, r.Echeance });
         });
 
         modelBuilder.Entity<EvenementDeCandidature>(evenement =>
@@ -73,8 +113,17 @@ public sealed class BaseDeSollicito(DbContextOptions<BaseDeSollicito> options) :
             evenement.HasKey(e => e.Id);
             evenement.HasDiscriminator<string>("Sorte")
                 .HasValue<ChangementDeStatut>(nameof(ChangementDeStatut))
-                .HasValue<Etape>(nameof(Etape));
+                .HasValue<Etape>(nameof(Etape))
+                .HasValue<ClotureDeRelance>(nameof(ClotureDeRelance));
             evenement.Property<string>("Sorte").HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<ClotureDeRelance>(cloture =>
+        {
+            // La clôture désigne la relance close, qui n'est close qu'une fois : l'index est unique. NO ACTION, comme pour
+            // les corrections : la suppression d'une candidature emporte en une instruction ses relances et leurs clôtures.
+            cloture.HasOne(c => c.Relance).WithMany().HasForeignKey("RelanceId").IsRequired().OnDelete(DeleteBehavior.NoAction);
+            cloture.HasIndex("RelanceId").IsUnique();
         });
 
         modelBuilder.Entity<ChangementDeStatut>(changement =>

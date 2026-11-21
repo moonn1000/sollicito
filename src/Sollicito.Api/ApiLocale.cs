@@ -2,13 +2,17 @@ using System.Net;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.FileProviders;
 using Sollicito.Api.Candidatures;
+using Sollicito.Api.Contacts;
 using Sollicito.Api.Donnees;
 using Sollicito.Api.Erreurs;
 using Sollicito.Api.Interface;
 using Sollicito.Api.Journaux;
+using Sollicito.Api.Relances;
 using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Securite;
 using Sollicito.Application.Candidatures;
+using Sollicito.Application.Contacts;
+using Sollicito.Application.Relances;
 using Sollicito.Infrastructure;
 using Sollicito.Infrastructure.Persistance;
 
@@ -103,6 +107,12 @@ public static class ApiLocale
         builder.Services.AddScoped<EnregistrementDesCandidatures>();
         builder.Services.AddScoped<SuiviDesCandidatures>();
         builder.Services.AddScoped<ModificationDesCandidatures>();
+        // Les relances et les contacts (#14) ; le délai par défaut se lit dans les réglages, et le brouillon ne s'ouvre
+        // que par la fenêtre hôte, qui le prépare par BrouillonsDesRelances (ADR-0011).
+        builder.Services.AddScoped<ContactsDesEntreprises>();
+        builder.Services.AddScoped<RelancesDesCandidatures>();
+        builder.Services.AddSingleton<ReglageDesRelances>();
+        builder.Services.AddSingleton<BrouillonsDesRelances>();
 
         // Les statuts s'écrivent en toutes lettres. Un champ inconnu du corps rend la requête illisible plutôt que
         // d'être ignoré : le statut, par exemple, ne vient jamais de l'interface.
@@ -136,6 +146,8 @@ public static class ApiLocale
             .WithSummary("État de l'application");
         RoutesDesCandidatures.Declarer(app);
         RoutesDesSauvegardes.Declarer(app);
+        RoutesDesContacts.Declarer(app);
+        RoutesDesRelances.Declarer(app);
 
         return app;
     }
