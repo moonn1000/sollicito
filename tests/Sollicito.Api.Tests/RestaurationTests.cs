@@ -388,11 +388,16 @@ public sealed class RestaurationTests : IAsyncLifetime
             Path.Combine(ParDefaut, NomsDesCopies.Provisoire(NomsDesCopies.AvantRestauration(instant))),
             Path.Combine(ParDefaut, NomsDesCopies.Provisoire(NomsDesCopies.AvantRestaurationBrute(instant))),
             Path.Combine(ParDefaut, NomsDesCopies.Provisoire(NomsDesCopies.AvantRestaurationBrute(instant) + "-wal")),
+            // Le journal d'une copie brute renommé, sa base pas encore : l'arrêt est tombé entre les deux renommages.
+            Path.Combine(ParDefaut, NomsDesCopies.AvantRestaurationBrute(instant.AddMinutes(1)) + "-wal"),
         ];
         string[] autres =
         [
             Path.Combine(ParDefaut, NomsDesCopies.AvantRestauration(instant)),
             Path.Combine(ParDefaut, NomsDesCopies.AvantRestaurationBrute(instant)),
+            Path.Combine(ParDefaut, NomsDesCopies.AvantRestaurationBrute(instant) + "-wal"),
+            // Sans la marque de huit chiffres hexadécimaux, ce n'est pas un fichier provisoire de Sollicito.
+            Path.Combine(ParDefaut, "sollicito-avant-x.partielle"),
             Path.Combine(ParDefaut, "notes-personnelles.txt"),
             Path.Combine(_dossier, "sollicito.db.restauration"),
         ];
@@ -458,6 +463,29 @@ public sealed class RestaurationTests : IAsyncLifetime
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => restauration);
         Assert.True(depuisLaFermeture.Elapsed < TimeSpan.FromSeconds(1), $"La vérification a continué {depuisLaFermeture.Elapsed} après la fermeture.");
         await RienNAChangeAsync(api);
+    }
+
+    [Fact]
+    public async Task Une_copie_reecrite_pendant_sa_recopie_est_dite_changee_et_rien_ne_se_remplace()
+    {
+        var etapes = new EtapesDeTest { Arret = EtapeDeLaRestauration.CopieDeTravailEcrite };
+        await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest(), AppelsDeLaRestauration.AvecLesEtapes(etapes));
+        await api.AttendreLaPremiereVerificationAsync();
+        await api.EnregistrerAvecSuccesAsync("Atelier Azur fictif", "Comptable A", "2026-11-02T09:00");
+        await api.SauvegarderMaintenantAsync();
+        await api.EnregistrerAvecSuccesAsync("Beta Logistique fictif", "Chauffeur B", "2026-11-03T09:00");
+        var copie = api.Copie(api.CopieDuJour(Le18));
+        var source = Path.Combine(ParDefaut, copie.Nom);
+
+        var restauration = Task.Run(() => api.RestaurerAsync(copie));
+        await etapes.Atteinte.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        // Pendant la recopie, un autre programme réécrit la copie : son instant n'est plus celui que la liste montrait.
+        File.SetLastWriteTimeUtc(source, File.GetLastWriteTimeUtc(source).AddMinutes(1));
+        etapes.Relacher();
+
+        Assert.Equal(IssueDeLaRestauration.Changee, await restauration.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+        Assert.Equal(["Chauffeur B", "Comptable A"], (await api.ListerAsync()).Select(candidature => candidature!["poste"]!.GetValue<string>()).Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(Fichiers(_dossier), fichier => fichier.Contains(".restauration", StringComparison.Ordinal));
     }
 
     // Une base saine à restaurer, puis, rangée parmi les copies, une copie lente à vérifier : 30 000 lignes et 50 index,

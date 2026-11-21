@@ -117,6 +117,13 @@ public sealed partial class RestaurationDeLaBase(
             {
                 await CopiesBrutes.CopierLeFichierAsync(source!, copieDeTravail, annulation);
                 etapes.Atteinte(EtapeDeLaRestauration.CopieDeTravailEcrite);
+                // La copie se relit après sa recopie : un instant qui a changé pendant elle dit qu'elle a été réécrite, et la
+                // copie de travail n'est peut-être plus celle que l'utilisateur a confirmée.
+                if (sauvegardes.RetrouverLaCopie(demande).Refus is { } changement)
+                {
+                    return Refuser(changement);
+                }
+
                 using var borne = new CancellationTokenSource(DelaiDeLaVerification, horloge);
                 using var liee = CancellationTokenSource.CreateLinkedTokenSource(annulation, borne.Token);
                 verdict = await VerificationDUneCopie.VerifierEtMettreAJourAsync(copieDeTravail, dossier.Fichier, liee.Token);

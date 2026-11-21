@@ -8,8 +8,8 @@ namespace Sollicito.Infrastructure.Persistance;
 /// Les restes qu'un arrêt brutal laisse dans le dossier de données (#26, ADR-0008) : la copie de travail d'une mise à jour
 /// ou d'une restauration interrompue (#28), de la taille de la base, et ses journaux ; les fichiers provisoires des
 /// réglages et de la dernière copie ; dans le dossier des sauvegardes par défaut, les fichiers provisoires d'une copie
-/// d'avant une mise à jour ou une restauration. Chacun ne vit que le temps d'une opération, que le processus arrêté n'a
-/// pas finie. Ils se reconnaissent à leur nom, avec sa marque tirée au hasard : ni la base, ni ses journaux, ni une copie
+/// d'avant une mise à jour ou une restauration, et le journal d'une copie brute resté sans elle. Chacun ne vit que le temps
+/// d'une opération, que le processus arrêté n'a pas finie. Ils se reconnaissent à leur nom, avec sa marque tirée au hasard : ni la base, ni ses journaux, ni une copie
 /// finie, ni aucun autre fichier n'y répondent.
 /// </summary>
 public static partial class RestesDUnArret
@@ -52,10 +52,20 @@ public static partial class RestesDUnArret
             }
         }
 
-        // Les fichiers provisoires d'une copie d'avant, que seule cette installation écrit dans son dossier par défaut.
-        foreach (var nom in LireLesNoms(dossier.DossierDesSauvegardes).Where(nom => NomsDesCopies.EstUnProvisoireDe(nom, installation: null)))
+        // Les fichiers provisoires d'une copie d'avant, que seule cette installation écrit dans son dossier par défaut ; et le
+        // journal d'une copie brute resté sans elle, quand l'arrêt est tombé entre les renommages du journal et de la copie
+        // (#28) : la restauration ne s'est pas faite, et ce journal n'est la copie de rien.
+        var nomsParDefaut = LireLesNoms(dossier.DossierDesSauvegardes);
+        foreach (var nom in nomsParDefaut)
         {
-            restes.Add(Path.Combine(dossier.DossierDesSauvegardes, nom));
+            if (NomsDesCopies.EstUnProvisoireDe(nom, installation: null))
+            {
+                restes.Add(Path.Combine(dossier.DossierDesSauvegardes, nom));
+            }
+            else if (NomsDesCopies.EstLeJournalDUneCopieBrute(nom, out var copieBrute) && !nomsParDefaut.Contains(copieBrute, StringComparer.OrdinalIgnoreCase))
+            {
+                restes.Add(Path.Combine(dossier.DossierDesSauvegardes, copieBrute));
+            }
         }
 
         var retires = 0;

@@ -111,12 +111,42 @@ public static partial class NomsDesCopies
     private static string Horodatage(DateTimeOffset instant) =>
         instant.UtcDateTime.ToString(FormatDeLHorodatage, CultureInfo.InvariantCulture);
 
-    /// <summary>Vrai pour un fichier provisoire laissé par une copie de cette installation, ou d'avant une mise à jour.</summary>
-    public static bool EstUnProvisoireDe(string nom, string? installation) =>
-        nom.EndsWith(SuffixeProvisoire, StringComparison.Ordinal)
-        && (installation is null
-            ? nom.StartsWith(Prefixe + MarqueAvantMiseAJour, StringComparison.Ordinal)
-            : nom.StartsWith($"{Prefixe}{installation}-", StringComparison.Ordinal));
+    /// <summary>
+    /// Vrai pour un fichier provisoire de Sollicito : le nom final d'une copie, sa marque de huit chiffres hexadécimaux,
+    /// puis <c>.partielle</c>. Avec une installation, celui d'une copie du jour de cette installation ; sans, celui d'une
+    /// copie d'avant une mise à jour ou une restauration, ou d'une copie brute et de son journal (#28).
+    /// </summary>
+    public static bool EstUnProvisoireDe(string nom, string? installation)
+    {
+        ArgumentNullException.ThrowIfNull(nom);
+        if (FormeDUnProvisoire().Match(nom) is not { Success: true } provisoire)
+        {
+            return false;
+        }
+
+        var final = provisoire.Groups["final"].Value;
+        return installation is null
+            ? Lire(final) is CopieNommee.AvantMiseAJour or CopieNommee.AvantRestauration || FormeDUneCopieBrute().IsMatch(final)
+            : Lire(final) is CopieNommee.DuJour duJour && duJour.Installation == installation;
+    }
+
+    /// <summary>
+    /// Vrai pour le journal WAL d'une copie brute (#28) ; <paramref name="copieBrute"/> est alors le nom de la copie brute
+    /// elle-même, que le journal suit.
+    /// </summary>
+    public static bool EstLeJournalDUneCopieBrute(string nom, out string copieBrute)
+    {
+        ArgumentNullException.ThrowIfNull(nom);
+        var forme = FormeDUneCopieBrute().Match(nom);
+        copieBrute = forme.Success && forme.Groups["journal"].Success ? forme.Groups["copie"].Value : "";
+        return copieBrute.Length > 0;
+    }
+
+    [GeneratedRegex(@"^(?<final>.+)\.[0-9a-f]{8}\.partielle\z", RegexOptions.CultureInvariant)]
+    private static partial Regex FormeDUnProvisoire();
+
+    [GeneratedRegex(@"^(?<copie>sollicito-avant-restauration-[0-9]{8}-[0-9]{9}-brute\.db)(?<journal>-wal)?\z", RegexOptions.CultureInvariant)]
+    private static partial Regex FormeDUneCopieBrute();
 
     [GeneratedRegex("^[0-9a-f]{8}$", RegexOptions.CultureInvariant)]
     private static partial Regex FormeDeLInstallation();
