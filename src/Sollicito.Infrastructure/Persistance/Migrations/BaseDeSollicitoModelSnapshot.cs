@@ -76,6 +76,32 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("Sollicito.Domain.Contacts.Contact", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EntrepriseId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Nom")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntrepriseId");
+
+                    b.ToTable("Contacts", (string)null);
+                });
+
             modelBuilder.Entity("Sollicito.Domain.Entreprises.Entreprise", b =>
                 {
                     b.Property<int>("Id")
@@ -99,6 +125,40 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                     b.ToTable("Entreprises", (string)null);
                 });
 
+            modelBuilder.Entity("Sollicito.Domain.Relances.Relance", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CandidatureId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("DestinataireId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly>("Echeance")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Etat")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CandidatureId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Relances_UneAFaireParCandidature")
+                        .HasFilter("\"Etat\" = 'AFaire'");
+
+                    b.HasIndex("DestinataireId");
+
+                    b.HasIndex("Etat", "Echeance");
+
+                    b.ToTable("Relances", (string)null);
+                });
+
             modelBuilder.Entity("Sollicito.Domain.Candidatures.ChangementDeStatut", b =>
                 {
                     b.HasBaseType("Sollicito.Domain.Candidatures.EvenementDeCandidature");
@@ -120,6 +180,19 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                         .IsUnique();
 
                     b.HasDiscriminator().HasValue("ChangementDeStatut");
+                });
+
+            modelBuilder.Entity("Sollicito.Domain.Candidatures.ClotureDeRelance", b =>
+                {
+                    b.HasBaseType("Sollicito.Domain.Candidatures.EvenementDeCandidature");
+
+                    b.Property<int>("RelanceId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasIndex("RelanceId")
+                        .IsUnique();
+
+                    b.HasDiscriminator().HasValue("ClotureDeRelance");
                 });
 
             modelBuilder.Entity("Sollicito.Domain.Candidatures.Etape", b =>
@@ -162,6 +235,29 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Sollicito.Domain.Contacts.Contact", b =>
+                {
+                    b.HasOne("Sollicito.Domain.Entreprises.Entreprise", null)
+                        .WithMany()
+                        .HasForeignKey("EntrepriseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Sollicito.Domain.Relances.Relance", b =>
+                {
+                    b.HasOne("Sollicito.Domain.Candidatures.Candidature", null)
+                        .WithMany("Relances")
+                        .HasForeignKey("CandidatureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Sollicito.Domain.Contacts.Contact", null)
+                        .WithMany()
+                        .HasForeignKey("DestinataireId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
             modelBuilder.Entity("Sollicito.Domain.Candidatures.ChangementDeStatut", b =>
                 {
                     b.HasOne("Sollicito.Domain.Candidatures.ChangementDeStatut", "Corrige")
@@ -170,6 +266,17 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                         .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("Corrige");
+                });
+
+            modelBuilder.Entity("Sollicito.Domain.Candidatures.ClotureDeRelance", b =>
+                {
+                    b.HasOne("Sollicito.Domain.Relances.Relance", "Relance")
+                        .WithMany()
+                        .HasForeignKey("RelanceId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.Navigation("Relance");
                 });
 
             modelBuilder.Entity("Sollicito.Domain.Candidatures.Etape", b =>
@@ -185,6 +292,8 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
             modelBuilder.Entity("Sollicito.Domain.Candidatures.Candidature", b =>
                 {
                     b.Navigation("Evenements");
+
+                    b.Navigation("Relances");
                 });
 #pragma warning restore 612, 618
         }

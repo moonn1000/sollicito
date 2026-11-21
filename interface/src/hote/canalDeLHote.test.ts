@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { CanalSimule, JETON_FICTIF } from "../tests/canalSimule.ts";
-import { demanderLeChoixDuDossier, demanderLeJeton } from "./canalDeLHote.ts";
+import { demanderLeBrouillon, demanderLeChoixDuDossier, demanderLeJeton } from "./canalDeLHote.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -69,4 +69,51 @@ test("une réponse au choix du dossier qui n'a pas la forme attendue est ignoré
   canal.envoyer({ type: "dossierDesSauvegardes", issue: "refuse" });
 
   await expect(issue).resolves.toBe("refuse");
+});
+
+test("la page demande le brouillon d'une relance par son seul identifiant, et reçoit son issue (#14)", async () => {
+  const canal = new CanalSimule();
+
+  const issue = demanderLeBrouillon(canal, 7);
+  expect(canal.messagesRecus).toEqual([{ type: "ouvrirLeBrouillon", relance: 7 }]);
+  canal.envoyer({ type: "brouillonDeRelance", relance: 7, issue: "ouvert" });
+
+  await expect(issue).resolves.toBe("ouvert");
+  expect(canal.abonnes).toBe(0);
+});
+
+test("une réponse au brouillon d'une autre forme, ou pour une autre relance, est ignorée", async () => {
+  const canal = new CanalSimule();
+
+  const issue = demanderLeBrouillon(canal, 7);
+  canal.envoyer({ type: "brouillonDeRelance", relance: 8, issue: "ouvert" });
+  canal.envoyer({ type: "brouillonDeRelance", relance: "7", issue: "ouvert" });
+  canal.envoyer({ type: "brouillonDeRelance", relance: 7, issue: "mailto:pirate@exemple.invalid" });
+  canal.envoyer({ type: "brouillonDeRelance", relance: 7, issue: "sansReponse" });
+  canal.envoyer({ type: "dossierDesSauvegardes", issue: "choisi" });
+  canal.envoyer("ouvert");
+  expect(canal.abonnes).toBe(1);
+  canal.envoyer({ type: "brouillonDeRelance", relance: 7, issue: "impossible" });
+
+  await expect(issue).resolves.toBe("impossible");
+});
+
+test("sans réponse de l'hôte dans le délai, la page cesse d'attendre le brouillon", async () => {
+  vi.useFakeTimers();
+  const canal = new CanalSimule();
+
+  const issue = demanderLeBrouillon(canal, 7, 1_000);
+  await vi.advanceTimersByTimeAsync(1_000);
+
+  await expect(issue).resolves.toBe("sansReponse");
+  expect(canal.abonnes).toBe(0);
+});
+
+test("un identifiant qui n'est pas un entier positif ne part pas", async () => {
+  const canal = new CanalSimule();
+
+  await expect(demanderLeBrouillon(canal, 0)).rejects.toThrow(RangeError);
+  await expect(demanderLeBrouillon(canal, 1.5)).rejects.toThrow(RangeError);
+  await expect(demanderLeBrouillon(canal, Number.NaN)).rejects.toThrow(RangeError);
+  expect(canal.messagesRecus).toEqual([]);
 });

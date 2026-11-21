@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Sollicito.Api;
+using Sollicito.Api.Relances;
 using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Securite;
 
@@ -54,7 +55,8 @@ internal static class Program
             var origine = new Uri(api.Services.GetRequiredService<AdresseDEcoute>().Origine);
             var jeton = api.Services.GetRequiredService<JetonDeLancement>();
             var sauvegardes = api.Services.GetRequiredService<SauvegardesDeLaBase>();
-            using var fenetre = new FenetreHote(origine, jeton, lancement, sauvegardes);
+            var brouillons = api.Services.GetRequiredService<BrouillonsDesRelances>();
+            using var fenetre = new FenetreHote(origine, jeton, lancement, sauvegardes, brouillons);
             System.Windows.Forms.Application.Run(fenetre);
             return fenetre.CodeDeSortie;
         }

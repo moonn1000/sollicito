@@ -92,8 +92,41 @@ export interface EtapeLue {
   estCorrige: boolean;
 }
 
+/** L'état d'une relance, tel que l'API l'écrit (#14) : à faire, faite ou abandonnée. */
+export type EtatDeRelance = "AFaire" | "Faite" | "Abandonnee";
+
+/** Un contact d'une entreprise (#14) : un nom et une adresse électronique. */
+export interface ContactConnu {
+  id: number;
+  nom: string;
+  email: string;
+}
+
+/** Une relance d'une candidature (#14). */
+export interface RelanceLue {
+  id: number;
+  /** Le jour de l'échéance, sans heure ni fuseau : `2026-04-03`. */
+  echeance: string;
+  etat: EtatDeRelance;
+  /** Son destinataire, ou rien : le brouillon s'ouvre alors sans destinataire. */
+  destinataire: ContactConnu | null;
+}
+
+/** La clôture d'une relance, faite ou abandonnée, dans l'historique (#14). */
+export interface ClotureDeRelanceLue {
+  sorte: "clotureDeRelance";
+  id: number;
+  /** L'instant de la clôture, en UTC, donné par l'horloge. */
+  survenuLe: string;
+  /** L'identifiant de la relance close. */
+  relance: number;
+  etat: EtatDeRelance;
+  echeance: string;
+  destinataire: ContactConnu | null;
+}
+
 /** Un événement de l'historique : sa sorte dit lequel. */
-export type EvenementDeLHistorique = ChangementDeStatutLu | EtapeLue;
+export type EvenementDeLHistorique = ChangementDeStatutLu | EtapeLue | ClotureDeRelanceLue;
 
 /** Ce que ferait la correction du dernier changement de statut. */
 export interface CorrectionPossible {
@@ -113,7 +146,79 @@ export interface FicheDUneCandidature extends Candidature {
   correction: CorrectionPossible | null;
   /** Ses événements, du plus ancien au plus récent. */
   historique: EvenementDeLHistorique[];
+  /** Ses relances, dans l'ordre de leur planification : au plus une à faire (#14). */
+  relances: RelanceLue[];
 }
+
+/** Un contact tel que la fiche l'envoie, champ par champ (#14). */
+export interface SaisieDUnContact {
+  nom: string;
+  email: string;
+}
+
+/** Un champ de la saisie d'un contact. */
+export type ChampDuContact = keyof SaisieDUnContact;
+
+/** Les messages de refus de l'API, champ par champ. */
+export type RefusDuContact = Partial<Record<ChampDuContact, string[]>>;
+
+/** Ce que rend l'ajout ou la modification d'un contact : le contact enregistré, ou les refus de ses champs. */
+export type ResultatDUnContact = { issue: "enregistre"; contact: ContactConnu } | { issue: "refuse"; refus: RefusDuContact };
+
+/** Une relance telle que la fiche l'envoie (#14) : un délai en jours depuis l'envoi, et un destinataire ou personne. */
+export interface SaisieDUneRelance {
+  delai: number;
+  destinataire: number | null;
+}
+
+/** Un champ de la saisie d'une relance. */
+export type ChampDeLaRelance = keyof SaisieDUneRelance;
+
+/** Les messages de refus de l'API, champ par champ. */
+export type RefusDeLaRelance = Partial<Record<ChampDeLaRelance, string[]>>;
+
+/**
+ * Ce que rend une relance planifiée ou changée : la fiche à jour ; les refus de ses champs ; ou le motif d'un refus que
+ * l'état de la candidature explique (close, ou qui a déjà sa relance à faire).
+ */
+export type ResultatDeLaRelance =
+  | { issue: "faite"; fiche: FicheDUneCandidature }
+  | { issue: "refusee"; refus: RefusDeLaRelance }
+  | { issue: "nonPermise"; motif: string };
+
+/** Une relance à faire que signale le tableau de bord (#14). */
+export interface RelanceSignalee {
+  id: number;
+  echeance: string;
+  candidature: { id: number; poste: string; entreprise: EntrepriseConnue };
+  destinataire: ContactConnu | null;
+}
+
+/** Les relances que signale le tableau de bord, calculées par l'API en date locale. */
+export interface RelancesDuTableauDeBord {
+  /** Le jour local de la lecture : `2026-11-18`. */
+  aujourdhui: string;
+  /** Les relances à faire dont l'échéance tombe aujourd'hui ou avant. */
+  echues: RelanceSignalee[];
+  /** Celles dont l'échéance tombe dans les sept jours qui suivent. */
+  deLaSemaine: RelanceSignalee[];
+}
+
+/** Le délai par défaut des relances, réglé dans reglages.json (#14, ADR-0011). */
+export interface ReglageDuDelai {
+  /** Le délai qui s'applique, en jours : celui du réglage, ou les 7 jours d'usine. */
+  delaiParDefaut: number;
+  /** Faux si le délai enregistré n'a pas pu être relu. */
+  delaiLisible: boolean;
+  /** Faux si le fichier des réglages n'a pas pu être relu en entier : le délai ne s'y écrit pas. */
+  fichierLisible: boolean;
+}
+
+/** Ce que rend un changement du délai par défaut : le réglage à jour, le refus du champ, ou le motif d'un refus. */
+export type ResultatDuReglage =
+  | { issue: "change"; reglage: ReglageDuDelai }
+  | { issue: "refuse"; refus: string[] }
+  | { issue: "impossible"; motif: string };
 
 /** Ce que rend un changement de statut ou une correction : la fiche à jour, ou le motif d'un refus. */
 export type ResultatDUneAction = { faite: true; fiche: FicheDUneCandidature } | { faite: false; motif: string };
@@ -186,6 +291,10 @@ const CHAMPS: readonly ChampDeLaSaisie[] = ["entreprise", "poste", "envoyeeLe"];
 
 const CHAMPS_DE_L_ETAPE: readonly ChampDeLEtape[] = ["type", "survenuLe", "note"];
 
+const CHAMPS_DU_CONTACT: readonly ChampDuContact[] = ["nom", "email"];
+
+const CHAMPS_DE_LA_RELANCE: readonly ChampDeLaRelance[] = ["delai", "destinataire"];
+
 /** Une réponse de l'API en erreur : jeton refusé, origine refusée, route inconnue… */
 export class ErreurDeLApi extends Error {
   readonly statut: number;
@@ -235,6 +344,28 @@ export interface ClientDeLApi {
   sauvegarderMaintenant(): Promise<EtatDesSauvegardes>;
   /** Revient au dossier par défaut, après une copie qui doit y réussir ; sinon l'ancien dossier reste. */
   revenirAuDossierParDefaut(): Promise<ResultatDuRetourAuDossierParDefaut>;
+  /** Les contacts d'une entreprise, dans l'ordre de leur ajout (#14). */
+  listerLesContacts(entreprise: number): Promise<ContactConnu[]>;
+  /** Ajoute un contact à une entreprise, ou rend les refus de ses champs. */
+  ajouterUnContact(entreprise: number, saisie: SaisieDUnContact): Promise<ResultatDUnContact>;
+  /** Corrige le nom et l'adresse d'un contact, ou rend les refus de ses champs ; une `ErreurDeLApi` 404 s'il n'existe pas. */
+  modifierUnContact(contact: number, saisie: SaisieDUnContact): Promise<ResultatDUnContact>;
+  /** Supprime un contact, définitivement : ses relances restent, sans destinataire. */
+  supprimerUnContact(contact: number): Promise<void>;
+  /** Planifie une relance de la candidature, ou rend les refus de ses champs, ou le motif d'un refus. */
+  planifierUneRelance(candidature: number, saisie: SaisieDUneRelance): Promise<ResultatDeLaRelance>;
+  /** Change le délai et le destinataire de la relance à faire. */
+  changerLaRelance(candidature: number, relance: number, saisie: SaisieDUneRelance): Promise<ResultatDeLaRelance>;
+  /** Marque faite la relance à faire, pour de bon, ou rend le motif du refus. */
+  marquerLaRelanceFaite(candidature: number, relance: number): Promise<ResultatDUneAction>;
+  /** Abandonne la relance à faire, pour de bon, ou rend le motif du refus. */
+  abandonnerLaRelance(candidature: number, relance: number): Promise<ResultatDUneAction>;
+  /** Les relances échues et celles de la semaine, que signale le tableau de bord. */
+  listerLesRelances(): Promise<RelancesDuTableauDeBord>;
+  /** Le délai par défaut des relances. */
+  lireLeReglageDesRelances(): Promise<ReglageDuDelai>;
+  /** Change le délai par défaut des relances, ou rend le refus du champ, ou le motif d'un refus. */
+  changerLeDelaiParDefaut(jours: number): Promise<ResultatDuReglage>;
 }
 
 /**
@@ -400,7 +531,93 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
 
       throw new ErreurDeLApi(reponse.status);
     },
+    listerLesContacts: async (entreprise) => (await lire(adresseDesContacts(entreprise))) as ContactConnu[],
+    ajouterUnContact: async (entreprise, saisie) => enregistrerLeContact(await ecrire(adresseDesContacts(entreprise), saisie), 201),
+    modifierUnContact: async (contact, saisie) =>
+      enregistrerLeContact(await ecrire(`/api/contacts/${identifiant(contact)}`, saisie, "PUT"), 200),
+    supprimerUnContact: async (contact) => {
+      const reponse = await ecrire(`/api/contacts/${identifiant(contact)}`, undefined, "DELETE");
+      if (reponse.status !== 204) {
+        throw new ErreurDeLApi(reponse.status);
+      }
+    },
+    planifierUneRelance: async (candidature, saisie) =>
+      relancer(await ecrire(`${adresseDeLaFiche(candidature)}/relances`, saisie)),
+    changerLaRelance: async (candidature, relance, saisie) =>
+      relancer(await ecrire(`${adresseDeLaFiche(candidature)}/relances/${identifiant(relance)}`, saisie, "PUT")),
+    marquerLaRelanceFaite: async (candidature, relance) =>
+      agir(`${adresseDeLaFiche(candidature)}/relances/${identifiant(relance)}/faite`),
+    abandonnerLaRelance: async (candidature, relance) =>
+      agir(`${adresseDeLaFiche(candidature)}/relances/${identifiant(relance)}/abandon`),
+    listerLesRelances: async () => (await lire("/api/relances")) as RelancesDuTableauDeBord,
+    lireLeReglageDesRelances: async () => (await lire("/api/reglages/relances")) as ReglageDuDelai,
+    changerLeDelaiParDefaut: async (jours) => {
+      const reponse = await ecrire("/api/reglages/relances", { delaiParDefaut: jours }, "PUT");
+      if (reponse.status === 200) {
+        return { issue: "change", reglage: (await reponse.json()) as ReglageDuDelai };
+      }
+
+      if (reponse.status === 400) {
+        const refus = lireLesRefus(await reponse.json().catch(() => undefined), ["delaiParDefaut"] as const);
+        if (refus?.delaiParDefaut !== undefined) {
+          return { issue: "refuse", refus: refus.delaiParDefaut };
+        }
+      }
+
+      if (reponse.status === 409) {
+        const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+        if (motif !== undefined) {
+          return { issue: "impossible", motif };
+        }
+      }
+
+      throw new ErreurDeLApi(reponse.status);
+    },
   };
+}
+
+// Le contact enregistré (201 à l'ajout, 200 à la modification), ou les refus de ses champs (400).
+async function enregistrerLeContact(reponse: Response, attendu: 200 | 201): Promise<ResultatDUnContact> {
+  if (reponse.status === attendu) {
+    return { issue: "enregistre", contact: (await reponse.json()) as ContactConnu };
+  }
+
+  if (reponse.status === 400) {
+    const refus = lireLesRefus(await reponse.json().catch(() => undefined), CHAMPS_DU_CONTACT);
+    if (refus !== undefined && Object.keys(refus).length > 0) {
+      return { issue: "refuse", refus };
+    }
+  }
+
+  throw new ErreurDeLApi(reponse.status);
+}
+
+// La fiche à jour (200), les refus des champs (400), ou le motif d'un refus que l'état de la candidature explique (409).
+async function relancer(reponse: Response): Promise<ResultatDeLaRelance> {
+  if (reponse.status === 200) {
+    return { issue: "faite", fiche: (await reponse.json()) as FicheDUneCandidature };
+  }
+
+  if (reponse.status === 400) {
+    const refus = lireLesRefus(await reponse.json().catch(() => undefined), CHAMPS_DE_LA_RELANCE);
+    if (refus !== undefined && Object.keys(refus).length > 0) {
+      return { issue: "refusee", refus };
+    }
+  }
+
+  if (reponse.status === 409) {
+    const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+    if (motif !== undefined) {
+      return { issue: "nonPermise", motif };
+    }
+  }
+
+  throw new ErreurDeLApi(reponse.status);
+}
+
+// L'adresse des contacts d'une entreprise : seul son identifiant y entre.
+function adresseDesContacts(entreprise: number): string {
+  return `/api/entreprises/${identifiant(entreprise)}/contacts`;
 }
 
 // L'adresse de la fiche : seul un identifiant de la base y entre, jamais un texte saisi.

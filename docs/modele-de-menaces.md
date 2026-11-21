@@ -1,8 +1,8 @@
 # Modèle de menaces
 
-- **Mis à jour le** : 2026-11-21, avec l'exe construit dans la CI et la chaîne de publication de ses versions (#54)
-- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D9 et D10 ; [ADR-0003](adr/0003-hote-interface-webview2.md), « Règles d'accès » et « Durcissement de la fenêtre » ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) ; [ADR-0009](adr/0009-construction-et-publication-de-l-exe.md)
-- **Périmètre** : l'API locale, ses journaux et sa base, ses sauvegardes et ses réglages, la fenêtre hôte, les textes saisis, et l'exe distribué, de sa construction à son attestation. Les offres et la sortie de l'IA, et les clés d'IA, ajouteront leur section avec les stories qui les construisent.
+- **Mis à jour le** : 2026-11-21, avec l'exe construit dans la CI et la chaîne de publication de ses versions (#54), puis avec les relances, les contacts et le brouillon d'une relance (#14)
+- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D9 et D10 ; [ADR-0003](adr/0003-hote-interface-webview2.md), « Règles d'accès » et « Durcissement de la fenêtre » ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) ; [ADR-0009](adr/0009-construction-et-publication-de-l-exe.md) ; [ADR-0011](adr/0011-relances-et-brouillon.md)
+- **Périmètre** : l'API locale, ses journaux et sa base, ses sauvegardes et ses réglages, la fenêtre hôte et le brouillon d'une relance qu'elle ouvre, les textes saisis, et l'exe distribué, de sa construction à son attestation. Les offres et la sortie de l'IA, et les clés d'IA, ajouteront leur section avec les stories qui les construisent.
 
 ## Ce qui est protégé
 
@@ -99,6 +99,25 @@ Un chemin n'est servi comme fichier que s'il est fait de segments simples : lett
 
 *Tests* : `tests/Sollicito.Api.Tests/ProtectionsDesCandidaturesTests.cs`, `ProtectionsDuSuiviTests.cs` et `ProtectionsDeLaModificationTests.cs`. Sur chacune des dix routes, une requête sans jeton (401), sous un autre `Host` (400) ou d'une autre origine (403) est refusée, et n'enregistre ni ne change rien ; une écriture sans origine ou d'origine `null` aussi (403). Les dix routes figurent dans la documentation OpenAPI. `tests/Sollicito.Api.Tests/CandidaturesTests.cs`, `SuiviDesCandidaturesTests.cs`, `ModificationDesCandidaturesTests.cs` et `CorrectionDesEtapesTests.cs` : les refus de chaque champ, et les corps illisibles ou étrangers (nombre à la place d'un statut, statut dans une modification, champ inconnu, JSON mal formé, corps vide), n'enregistrent ni ne changent rien ; dix changements de statut simultanés n'en gardent qu'un, cinq corrections simultanées du même changement n'en font qu'une, six corrections simultanées d'une même étape n'en font qu'une, huit modifications simultanées vers un même nouveau nom ne créent qu'une entreprise, et dix modifications de la date d'envoi lancées en même temps qu'une étape n'en laissent aucune avant l'envoi. La base refuse elle-même qu'une étape soit corrigée deux fois, ou qu'une correction désigne un événement absent. `MigrationDesCorrectionsDEtapeTests.cs` : une base peuplée avant #25 passe sa migration sans rien perdre, puis s'écrit. `FicheDUneCandidature.test.tsx` : la suppression attend sa confirmation dans la page, aucune boîte du navigateur ne s'ouvre, et « Annuler » ou Échap ne suppriment rien ; `fenetre.test.ts` : de même dans la vraie fenêtre, où aucune boîte ne s'ouvre.
 
+### Routes des contacts et des relances
+
+Les onze routes de #14 passent par les mêmes contrôles que toute route, et figurent dans la documentation OpenAPI (ADR-0011) :
+
+- les contacts d'une entreprise : `GET` et `POST /api/entreprises/{id}/contacts`, `PUT` et `DELETE /api/contacts/{id}` ;
+- la relance d'une candidature : `POST /api/candidatures/{id}/relances`, `PUT …/relances/{relance}`, et en `POST` `…/relances/{relance}/faite` et `…/relances/{relance}/abandon` ;
+- les relances que signale le tableau de bord, `GET /api/relances`, et le délai par défaut, `GET` et `PUT /api/reglages/relances`.
+
+Ce qu'elles tiennent :
+
+- **Des identifiants seulement dans l'adresse** : le nom et l'adresse d'un contact, le délai d'une relance voyagent dans le corps.
+- **Un corps lu strictement** : un champ inconnu, comme un état ou une échéance, rend la requête illisible (400). Un nombre s'écrit en nombre : un délai écrit en texte (`"7"`) est refusé, alors que les réglages du web d'ASP.NET Core l'auraient lu.
+- **Des refus qui ne reprennent pas le texte saisi** : l'adresse d'un contact refusée n'est jamais citée.
+- **Une écriture exclusive** : chaque action sur une relance lit la candidature et l'écrit d'un bloc, et la base elle-même n'admet qu'une relance à faire par candidature (un index unique, filtré sur l'état). Une relance qui n'est plus à faire, ou d'une autre candidature, est refusée (409).
+- **Aucune route n'ouvre de brouillon, ni ne rend de lien `mailto`** : seule la fenêtre hôte bâtit et lance ce lien (voir « Brouillon d'une relance »).
+- **Un contact supprimé** quitte toutes ses relances, closes comprises : la base met leur destinataire à rien (`ON DELETE SET NULL`). La suppression ne part que de l'interface, après une confirmation dans la page.
+
+*Tests* : `tests/Sollicito.Api.Tests/ProtectionsDesRelancesTests.cs`. Sur chacune des onze routes, une requête sans jeton (401) ou sous un autre `Host` (400) est refusée, et ne change ni les fiches, ni les contacts, ni le réglage ; une écriture d'une autre origine, sans origine ou d'origine `null`, et une lecture d'une autre origine aussi (403). Les onze routes figurent dans la documentation OpenAPI. `ContactsTests.cs`, `RelancesTests.cs` et `ReglageDesRelancesTests.cs` : les refus de chaque champ et les corps illisibles (champ inconnu, type inattendu, nombre en texte) n'enregistrent rien ; l'adresse refusée n'est pas citée ; dix planifications simultanées ne créent qu'une relance, cinq clôtures simultanées n'en font qu'une ; la base refuse elle-même une seconde relance à faire. `MigrationDesRelancesTests.cs` : une base peuplée à la migration de #25 passe celle de #14 sans rien perdre, puis reçoit contacts et relances.
+
 ### Erreurs inattendues
 
 En développement, ASP.NET Core place sa page d'exception avant tout le reste du chemin des requêtes. Elle afficherait les en-têtes de la requête, jeton compris, et le message de l'exception, en HTML, en texte ou en JSON selon ce que la requête accepte. Aucune exception ne l'atteint : la première étape du chemin, `ErreursInattendues` (`src/Sollicito.Api/Erreurs/ErreursInattendues.cs`), répond elle-même, quel que soit l'environnement.
@@ -120,6 +139,7 @@ La fenêtre (`src/Sollicito.Fenetre`) n'affiche que l'interface locale (ADR-0001
 | Une donnée, dans une adresse | une image, un script, un `fetch`, un cadre, une balise (`sendBeacon`) | la politique de sécurité du contenu ; le filtre des requêtes |
 | Une donnée, par le navigateur par défaut | une nouvelle fenêtre ouverte par un script | l'exigence d'un geste de l'utilisateur |
 | Le poste | un schéma externe (`mailto:`, `ms-settings:`…), un téléchargement | leur annulation |
+| Une donnée, par la messagerie | le brouillon d'une relance (`mailto`) | la page ne donne qu'un identifiant ; l'hôte bâtit le lien à partir de la base, encodé, sans autre en-tête ; l'utilisateur envoie lui-même (voir « Brouillon d'une relance ») |
 | La caméra, le micro, la position, les notifications | une demande de permission | son refus |
 | Le jeton | une autre page qui le demanderait | le contrôle de la source du message |
 | Une copie de la base | un dossier de sauvegarde choisi par un script, par exemple un partage réseau | aucune route ne reçoit de chemin ; seul le dialogue de l'hôte en donne un (voir « Sauvegardes ») |
@@ -142,7 +162,7 @@ La fenêtre (`src/Sollicito.Fenetre`) n'affiche que l'interface locale (ADR-0001
 
 ### Schémas externes et téléchargements
 
-`LaunchingExternalUriScheme` et `DownloadStarting` sont annulés : aucun programme ne se lance depuis la page, aucun fichier ne s'enregistre sur le poste. `LaunchingExternalUriScheme` est une seconde barrière : l'annulation des navigations arrête `mailto:` et `ms-settings:` avant lui, et aucun test ne l'atteint. Au début d'un téléchargement, avant que la fenêtre ne l'annule, le navigateur intégré crée et efface aussitôt un fichier temporaire (`<identifiant>.tmp`) dans le dossier Téléchargements de l'utilisateur ; rien n'y reste (relevé le 19/11).
+`LaunchingExternalUriScheme` et `DownloadStarting` sont annulés : aucun programme ne se lance depuis la page, aucun fichier ne s'enregistre sur le poste. Seul l'hôte lance un lien `mailto`, celui du brouillon d'une relance, qu'il bâtit lui-même (voir « Brouillon d'une relance ») ; la page n'en ouvre aucun. `LaunchingExternalUriScheme` est une seconde barrière : l'annulation des navigations arrête `mailto:` et `ms-settings:` avant lui, et aucun test ne l'atteint. Au début d'un téléchargement, avant que la fenêtre ne l'annule, le navigateur intégré crée et efface aussitôt un fichier temporaire (`<identifiant>.tmp`) dans le dossier Téléchargements de l'utilisateur ; rien n'y reste (relevé le 19/11).
 
 *Tests* : `fenetre.test.ts` : deux téléchargements, d'un fichier de l'interface et d'un `blob:`, n'écrivent rien dans le dossier de téléchargement de la version de test. Branché par CDP, Playwright prend les téléchargements à son compte, et la fenêtre ne verrait pas les siens : le test rend d'abord au navigateur sa propre gestion, celle de la version publiée.
 
@@ -158,6 +178,22 @@ La fenêtre (`src/Sollicito.Fenetre`) n'affiche que l'interface locale (ADR-0001
 - L'interface le garde dans la fermeture de son client de l'API, en mémoire : ni stockage du navigateur, ni cookie, ni adresse. Elle l'envoie dans l'en-tête `Sollicito-Jeton`, vers la même origine. Une page rechargée le redemande et le reçoit de nouveau.
 
 *Tests* : `fenetre.test.ts` : après un rechargement, l'appel de l'interface à `/api/etat` porte le jeton dans son en-tête, et ce jeton ouvre l'API. Ni l'adresse de la page, ni le stockage local et de session, ni les cookies, ni IndexedDB, ni le cache, ni le document, ni les journaux de l'API ne le contiennent ; après la fermeture, aucun fichier du dossier de données non plus. `ReglesDeLaFenetreTests.cs` : un message d'une autre source, mal formé ou d'un autre type ne reçoit rien. `interface/src/hote/canalDeLHote.test.ts` et `interface/src/connexion.test.ts` : l'interface ignore un message qui n'a pas la forme du jeton, et n'écrit le jeton dans aucun stockage.
+
+### Brouillon d'une relance
+
+La page n'ouvre jamais un lien `mailto` : elle demande le brouillon d'une relance à l'hôte, qui le bâtit à partir de la base (ADR-0003, « Brouillon de relance » ; ADR-0011).
+
+- **Le message** : `{"type":"ouvrirLeBrouillon","relance":<id>}`, sous le contrôle de la source du canal du jeton. Il porte son type et l'identifiant de la relance, un entier positif, et rien d'autre : un champ de plus, comme une adresse ou un texte, et rien ne s'ouvre. Un message d'une autre source ou d'une autre forme n'ouvre rien non plus.
+- **Les champs** viennent de la base, lus par le service des relances, en mémoire : l'adresse du contact destinataire, validée à sa saisie et revérifiée par l'hôte, et le texte du brouillon, bâti à partir du poste et de la date d'envoi. Seule une relance à faire a un brouillon. Une adresse lue en base qui ne passe plus la règle fait refuser le brouillon.
+- **Le lien** : `mailto:`, l'adresse encodée (tout sauf les caractères non réservés et l'`@`), puis l'objet et le corps encodés en UTF-8, chaque fin de ligne en `%0D%0A`. Aucun autre en-tête : un `?`, un `&`, un `#` ou une fin de ligne d'un champ ne peut ni couper le lien, ni y ajouter une copie cachée ou un autre destinataire. Seul un lien qui commence par `mailto:` va au shell de Windows.
+- **Un brouillon à la fois**, ouvert après le gestionnaire du message ; une demande reçue pendant un autre attend son tour, quatre au plus, et une demande de plus est ignorée. La page ne reçoit que l'issue : ouvert, refusé ou impossible, sans rien du brouillon.
+- **Ce qui reste** : aucun geste n'est exigé. `WebMessageReceived` ne dit pas si un clic précède le message, contrairement à `IsUserInitiated` pour une nouvelle fenêtre (ADR-0006). Un script injecté qui aurait le jeton pourrait ouvrir le brouillon d'une relance sans clic, après avoir créé par l'API un contact à son adresse, et choisi le poste qui fait le texte. L'envoi reste à l'utilisateur, qui voit le brouillon dans sa messagerie (ADR-0001, D8) ; contre ce script, restent l'affichage échappé et la politique de sécurité du contenu. Rien n'en borne non plus le nombre dans le temps : la file limite les demandes en attente, pas leur suite, et ce script peut ouvrir un brouillon après l'autre, chacun à la réponse du précédent.
+- **Ce qui reste sur le poste** : une messagerie de bureau reçoit en général le lien entier en argument de sa ligne de commande. L'adresse et le nom du contact, le poste et le texte du brouillon s'y lisent alors, par tout programme du compte, et dans l'audit de création des processus quand un poste géré l'active, ligne de commande comprise. Ce n'est pas un journal de Sollicito, et le même compte lit déjà la base (voir « Limites »).
+- **Ce qui quitte le poste** : une messagerie en ligne, ou qui range ses brouillons sur un serveur, reçoit le destinataire, l'objet et le texte du brouillon avant tout envoi, même si l'utilisateur renonce (ADR-0011, « Ce qui quitte la machine »). Sollicito, lui, ne contacte aucun serveur.
+
+*Tests* : `tests/Sollicito.Fenetre.Tests/LienDuBrouillonTests.cs` : le lien porte le destinataire, l'objet et le corps encodés ; `?`, `&`, `#`, `=`, `+`, `%`, les accents et les fins de ligne n'y ajoutent ni ne coupent rien ; une adresse en liste, porteuse d'un paramètre ou d'une fin de ligne, ne fait aucun lien ; seul un message de l'interface, de la forme attendue, avec un identifiant entier positif et sans autre champ, demande un brouillon ; la réponse ne porte que la relance et l'issue. `RelancesTests.cs` : le brouillon d'une relance à faire se lit en base, mot pour mot ; une relance close ou inconnue n'en a pas. `interface/src/hote/canalDeLHote.test.ts` : le message ne porte que l'identifiant, et une réponse d'une autre forme, ou pour une autre relance, est ignorée. `fenetre.test.ts`, dans la vraie fenêtre : le brouillon d'une relance planifiée, noté par la version de test, est celui de la base ; un message d'une autre forme, ou pour une relance inconnue, n'en ouvre aucun ; un champ de plus n'en ouvre aucun non plus, même pour une relance à faire, et le même message réduit à sa forme rouvre le brouillon de la base.
+
+*À vérifier à la main* sur l'exe publié (ADR-0011, « À vérifier ») : une messagerie de bureau et une messagerie en ligne reçoivent le brouillon entier ; un brouillon aux champs longs ; un poste sans messagerie associée.
 
 ### Politique de sécurité du contenu et autres en-têtes
 
@@ -202,7 +238,7 @@ Un lancement finit toujours, par la fenêtre ou par le message « Sollicito n'a 
 
 ### Version de test
 
-Le test Playwright pilote la vraie fenêtre par le protocole CDP, ouvert dans la seule version de test (configuration `Test`, `src/Sollicito.Fenetre/VersionDeTest.cs`), sur un port de `127.0.0.1` choisi par le test. Elle reprend les réglages de la version publiée, et ne s'en écarte que sur ces points : le port CDP ; un dossier de données donné par le test, sans lequel elle refuse de se lancer ; les liens externes notés dans un fichier au lieu d'être ouverts, et les navigations annulées notées dans un autre ; le dossier de téléchargement placé dans ce dossier, quand la version publiée garde le dossier Téléchargements de l'utilisateur ; une caméra et un micro simulés ; ses messages d'erreur écrits sur la sortie d'erreur, sans boîte de dialogue ; le dialogue de dossier des sauvegardes remplacé par le dossier que le test écrit dans un fichier de ce dossier (`dossier-a-choisir.txt`), sans fichier, un choix annulé (#26). Le code de ces écarts n'est pas compilé dans la version publiée, et `dotnet publish -c Test` échoue.
+Le test Playwright pilote la vraie fenêtre par le protocole CDP, ouvert dans la seule version de test (configuration `Test`, `src/Sollicito.Fenetre/VersionDeTest.cs`), sur un port de `127.0.0.1` choisi par le test. Elle reprend les réglages de la version publiée, et ne s'en écarte que sur ces points : le port CDP ; un dossier de données donné par le test, sans lequel elle refuse de se lancer ; les liens externes notés dans un fichier au lieu d'être ouverts, et les navigations annulées notées dans un autre ; le dossier de téléchargement placé dans ce dossier, quand la version publiée garde le dossier Téléchargements de l'utilisateur ; une caméra et un micro simulés ; ses messages d'erreur écrits sur la sortie d'erreur, sans boîte de dialogue ; le dialogue de dossier des sauvegardes remplacé par le dossier que le test écrit dans un fichier de ce dossier (`dossier-a-choisir.txt`), sans fichier, un choix annulé (#26) ; le lien `mailto` d'un brouillon noté dans un fichier de ce dossier (`brouillons-ouverts.txt`) au lieu d'être lancé (#14). Le code de ces écarts n'est pas compilé dans la version publiée, et `dotnet publish -c Test` échoue.
 
 ## Sauvegardes
 
@@ -227,7 +263,7 @@ Le dossier par défaut ne protège pas d'une panne du disque de la base : l'écr
 - Un script injecté dans la page, qui aurait lu le jeton, peut ouvrir le dialogue, où l'utilisateur seul choisit ; refaire la copie du jour ; ou ramener les copies au dossier par défaut, par une route sans chemin. Il ne peut pas les envoyer vers un dossier de son choix, ni vers un partage réseau qui recevrait aussi l'empreinte NTLM du compte.
 - Le dossier choisi ne devient celui des sauvegardes qu'après une copie qui y réussit. Il n'est jamais recréé s'il manque : une autre clé a pu prendre la même lettre. Aucune copie ne part alors ailleurs ; l'alerte du tableau de bord le dit.
 - La rotation n'efface que les copies du jour de l'installation, reconnues à leur nom (`sollicito-<installation>-<AAAA-MM-JJ>.db`) : jamais un autre fichier du dossier, ni les copies d'un autre poste qui le partage, ni celles d'avant une mise à jour.
-- Le réglage du dossier vit dans `reglages.json`, dans le dossier de données, hors de la base. Un fichier illisible rend le dossier par défaut, et l'alerte le dit. `sauvegardes.json`, à côté, ne garde que l'instant de la dernière copie réussie, sans chemin.
+- Le réglage du dossier vit dans `reglages.json`, dans le dossier de données, hors de la base. Un fichier illisible rend le dossier par défaut, et l'alerte le dit. Le délai des relances (#14) s'y lit et s'y écrit à part : un délai mal écrit ne touche pas au dossier, et le délai ne s'écrit pas sur un fichier illisible en entier, que seul le choix d'un dossier réécrit (ADR-0011). `sauvegardes.json`, à côté, ne garde que l'instant de la dernière copie réussie, sans chemin.
 
 ### Une copie juste, et une mise à jour qui ne touche la base qu'une fois réussie
 
@@ -252,6 +288,15 @@ Ni le dossier de données, ni le dossier des sauvegardes, ni le nom d'une copie 
 - `interface/src/sauvegardes/SectionDesSauvegardes.test.tsx` et `AlerteDesSauvegardes.test.tsx` : avertissements, liste, choix réussi, annulé ou refusé, retour au dossier par défaut, sauvegarder maintenant, alerte et « Réessayer » ; tant que le tableau de bord est affiché, l'alerte suit l'état : elle vient, reste sans clignoter, et part dès qu'une copie réussit, et une relecture partie avant un « Réessayer » réussi ne la ramène pas ; l'annonce d'un essai part quand l'alerte change, sans revenir, et un essai manqué le dit sous l'alerte la plus récente, même relue dans le même tour, sans message laissé seul si elle est partie entre-temps ; le tableau de bord quitté, même pendant une lecture, l'état ne se relit plus ; la section ne parle ni de restaurer ni de candidature supprimée. `interface/src/hote/canalDeLHote.test.ts` : le message du choix ne porte aucun chemin, et une réponse d'une autre forme est ignorée.
 - `interface/tests-fenetre/fenetre.test.ts`, dans la vraie fenêtre : la copie du lancement, le choix d'un dossier par le remplaçant du dialogue, le réglage écrit, puis la copie refaite à la fermeture ; aucun fichier du dossier de données, copies comprises, ne contient le jeton.
 - *À vérifier à la main* sur l'exe publié (ADR-0008, « À vérifier ») : le vrai dialogue de Windows, que le protocole CDP ne pilote pas, s'ouvre sur le dossier courant, et son annulation ne change rien.
+
+## Relances et brouillons
+
+Les relances et les contacts (#14, ADR-0011) passent par les deux protections : leurs onze routes par celles de l'API (voir « Routes des contacts et des relances »), leur brouillon par la seule fenêtre hôte (voir « Brouillon d'une relance »). En bref :
+
+- **Le brouillon** : la page ne donne à l'hôte que l'identifiant d'une relance. L'hôte bâtit le lien `mailto` à partir de la base, encodé, sans autre en-tête, puis le lance par le shell de Windows. Sollicito n'envoie rien : l'utilisateur relit et envoie le brouillon dans sa messagerie.
+- **Le délai par défaut** vit dans `reglages.json`, lu et écrit à part du dossier des sauvegardes (voir « Sauvegardes »).
+- **La version de test** note le lien d'un brouillon dans `brouillons-ouverts.txt` au lieu de le lancer (voir « Version de test »).
+- **Les limites** : aucun geste n'est exigé avant un brouillon, et un script qui a le jeton peut en ouvrir un, adressé à un contact qu'il aurait créé, puis un autre, sans limite de nombre dans le temps ; l'envoi reste à l'utilisateur. Une messagerie en ligne, ou qui range ses brouillons sur un serveur, reçoit le brouillon avant tout envoi, et une messagerie de bureau en reçoit en général le lien sur sa ligne de commande (voir « Limites »).
 
 ## Exe distribué
 
@@ -282,9 +327,9 @@ Chaque version joint à son exe son empreinte SHA-256 et le paquet de son attest
 
 ## Textes saisis
 
-Les textes que l'utilisateur saisit (une entreprise, un poste, la note d'une étape) s'affichent comme du texte, jamais comme du HTML : l'interface les écrit par React, qui les échappe, et n'emploie nulle part `dangerouslySetInnerHTML` (ADR-0001, D9, « Contenu non fiable »). Les sauts de ligne d'une note s'affichent par le style (`white-space: pre-wrap`), sans balise. Ces textes ne paraissent dans aucun journal (voir « Règle des journaux »). Un script qui passerait par eux lirait le jeton dans la page (voir « Limites ») : la politique de sécurité du contenu double l'échappement.
+Les textes que l'utilisateur saisit (une entreprise, un poste, la note d'une étape, le nom et l'adresse d'un contact) s'affichent comme du texte, jamais comme du HTML : l'interface les écrit par React, qui les échappe, et n'emploie nulle part `dangerouslySetInnerHTML` (ADR-0001, D9, « Contenu non fiable »). Les sauts de ligne d'une note s'affichent par le style (`white-space: pre-wrap`), sans balise. Ces textes ne paraissent dans aucun journal (voir « Règle des journaux »). Un script qui passerait par eux lirait le jeton dans la page (voir « Limites ») : la politique de sécurité du contenu double l'échappement.
 
-*Tests* : `interface/src/candidatures/TableauDeBord.test.tsx`, `SaisieDUneCandidature.test.tsx` et `FicheDUneCandidature.test.tsx` : un nom d'entreprise, un poste et une note porteurs de balises (`<img onerror>`, `<b>`, `<script>`) s'affichent tels quels, et aucune de ces balises ne se crée, ni dans la liste, ni parmi les entreprises proposées, ni dans la fiche. `fenetre.test.ts` : de même dans la vraie fenêtre, après un enregistrement, puis pour la note d'une étape.
+*Tests* : `interface/src/candidatures/TableauDeBord.test.tsx`, `SaisieDUneCandidature.test.tsx` et `FicheDUneCandidature.test.tsx` : un nom d'entreprise, un poste et une note porteurs de balises (`<img onerror>`, `<b>`, `<script>`) s'affichent tels quels, et aucune de ces balises ne se crée, ni dans la liste, ni parmi les entreprises proposées, ni dans la fiche. `fenetre.test.ts` : de même dans la vraie fenêtre, après un enregistrement, puis pour la note d'une étape, et pour un poste dans la fiche d'une relance. `interface/src/relances/RelancesDuTableauDeBord.test.tsx` et `ContactsDeLEntreprise.test.tsx` : un poste, une entreprise et un contact porteurs de balises s'affichent tels quels, au tableau de bord et dans la fiche.
 
 ## Règle des journaux
 
@@ -317,6 +362,8 @@ Pour les stories suivantes : une route ne porte qu'un identifiant, jamais une do
 
 Aucune entrée ne contient le nom du faux compte, ni le dossier temporaire du test, ni la donnée d'une candidature copiée, ni l'identifiant d'installation qui nomme les copies. Des témoins prouvent que chaque chemin a été parcouru. Sans le correctif de #80, point 1, le dernier cas fait échouer le test : l'hôte y écrit `Cannot create '…'`, chemin compris.
 
+`tests/Sollicito.Api.Tests/JournauxDesRelancesTests.cs` garde les contacts et les relances (#14), journaux au niveau Trace : une donnée fictive dans le nom et l'adresse d'un contact et dans un poste, sur dix des onze routes, admises comme refusées (champs, corps illisibles, nombre en texte, origine absente, 404, 409), puis dans le brouillon préparé pour la fenêtre. Aucune entrée ne la contient ; une exception levée sur sept de ces routes n'écrit que son type. La onzième route, la lecture du délai par défaut (`GET /api/reglages/relances`), ne porte aucune donnée personnelle.
+
 ## Limites
 
 - **Un programme lancé sous le compte de l'utilisateur** n'est arrêté par rien de ce qui précède. Il peut lire la mémoire du processus, jeton compris, et le dossier de données. Il peut lancer Sollicito avec ses propres arguments ou variables d'environnement : `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` suffit à ouvrir le débogage distant de la fenêtre (ADR-0003, « Conséquences »). Il peut aussi écrire dans le dossier où l'exe extrait ses bibliothèques natives, sous `%TEMP%\.net`, qui reste d'un lancement à l'autre (prototype de #9, ADR-0003, « À vérifier »). Seule la frontière du compte Windows le tient à distance ; la D9 le dit déjà de DPAPI.
@@ -331,10 +378,13 @@ Aucune entrée ne contient le nom du faux compte, ni le dossier temporaire du te
 - **Une connexion WebSocket**, que la V1 n'a pas, ne pourrait pas porter l'en-tête du jeton : le navigateur ne permet pas d'en ajouter un à l'ouverture d'un WebSocket. Il lui faudrait sa propre règle, avec le contrôle d'`Origin` que demande la D9.
 - **Les copies ne sont pas chiffrées** : sur une clé USB perdue, ou dans un dossier synchronisé, elles emportent toute la base (voir « Sauvegardes »). Le chiffrement est l'objet de #51.
 - **Le fichier des réglages** se lit et s'écrit sous le compte de l'utilisateur : un programme du même compte peut y désigner un autre dossier de sauvegarde. Il pourrait aussi lire la base elle-même (premier point).
+- **Un brouillon sans clic** : un script injecté qui aurait le jeton pourrait ouvrir le brouillon d'une relance sans geste de l'utilisateur, adressé à un contact qu'il aurait créé (voir « Brouillon d'une relance »). L'envoi reste à l'utilisateur.
+- **Des brouillons enchaînés** : la file des brouillons borne les demandes en attente, pas leur nombre dans le temps. Ce même script peut ouvrir un brouillon après l'autre, chacun à la réponse du précédent (voir « Brouillon d'une relance »).
+- **Une messagerie en ligne** reçoit le brouillon d'une relance avant tout envoi (voir « Brouillon d'une relance »).
+- **Une messagerie de bureau** reçoit en général le lien du brouillon en argument de sa ligne de commande : tout programme du compte l'y lit, et l'audit de création des processus le garde quand un poste géré l'active, ligne de commande comprise (voir « Brouillon d'une relance »).
 
 ## À reprendre
 
-- **Brouillon de relance (#14)** : la page demande l'ouverture du lien `mailto` à l'hôte par un message, soumis au même contrôle de la source que le canal du jeton (ADR-0003), comme le choix du dossier des sauvegardes (#26) ; tout autre schéma externe reste annulé.
 - **Restauration (#28)** : une copie restaurée remplace toute la base ; elle doit se vérifier avant, et la base en cours se copier d'abord. La liste à restaurer montre toutes les copies de Sollicito du dossier, celles d'une autre installation comprises.
 - **Interface en développement** : le serveur de développement de Vite sert une autre origine. L'API refuse ses écritures, et l'interface ne reçoit le jeton que dans la fenêtre.
 - **Exe** : le dossier d'extraction `%TEMP%\.net` (voir « Limites ») ; au palier 5, le ruleset des étiquettes `v*` et la première exécution du chemin de publication, attestation comprise (voir « Exe distribué »).

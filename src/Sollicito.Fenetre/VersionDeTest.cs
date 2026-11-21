@@ -17,7 +17,9 @@ namespace Sollicito.Fenetre;
 /// <item>une caméra et un micro simulés, pour que leur demande de permission ne dépende pas du poste ;</item>
 /// <item>ses messages d'erreur écrits sur la sortie d'erreur, sans boîte de dialogue (<see cref="Signalement"/>) ;</item>
 /// <item>le dialogue de dossier des sauvegardes remplacé par le dossier que le test écrit dans un fichier de ce
-/// dossier, sans dialogue (#26) ; sans ce fichier, le choix est annulé.</item>
+/// dossier, sans dialogue (#26) ; sans ce fichier, le choix est annulé ;</item>
+/// <item>le lien <c>mailto</c> du brouillon d'une relance noté dans un fichier de ce dossier au lieu d'être ouvert dans
+/// la messagerie (#14).</item>
 /// </list>
 /// </summary>
 internal static class VersionDeTest
@@ -28,6 +30,7 @@ internal static class VersionDeTest
     public const string FichierDesNavigationsAnnulees = "navigations-annulees.txt";
     public const string DossierDesTelechargements = "telechargements";
     public const string FichierDuDossierAChoisir = "dossier-a-choisir.txt";
+    public const string FichierDesBrouillonsOuverts = "brouillons-ouverts.txt";
 
     public static Lancement Lancement()
     {
@@ -52,13 +55,24 @@ internal static class VersionDeTest
             new JournalDesLiens(Path.Combine(dossier, FichierDesLiensOuverts)),
             Path.Combine(dossier, DossierDesTelechargements),
             adresse => File.AppendAllText(navigationsAnnulees, adresse + Environment.NewLine),
-            new ChoixLuDansUnFichier(Path.Combine(dossier, FichierDuDossierAChoisir)));
+            new ChoixLuDansUnFichier(Path.Combine(dossier, FichierDuDossierAChoisir)),
+            new JournalDesBrouillons(Path.Combine(dossier, FichierDesBrouillonsOuverts)));
     }
 
     /// <summary>Note chaque lien que la version publiée ouvrirait dans le navigateur par défaut.</summary>
     private sealed class JournalDesLiens(string fichier) : IOuvreurDeLiens
     {
         public void Ouvrir(Uri lien) => File.AppendAllText(fichier, lien.AbsoluteUri + Environment.NewLine);
+    }
+
+    /// <summary>Note chaque brouillon que la version publiée ouvrirait dans la messagerie : son lien mailto, sur une ligne.</summary>
+    private sealed class JournalDesBrouillons(string fichier) : IOuvreurDeBrouillons
+    {
+        public bool Ouvrir(string lien)
+        {
+            File.AppendAllText(fichier, lien + Environment.NewLine);
+            return true;
+        }
     }
 
     /// <summary>Le dossier que le test a écrit dans le fichier, au lieu du dialogue ; sans fichier, le choix est annulé.</summary>

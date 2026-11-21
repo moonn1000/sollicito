@@ -1,7 +1,7 @@
 # Vues d'architecture de la V1
 
-- **Mis à jour le** : 2026-11-20, avec #7
-- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md) (D1 à D4, D6 à D10, D12), en partie remplacé par l'[ADR-0003](adr/0003-hote-interface-webview2.md) (hôte de l'interface) et l'[ADR-0004](adr/0004-v1-resserree-paliers.md) (V1 resserrée, livrée en paliers) ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md) (requêtes et liens de la fenêtre)
+- **Mis à jour le** : 2026-11-21, avec #14
+- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md) (D1 à D4, D6 à D10, D12), en partie remplacé par l'[ADR-0003](adr/0003-hote-interface-webview2.md) (hôte de l'interface) et l'[ADR-0004](adr/0004-v1-resserree-paliers.md) (V1 resserrée, livrée en paliers) ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md) (requêtes et liens de la fenêtre) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) (sauvegardes de la base) ; [ADR-0011](adr/0011-relances-et-brouillon.md) (brouillon d'une relance)
 - **Périmètre** : la V1 que fixe l'ADR-0004, en deux vues du modèle C4 : le contexte (niveau 1) et les conteneurs (niveau 2). La vue des composants (niveau 3) et les diagrammes de séquence s'y ajouteront au palier 5 (#59). Ce que l'utilisateur fait dans Sollicito : [cas d'utilisation](cas-d-utilisation.md).
 
 Le modèle C4 ne prescrit pas de notation ; ces vues sont écrites en Mermaid, et chacune a sa légende. Les paliers sont ceux de l'ADR-0004 : P1, le squelette tourne ; P2, je suis mes candidatures ; P3, je relance et j'importe ; P4, mon IA m'aide ; P5, prêt à télécharger. L'avancement se suit dans les [jalons](https://github.com/moonn1000/sollicito/milestones).
@@ -23,6 +23,8 @@ flowchart TB
 
     ia["<b>IA en ligne</b><br>[Système extérieur, facultatif]<br>Claude (Anthropic) ou OpenAI,<br>par la clé de l'utilisateur<br>P4"]
     microsoft["<b>Microsoft</b><br>[Système extérieur]<br>Reçoit les données de diagnostic du runtime,<br>lui livre ses mises à jour<br>P1"]
+    distant["<b>Dossier en réseau ou synchronisé</b><br>[Système extérieur, facultatif]<br>NAS, dossier synchronisé :<br>reçoit les copies de la base<br>P2"]
+    fournisseur["<b>Fournisseur de messagerie</b><br>[Système extérieur, facultatif]<br>Messagerie en ligne, ou serveur<br>des brouillons de la messagerie<br>P3"]
     forem["<b>Le Forem</b><br>[Système extérieur, V2]<br>Offres d'emploi en données ouvertes (ODWB)<br>V2"]
 
     personne -- "suit ses candidatures, ses relances et ses offres" --> sollicito
@@ -32,8 +34,10 @@ flowchart TB
     sollicito -- "ouvre le brouillon d'une relance (mailto), P3" --> messagerie
     sollicito -- "confie un texte à analyser, P4" --> ollama
     sollicito -- "① confie le texte d'une offre ou d'une relance (HTTPS), P4" --> ia
-    runtime -- "② données de diagnostic" --> microsoft
-    runtime -- "③ télécharge ses mises à jour" --> microsoft
+    sollicito -- "② copie la base, si l'utilisateur y range ses sauvegardes, P2" --> distant
+    messagerie -- "③ reçoit le brouillon avant tout envoi, si elle est en ligne<br>ou range ses brouillons sur un serveur, P3" --> fournisseur
+    runtime -- "④ données de diagnostic" --> microsoft
+    runtime -- "⑤ télécharge ses mises à jour" --> microsoft
     sollicito -. "offres ouvertes, V2" .-> forem
 
     classDef personne fill:#08427b,stroke:#052e56,color:#ffffff
@@ -42,7 +46,7 @@ flowchart TB
     classDef v2 fill:#ffffff,stroke:#6b6b6b,color:#3d3d3d,stroke-dasharray:6 4
     class personne personne
     class sollicito systeme
-    class runtime,navigateur,messagerie,ollama,ia,microsoft exterieur
+    class runtime,navigateur,messagerie,ollama,ia,microsoft,distant,fournisseur exterieur
     class forem v2
     style poste fill:none,stroke:#888888,stroke-dasharray:6 4
 ```
@@ -55,20 +59,22 @@ flowchart TB
 | Boîte blanche à bord pointillé | un système de la V2 |
 | Cadre pointillé | la limite du poste de l'utilisateur |
 | Trait plein, trait pointillé | un échange de la V1, un échange de la V2 |
-| ①, ②, ③ | les trois échanges qui quittent le poste |
+| ① à ⑤ | les cinq échanges qui quittent le poste |
 | P1 à P5 | le palier qui amène un élément ; sur un trait, celui qui amène l'échange, s'il vient après le palier 1 |
 
 ### Ce qui quitte le poste
 
-Sollicito n'a pas de serveur distant. Seuls trois échanges prévus franchissent la limite du poste, ceux que décrivent l'[ADR-0004](adr/0004-v1-resserree-paliers.md) (« Ce qui quitte la machine ») et le [README](../README.md) (« Ce qui quitte votre machine ») :
+Sollicito n'a pas de serveur distant. Seuls cinq échanges prévus franchissent la limite du poste, ceux que décrit le [README](../README.md) (« Ce qui quitte votre machine ») ; l'[ADR-0004](adr/0004-v1-resserree-paliers.md) (« Ce qui quitte la machine ») décrit le premier et les deux derniers, l'[ADR-0008](adr/0008-sauvegardes-de-la-base.md) le deuxième, et l'[ADR-0011](adr/0011-relances-et-brouillon.md) le troisième :
 
 1. ce que l'utilisateur confie à l'IA en ligne, Claude ou OpenAI, s'il en configure une (palier 4) ; un modèle Ollama, qui tourne sur le poste, ne fait rien sortir ;
-2. les données de diagnostic que le runtime WebView2 envoie à Microsoft ;
-3. les mises à jour du runtime, qu'il télécharge seul.
+2. les copies de la base, non chiffrées, si l'utilisateur range ses sauvegardes dans un dossier en réseau ou synchronisé (palier 2) : elles partent là où ce dossier les envoie ;
+3. le brouillon d'une relance, si la messagerie de l'utilisateur est en ligne ou range ses brouillons sur un serveur (palier 3) : son destinataire, son objet et son texte partent chez le fournisseur de messagerie, avant tout envoi ;
+4. les données de diagnostic que le runtime WebView2 envoie à Microsoft ;
+5. les mises à jour du runtime, qu'il télécharge seul.
 
 Les deux derniers viennent du runtime, un composant de Windows, et non du code de Sollicito. Le Forem, en pointillé, n'arrive qu'en V2 (ADR-0004, « Ce qui attend la V2 »).
 
-Le navigateur et la messagerie reçoivent sur le poste un lien ou un brouillon. Ce qu'ils en font ensuite ne vient pas de Sollicito : c'est l'utilisateur qui suit le lien ou envoie le message (ADR-0001, D8 ; ADR-0006).
+Le navigateur et la messagerie reçoivent sur le poste un lien ou un brouillon. Ce qu'ils en font ensuite ne vient pas de Sollicito : c'est l'utilisateur qui suit le lien ou envoie le message (ADR-0001, D8 ; ADR-0006). Une messagerie en ligne, ou qui range ses brouillons sur un serveur, reçoit pourtant le brouillon avant tout envoi : c'est l'échange ③.
 
 Hors du diagramme :
 
@@ -126,7 +132,7 @@ flowchart TB
     fenetre -- "brouillon (mailto), P3" --> messagerie
     api -- "texte à analyser, P4" --> ollama
     api -- "① HTTPS, P4" --> ia
-    runtime -- "② diagnostic, ③ mises à jour" --> microsoft
+    runtime -- "④ diagnostic, ⑤ mises à jour" --> microsoft
     api -. "ingestion en tâche de fond, V2" .-> forem
     base ~~~ cles ~~~ profil
     navigateur ~~~ messagerie
@@ -155,7 +161,7 @@ flowchart TB
 | Cadre pointillé bleu | la limite de Sollicito |
 | Cadre en pointillé fin | un processus, ou un dossier |
 | Trait plein, trait pointillé | un échange de la V1, un échange de la V2 |
-| ①, ②, ③ | les trois échanges qui quittent le poste (voir la vue de contexte) |
+| ①, ④, ⑤ | trois des cinq échanges qui quittent le poste ; ② part du dossier des sauvegardes, ③ de la messagerie (voir la vue de contexte) |
 | P1 à P5 | le palier qui amène un élément ; sur un trait, celui qui amène l'échange, s'il vient après le palier 1 |
 
 ### Les conteneurs

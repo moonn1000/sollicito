@@ -46,6 +46,7 @@ Les échanges prévus en V1 :
 
 - **l'IA en ligne, si vous en configurez une** : ce que vous lui confiez, le texte d'une offre ou les éléments d'une relance, part chez Anthropic (Claude) ou chez OpenAI. Un modèle Ollama qui tourne sur votre ordinateur ne fait rien sortir ;
 - **vos sauvegardes, si vous les rangez dans un dossier en réseau ou synchronisé** (un NAS, OneDrive…) : chaque copie de votre base, non chiffrée, part là où ce dossier l'envoie ;
+- **le brouillon d'une relance, si votre messagerie est en ligne ou range vos brouillons sur un serveur** : son destinataire, son objet et son texte partent chez votre fournisseur de messagerie dès l'ouverture du brouillon ou à son enregistrement, même si vous ne l'envoyez pas ;
 - **la télémétrie du runtime WebView2**, le composant de Windows qui affiche l'interface dans la fenêtre de Sollicito : il envoie à Microsoft des données de diagnostic, les facultatives seulement si vous les autorisez dans le réglage « Données de diagnostic » de Windows, les obligatoires quel que soit ce réglage, et par défaut un rapport à chaque plantage de l'un de ses processus ;
 - **les mises à jour de ce runtime**, qu'il télécharge seul auprès de Microsoft.
 
