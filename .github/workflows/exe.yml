@@ -1,0 +1,117 @@
+# Construit l'exe autonome d'un seul fichier tel que la publication le construira, puis le contrôle, le lance et le
+# garde en artefact (ADR-0009). La CI l'appelle deux fois : la seconde construction, dans un autre dossier, doit
+# donner la même empreinte. Aucun secret : le jeton ne peut que lire le dépôt. Aucun cache : rien d'un autre run
+# n'entre dans l'exe.
+# Les actions sont épinglées par empreinte de commit, leur version en commentaire.
+name: Exe
+
+on:
+  workflow_call:
+    inputs:
+      dossier:
+        description: Dossier de la copie du dépôt, sous l'espace de travail du runner.
+        type: string
+        default: "."
+      complet:
+        description: Contrôler l'exe, le lancer et le garder en artefact ; sinon, calculer seulement son empreinte.
+        type: boolean
+        default: true
+    outputs:
+      empreinte:
+        description: Empreinte SHA-256 de l'exe, en hexadécimal minuscule.
+        value: ${{ jobs.construire.outputs.empreinte }}
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+
+jobs:
+  construire:
+    name: Construire
+    runs-on: windows-2025
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    outputs:
+      empreinte: ${{ steps.empreinte.outputs.empreinte }}
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: ${{ inputs.dossier }}
+    steps:
+      - name: Récupérer le dépôt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: ${{ inputs.dossier }}
+          persist-credentials: false
+
+      - name: Installer le SDK .NET fixé par global.json
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: ${{ inputs.dossier }}/global.json
+
+      - name: Installer pnpm, version fixée par package.json
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          package_json_file: ${{ inputs.dossier }}/interface/package.json
+          standalone: true
+
+      # Node.js est fourni par pnpm, à la version de package.json (devEngines.runtime). Une commande par étape :
+      # pwsh ne rend que le code de sortie de la dernière.
+      - name: Installer les dépendances du fichier de verrouillage
+        working-directory: ${{ inputs.dossier }}/interface
+        run: pnpm install --frozen-lockfile
+
+      - name: Construire l'interface
+        working-directory: ${{ inputs.dossier }}/interface
+        run: pnpm run build
+
+      # Restauration en mode verrouillé et ContinuousIntegrationBuild (CI=true, voir Directory.Build.props).
+      - name: Publier l'exe
+        run: dotnet publish src/Sollicito.Fenetre/Sollicito.Fenetre.csproj -c Release -o "$env:RUNNER_TEMP/publication"
+
+      # La publication ne réécrit aucun fichier suivi, verrous NuGet compris (voir Sollicito.Fenetre.csproj).
+      - name: Vérifier que la publication n'a rien réécrit
+        run: git diff --exit-code
+
+      - name: Calculer l'empreinte SHA-256
+        id: empreinte
+        run: |
+          $empreinte = (Get-FileHash -Algorithm SHA256 -LiteralPath "$env:RUNNER_TEMP/publication/Sollicito.exe").Hash.ToLowerInvariant()
+          "Empreinte SHA-256 de Sollicito.exe : $empreinte"
+          "empreinte=$empreinte" >> $env:GITHUB_OUTPUT
+
+      - name: Contrôler l'exe
+        if: inputs.complet
+        run: ./.github/scripts/verifier-exe.ps1 -Dossier "$env:RUNNER_TEMP/publication"
+
+      - name: Lancer l'exe seul dans un dossier vide
+        if: inputs.complet
+        run: ./.github/scripts/lancer-exe.ps1 -Exe "$env:RUNNER_TEMP/publication/Sollicito.exe"
+
+      - name: Préparer l'artefact
+        id: artefact
+        if: inputs.complet
+        env:
+          EMPREINTE: ${{ steps.empreinte.outputs.empreinte }}
+        run: |
+          $dossier = New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/artefact" -Force
+          Copy-Item -LiteralPath "$env:RUNNER_TEMP/publication/Sollicito.exe" -Destination $dossier
+          # Format de sha256sum : l'empreinte, deux espaces, le nom du fichier.
+          [IO.File]::WriteAllText((Join-Path $dossier 'Sollicito.exe.sha256'), "$env:EMPREINTE  Sollicito.exe`n")
+          "nom=exe-non-publie-$($env:GITHUB_SHA.Substring(0, 7))" >> $env:GITHUB_OUTPUT
+
+      # Un exe d'essai, ni publié ni attesté. Sur un dépôt public, tout compte GitHub connecté peut le télécharger.
+      - name: Garder l'exe en artefact, 7 jours
+        if: inputs.complet
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.artefact.outputs.nom }}
+          path: ${{ runner.temp }}/artefact
+          retention-days: 7
+          if-no-files-found: error
+          # Le paquet de l'exe est déjà compressé.
+          compression-level: 0

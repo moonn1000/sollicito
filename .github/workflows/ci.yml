@@ -1,6 +1,7 @@
 # Construit et teste la solution .NET et l'interface à chaque pull request vers main,
-# puis après chaque fusion, et pilote la vraie fenêtre par Playwright. Aucun secret : le
-# jeton du workflow ne peut que lire le dépôt.
+# puis après chaque fusion, pilote la vraie fenêtre par Playwright, et construit l'exe tel
+# que la publication le construira (exe.yml). Aucun secret : le jeton du workflow ne peut
+# que lire le dépôt.
 # Les actions sont épinglées par empreinte de commit, leur version en commentaire.
 name: CI
 
@@ -101,11 +102,45 @@ jobs:
       - name: Piloter la vraie fenêtre
         run: pnpm run test:fenetre
 
+  # L'exe autonome d'un seul fichier : construit, contrôlé, lancé, gardé 7 jours en artefact (ADR-0009).
+  # Un workflow réutilisable du dépôt se lit au commit du run, jamais sur le disque du runner. La syntaxe « $/ »
+  # que propose zizmor date de juillet 2026, et actionlint 1.7.12 la refuse : « ./ » reste.
+  exe:
+    name: Exe
+    uses: ./.github/workflows/exe.yml # zizmor: ignore[self-repository]
+
+  # Le même commit, construit dans un autre dossier : seule son empreinte sert.
+  exe-ailleurs:
+    name: Exe, autre dossier
+    uses: ./.github/workflows/exe.yml # zizmor: ignore[self-repository]
+    with:
+      dossier: ailleurs/sollicito
+      complet: false
+
+  reproductibilite:
+    name: Reproductibilité
+    needs: [exe, exe-ailleurs]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Comparer les empreintes des deux constructions
+        env:
+          PREMIERE: ${{ needs.exe.outputs.empreinte }}
+          SECONDE: ${{ needs.exe-ailleurs.outputs.empreinte }}
+        run: |
+          echo "Première construction : $PREMIERE"
+          echo "Seconde construction, autre dossier : $SECONDE"
+          if [ -z "$PREMIERE" ] || [ "$PREMIERE" != "$SECONDE" ]; then
+            echo "Les deux constructions du même commit ne donnent pas le même exe."
+            exit 1
+          fi
+
   # Seule vérification à rendre obligatoire : elle échoue dès qu'un job ci-dessus n'a pas réussi.
   verdict:
     name: Verdict
     if: always()
-    needs: [dotnet, interface, fenetre]
+    needs: [dotnet, interface, fenetre, exe, exe-ailleurs, reproductibilite]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}
