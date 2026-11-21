@@ -165,7 +165,7 @@ function Chercher-Chemins([byte[]]$contenu, [string]$ou) {
         if ($lectures[0].IndexOf($enOctets, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
             $lectures[1].IndexOf($motif, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
             $lectures[2].IndexOf($motif, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-            Signaler "$ou contient un chemin de la machine de construction"
+            Signaler "$ou contient un chemin de la machine de construction : $motif"
             return
         }
     }
