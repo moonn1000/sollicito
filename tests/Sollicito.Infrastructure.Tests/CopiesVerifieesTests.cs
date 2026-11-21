@@ -144,18 +144,20 @@ public sealed class CopiesVerifieesTests : IDisposable
         try
         {
             // Un autre programme tient le fichier provisoire sans en partager la suppression, comme un antivirus qui
-            // l'examine : le renommage échoue, et se reprend.
+            // l'examine : le renommage échoue, et se reprend. La copie et sa vérification ne rendent pas la main : quand
+            // l'écriture la rend, son premier renommage a échoué, et elle attend sa reprise.
             var ecriture = CopiesVerifiees.EcrireAsync(Source, destination, annulation.Token, verifier: (provisoire, _) =>
             {
                 tenu = new FileStream(provisoire, FileMode.Open, FileAccess.Read, FileShare.Read);
                 return Task.FromResult(true);
             });
-            await Task.Delay(120, TestContext.Current.CancellationToken);
+            Assert.NotNull(tenu);
+            Assert.False(ecriture.IsCompleted);
 
-            // L'annulation tombe pendant les reprises, puis le fichier se libère.
-            await annulation.CancelAsync();
-            await Task.Delay(150, TestContext.Current.CancellationToken);
-            tenu?.Dispose();
+            // L'annulation tombe pendant les reprises ; le fichier se libère aussitôt après, sans attente, pour que
+            // l'effacement du provisoire aboutisse dans ses propres reprises.
+            annulation.Cancel();
+            tenu.Dispose();
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ecriture);
         }
@@ -183,20 +185,44 @@ public sealed class CopiesVerifieesTests : IDisposable
             Executer(connexion, "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100000) INSERT INTO Lest SELECT i, hex(randomblob(8)), hex(randomblob(8)) FROM n");
         }
 
-        // Une relecture complète d'abord, pour mesurer sa durée sur ce poste.
-        var montre = Stopwatch.StartNew();
-        Assert.True(await CopieDeLaBase.EstSaineAsync(lestee, TestContext.Current.CancellationToken));
-        var complete = montre.Elapsed;
+        // Trois relectures complètes d'abord : la plus courte donne leur durée sur ce poste, même sous la charge.
+        var complete = TimeSpan.MaxValue;
+        for (var fois = 0; fois < 3; fois++)
+        {
+            var debutDeLaMesure = Stopwatch.GetTimestamp();
+            Assert.True(await CopieDeLaBase.EstSaineAsync(lestee, TestContext.Current.CancellationToken));
+            var duree = Stopwatch.GetElapsedTime(debutDeLaMesure);
+            complete = duree < complete ? duree : complete;
+        }
 
         using var annulation = new CancellationTokenSource();
-        montre.Restart();
+        var annuleeLe = new TaskCompletionSource<long>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var inscription = annulation.Token.Register(() => annuleeLe.TrySetResult(Stopwatch.GetTimestamp()));
+        long commenceeLe = 0;
+        long finieLe = 0;
         // Les appels de SQLite sont synchrones : la vérification tourne sur un autre fil, et l'annulation tombe pendant.
-        var verification = Task.Run(() => CopieDeLaBase.EstSaineAsync(lestee, annulation.Token), TestContext.Current.CancellationToken);
+        // Ses instants se prennent sur ce fil, pour qu'un retard du test ne compte pas.
+        var verification = Task.Run(
+            async () =>
+            {
+                commenceeLe = Stopwatch.GetTimestamp();
+                try
+                {
+                    return await CopieDeLaBase.EstSaineAsync(lestee, annulation.Token);
+                }
+                finally
+                {
+                    finieLe = Stopwatch.GetTimestamp();
+                }
+            },
+            TestContext.Current.CancellationToken);
         annulation.CancelAfter(complete / 4);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => verification);
-        // Interrompue, elle rend la main bien avant la fin d'une relecture complète, et non une fois celle-ci finie.
-        Assert.True(montre.Elapsed < complete * 0.75, $"Relecture annulée rendue en {montre.Elapsed.TotalMilliseconds:F0} ms ; relecture complète en {complete.TotalMilliseconds:F0} ms.");
+        // Interrompue, elle rend la main peu après l'annulation, ou après son propre départ s'il est venu plus tard, au
+        // lieu de finir la relecture.
+        var depuisLAnnulation = Stopwatch.GetElapsedTime(Math.Max(await annuleeLe.Task, commenceeLe), finieLe);
+        Assert.True(depuisLAnnulation < complete / 2, $"Relecture annulée rendue {depuisLAnnulation.TotalMilliseconds:F0} ms après l'annulation ; relecture complète en {complete.TotalMilliseconds:F0} ms.");
     }
 
     private static SqliteConnection Ouvrir(string fichier, SqliteOpenMode mode)

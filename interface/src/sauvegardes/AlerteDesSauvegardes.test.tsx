@@ -254,6 +254,39 @@ test("un essai manqué le dit sous l'alerte affichée quand il répond, même si
   }
 });
 
+test("un essai manqué dans le même tour qu'une relecture qui change l'alerte le dit sous la nouvelle alerte", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const copieImpossible = sauvegardesFictives({ echec: { motif: "CopieImpossible", depuis: "2026-11-19T08:00:00Z" } });
+    let rendreLaRelecture: (etat: typeof copieImpossible) => void = () => {};
+    let refuserLEssai: (raison: unknown) => void = () => {};
+    const client = clientSimule({
+      lireLesSauvegardes: vi
+        .fn()
+        .mockResolvedValueOnce(sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-19T08:00:00Z" } }))
+        .mockReturnValueOnce(new Promise((rendre) => (rendreLaRelecture = rendre)))
+        .mockResolvedValue(copieImpossible),
+      sauvegarderMaintenant: vi.fn().mockReturnValue(new Promise((_, refuser) => (refuserLEssai = refuser))),
+    });
+    tableauDeBord(client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Réessayer" }));
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS);
+    expect(client.lireLesSauvegardes).toHaveBeenCalledTimes(2);
+
+    // La relecture rend un autre motif, et l'essai échoue dans le même tour, avant que l'écran n'ait changé.
+    await act(async () => {
+      rendreLaRelecture(copieImpossible);
+      refuserLEssai(new ErreurDeLApi(500));
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("alert").textContent).toContain("n'a pas pu y écrire de copie");
+    expect(screen.getByText(ECHEC_DE_L_ESSAI)).toBeDefined();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("un essai manqué alors que l'alerte est partie entre-temps ne laisse aucun message seul", async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   try {
