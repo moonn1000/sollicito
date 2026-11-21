@@ -37,30 +37,26 @@ Ce relevé n'est pas un avis juridique.
   - `sollicito.com` est enregistré depuis le 24/08/1998, chez NameCheap, et redirige vers un autre domaine ;
   - `sollicito.be`, `sollicito.eu`, `sollicito.nl`, `sollicito.fr` et `sollicito.app` n'ont pas de serveurs DNS.
 
-## Analyse
+## Ce que la recherche montre
 
-- **Aucune marque identique** n'a été trouvée, ni dans l'Union européenne, ni au Benelux, ni dans les enregistrements internationaux.
-- **Les marques voisines** sont au Benelux. Elles partagent le radical « sollicit- », qui veut dire « postuler » en néerlandais : un terme descriptif dans le domaine de l'emploi, qu'aucune marque ne protège seul. Elles se distinguent par ce qui le suit : « -ego », « -eer op mij.nl », « -eer Zo! ».
-- **Les plus proches** sont « Sollicitego », pour le recrutement (classe 35), et « Solliciteeropmij.nl », pour les logiciels et le recrutement (classes 9, 35 et 42). Les produits ou services sont voisins de ceux de Sollicito, et le public est le même, néerlandophone.
+- **Aucune marque identique** n'a été trouvée, ni dans l'Union européenne, ni au Benelux, ni dans les enregistrements internationaux de Madrid.
+- **Les marques les plus proches** sont au Benelux, et toutes visent l'emploi. Elles commencent par « sollicit- », le radical du verbe néerlandais « solliciteren » : « Sollicitego », « Solliciteeropmij.nl », « SolliciteerZo! ».
+- **« Sollicitego »** (classe 35, recrutement) et **« Solliciteeropmij.nl »** (classes 9, 35 et 42 : logiciels et recrutement) couvrent des produits ou des services voisins de ceux de Sollicito, pour le même public néerlandophone.
 - **Sollicito** est un logiciel libre et gratuit (AGPL-3.0), sans service commercial. Le projet n'a pas de budget pour déposer une marque (ADR-0002).
 
-## Décision proposée
+Dire si ces marques et Sollicito risquent d'être confondus est une question de droit des marques. Ce relevé ne la tranche pas.
 
-**Garder le nom « Sollicito »** : aucune marque identique n'existe, et les marques voisines tiennent leur caractère distinctif de ce qui suit un radical descriptif en néerlandais.
+## Les deux voies
 
-**Autre voie** : changer de nom avant la version 1.0.0, si le mainteneur juge « Sollicitego » ou « Solliciteeropmij.nl » trop proches.
-
-La décision revient au mainteneur, au palier 5, avant la fusion de la pull request de version 1.0.0. Elle remplacera cette section, et l'ADR passera alors au statut « acceptée ».
-
-## Conséquences
-
-- **Garder le nom** :
+- **Garder le nom « Sollicito »** :
   - aucun travail ;
   - un nom qui dit son objet aux néerlandophones ;
-  - un risque faible, mais pas nul, d'une réclamation du titulaire d'une marque voisine.
-- **Changer de nom** :
+  - des marques voisines, enregistrées au Benelux, dans le même domaine.
+- **Changer de nom avant la version 1.0.0** :
   - le dépôt, l'exe, le dossier de données, la documentation et les textes publics à renommer ;
   - une nouvelle recherche, sur le nouveau nom.
+
+La décision revient au mainteneur, au palier 5, avant la fusion de la pull request de version 1.0.0. Elle remplacera cette section, et l'ADR passera alors au statut « acceptée ».
 
 ## À vérifier
 

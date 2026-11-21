@@ -30,6 +30,7 @@ essayer refus 'refs/tags/v1.2' "$sur_main" "version à deux nombres"
 essayer refus 'refs/tags/1.2.3' "$sur_main" "version sans v"
 essayer refus 'refs/tags/v1.2.3-rc.1' "$sur_main" "pré-version"
 essayer refus 'refs/tags/v1.2.3;id' "$sur_main" "point-virgule"
+# shellcheck disable=SC2016 # la substitution reste littérale : c'est elle qu'on éprouve
 essayer refus 'refs/tags/v1.2.3$(id)' "$sur_main" "substitution de commande"
 essayer refus "refs/tags/v1.2.3${saut}" "$sur_main" "saut de ligne final"
 essayer refus 'refs/tags/v1.2.3' "$hors_main" "commit absent de main"

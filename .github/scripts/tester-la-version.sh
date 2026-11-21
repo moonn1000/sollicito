@@ -26,6 +26,7 @@ exiger "version en brouillon, étiquette créée aussitôt" jq -e '.draft == tru
 exiger "étiquette vX.Y.Z, sans composant" jq -e '."include-v-in-tag" == true and ."include-component-in-tag" == false' "$config"
 exiger "Directory.Build.props dans extra-files" jq -e '.packages["."]."extra-files" | index("Directory.Build.props") != null' "$config"
 exiger "textes réglables présents" jq -e '[."pull-request-title-pattern", ."pull-request-header", ."pull-request-footer", .label, ."release-label"] | all(type == "string" and length > 0)' "$config"
+# shellcheck disable=SC2016 # ${version} est le texte littéral que cherche jq
 exiger "titre de la pull request qui porte la version" jq -e '."pull-request-title-pattern" | contains("${version}")' "$config"
 
 # Une seule ligne annotée, qui porte <Version>X.Y.Z</Version>, et la même version que le manifeste.
