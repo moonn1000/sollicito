@@ -225,6 +225,61 @@ test("l'annonce d'une copie réussie ne revient pas après une panne puis un ret
   }
 });
 
+test("un essai manqué le dit sous l'alerte affichée quand il répond, même si une relecture l'a changée entre-temps", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    let refuserLEssai: (raison: unknown) => void = () => {};
+    const client = clientSimule({
+      lireLesSauvegardes: vi
+        .fn()
+        .mockResolvedValueOnce(sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-19T08:00:00Z" } }))
+        .mockResolvedValue(sauvegardesFictives({ echec: { motif: "CopieImpossible", depuis: "2026-11-19T08:00:00Z" } })),
+      sauvegarderMaintenant: vi.fn().mockReturnValue(new Promise((_, refuser) => (refuserLEssai = refuser))),
+    });
+    tableauDeBord(client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Réessayer" }));
+    // Pendant l'essai, une relecture change le motif de l'alerte.
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS);
+    await vi.waitFor(() => expect(screen.getByRole("alert").textContent).toContain("n'a pas pu y écrire de copie"));
+
+    // L'essai échoue ensuite : son message reste, sous l'alerte qu'on voit.
+    await act(async () => {
+      refuserLEssai(new ErreurDeLApi(500));
+      await Promise.resolve();
+    });
+    expect(await screen.findByText(ECHEC_DE_L_ESSAI)).toBeDefined();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("le tableau de bord quitté pendant une lecture, l'état ne se relit plus", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    let rendreLaLecture: (etat: ReturnType<typeof sauvegardesFictives>) => void = () => {};
+    const client = clientSimule({
+      lireLesSauvegardes: vi.fn().mockReturnValueOnce(new Promise((rendre) => (rendreLaLecture = rendre))).mockResolvedValue(sauvegardesFictives()),
+    });
+    const { unmount } = render(
+      <TableauDeBord client={client} nouvelleCandidature={vi.fn()} ouvrirLaFiche={vi.fn()} ouvrirLesReglages={vi.fn()} />,
+    );
+    await screen.findByText("Aucune candidature enregistrée pour l'instant.");
+    expect(client.lireLesSauvegardes).toHaveBeenCalledOnce();
+
+    // La lecture répond après le départ du tableau de bord : aucune relecture ne se programme.
+    unmount();
+    await act(async () => {
+      rendreLaLecture(sauvegardesFictives());
+      await Promise.resolve();
+    });
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS * 3);
+    expect(client.lireLesSauvegardes).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 test("le tableau de bord quitté, l'état ne se relit plus", async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   try {

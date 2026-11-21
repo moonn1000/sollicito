@@ -35,6 +35,8 @@ export function AlerteDesSauvegardes({
   const occupe = useRef(false);
   // Change à chaque « Réessayer » réussi : une lecture partie avant sa réponse rapporterait l'état d'avant lui.
   const essaisReussis = useRef(0);
+  // L'alerte que montre l'écran, relue par un « Réessayer » qui répond plus tard.
+  const alerteAffichee = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     let affichee = true;
@@ -85,7 +87,8 @@ export function AlerteDesSauvegardes({
       setEtat(apres);
       setAnnonce(texteDeLAlerte(apres) === undefined ? { texte: ANNONCE_DE_LA_COPIE, sous: undefined } : undefined);
     } catch {
-      setAnnonce({ texte: ECHEC_DE_L_ESSAI, sous: alerte });
+      // Sous l'alerte affichée quand l'essai répond : une relecture a pu la changer pendant qu'il attendait.
+      setAnnonce({ texte: ECHEC_DE_L_ESSAI, sous: alerteAffichee.current });
     } finally {
       occupe.current = false;
       setEnCours(false);
@@ -93,6 +96,10 @@ export function AlerteDesSauvegardes({
   };
 
   const alerte = etat === undefined ? undefined : texteDeLAlerte(etat);
+  useEffect(() => {
+    alerteAffichee.current = alerte;
+  });
+
   // Une relecture qui change l'alerte (venue, partie ou autre) emporte l'annonce d'un essai d'avant : elle ne dirait plus
   // ce qui est à l'écran, et ne doit pas revenir avec une alerte qui repart.
   if (annonce !== undefined && annonce.sous !== alerte) {
