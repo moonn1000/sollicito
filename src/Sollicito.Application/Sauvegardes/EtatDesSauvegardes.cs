@@ -22,13 +22,18 @@ public sealed record EtatDesSauvegardes(
     EchecDUneCopie? Echec,
     bool Verifie);
 
-/// <summary>Une copie gardée.</summary>
+/// <summary>Une copie gardée, que l'utilisateur peut restaurer (#28).</summary>
 /// <param name="Nom">Son nom de fichier, sans le dossier.</param>
-/// <param name="Sorte">Copie du jour, ou d'avant une mise à jour.</param>
+/// <param name="Sorte">Copie du jour, de ce poste ou d'une autre installation, ou d'avant une mise à jour ou une restauration.</param>
 /// <param name="FaiteLe">L'instant où elle a été écrite, en UTC.</param>
-public sealed record CopieGardee(string Nom, SorteDeCopie Sorte, DateTime FaiteLe);
+/// <param name="Lieu">Le dossier où elle vit : celui des copies, ou celui par défaut.</param>
+/// <param name="Id">
+/// Son identifiant, que la page renvoie pour la restaurer : tiré du lieu, du nom et de l'instant, sans aucun chemin
+/// (<see cref="IdentifiantsDesCopies"/>).
+/// </param>
+public sealed record CopieGardee(string Nom, SorteDeCopie Sorte, DateTime FaiteLe, LieuDUneCopie Lieu, string Id);
 
-/// <summary>Les deux sortes de copies.</summary>
+/// <summary>Les sortes de copies.</summary>
 public enum SorteDeCopie
 {
     /// <summary>La copie d'un jour d'utilisation, gardée parmi les sept dernières.</summary>
@@ -36,6 +41,25 @@ public enum SorteDeCopie
 
     /// <summary>La copie faite avant une mise à jour de la base, gardée à part.</summary>
     AvantMiseAJour,
+
+    /// <summary>
+    /// La copie d'un jour d'une autre installation qui partage le dossier : un autre poste, ou celui-ci avant une
+    /// réinstallation (#28). Elle se restaure, mais n'entre ni dans la rotation ni dans la dernière copie.
+    /// </summary>
+    DuJourDUneAutreInstallation,
+
+    /// <summary>La copie de la base faite avant une restauration, gardée à part : le retour en arrière (#28).</summary>
+    AvantRestauration,
+}
+
+/// <summary>Les deux dossiers où vivent les copies.</summary>
+public enum LieuDUneCopie
+{
+    /// <summary>Le dossier des copies du jour, choisi ou par défaut.</summary>
+    DossierDesCopies,
+
+    /// <summary>Le dossier par défaut, quand un autre dossier est choisi : les copies d'avant, et celles d'avant le choix.</summary>
+    DossierParDefaut,
 }
 
 /// <summary>Des copies manquées, depuis la dernière réussie.</summary>

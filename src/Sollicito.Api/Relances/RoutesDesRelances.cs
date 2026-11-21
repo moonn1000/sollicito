@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Sollicito.Api.Candidatures;
+using Sollicito.Api.Sauvegardes;
 using Sollicito.Application.Candidatures;
 using Sollicito.Application.Relances;
 using Sollicito.Domain.Relances;
@@ -91,7 +92,8 @@ internal static class RoutesDesRelances
         routes.MapGet("/api/reglages/relances", LireLeReglage)
             .WithName("LireLeDelaiDesRelances")
             .WithSummary("Le délai par défaut des relances, et ce qui ne se lisait pas dans les réglages")
-            .WithTags("Relances");
+            .WithTags("Relances")
+            .SansLaBase();
 
         routes.MapPut("/api/reglages/relances", ChangerLeReglageAsync)
             .WithName("ChangerLeDelaiDesRelances")
@@ -100,7 +102,8 @@ internal static class RoutesDesRelances
                 "Il ne sert qu'aux relances planifiées ensuite. Refusé (409) si le fichier des réglages ne se lit pas : "
                 + "seul le choix d'un dossier des sauvegardes le réécrit.")
             .ProducesProblem(StatusCodes.Status409Conflict)
-            .WithTags("Relances");
+            .WithTags("Relances")
+            .SansLaBase();
     }
 
     private static async Task<Ok<RelancesDuTableauDeBord>> ListerAsync(RelancesDesCandidatures relances, CancellationToken annulation) =>

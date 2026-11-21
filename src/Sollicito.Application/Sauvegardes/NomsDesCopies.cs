@@ -12,6 +12,9 @@ namespace Sollicito.Application.Sauvegardes;
 /// <item>La copie du jour : <c>sollicito-&lt;installation&gt;-&lt;AAAA-MM-JJ&gt;.db</c>, une par jour d'utilisation et
 /// par installation, datée du jour local du poste.</item>
 /// <item>La copie d'avant une mise à jour : <c>sollicito-avant-&lt;migration&gt;.db</c>, une par migration cible.</item>
+/// <item>La copie d'avant une restauration (#28) : <c>sollicito-avant-restauration-&lt;AAAAMMJJ-HHMMSSmmm&gt;.db</c>,
+/// l'instant en UTC ; celle d'une base abîmée, copiée telle quelle, finit par <c>-brute.db</c>, et ne se restaure
+/// pas.</item>
 /// <item>Un fichier provisoire : le nom final, une marque tirée au hasard, puis <c>.partielle</c>. Il ne prend son nom
 /// final qu'une fois la copie vérifiée.</item>
 /// </list>
@@ -65,6 +68,15 @@ public static partial class NomsDesCopies
         return $"{Prefixe}{MarqueAvantMiseAJour}{migration}{Extension}";
     }
 
+    /// <summary>Le nom de la copie d'avant une restauration, faite à cet instant (#28).</summary>
+    public static string AvantRestauration(DateTimeOffset instant) => $"{Prefixe}{MarqueAvantRestauration}{Horodatage(instant)}{Extension}";
+
+    /// <summary>
+    /// Le nom de la copie brute d'avant une restauration : les fichiers d'une base abîmée, copiés tels quels (#28). Elle
+    /// ne se restaure pas : <see cref="Lire"/> ne la reconnaît pas.
+    /// </summary>
+    public static string AvantRestaurationBrute(DateTimeOffset instant) => $"{Prefixe}{MarqueAvantRestauration}{Horodatage(instant)}-brute{Extension}";
+
     /// <summary>Un nom provisoire pour une copie à venir : il ne désigne aucune copie tant qu'il n'est pas renommé.</summary>
     public static string Provisoire(string nomFinal) =>
         $"{nomFinal}.{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(4))}{SuffixeProvisoire}";
@@ -81,9 +93,23 @@ public static partial class NomsDesCopies
             return new CopieNommee.DuJour(nom, duJour.Groups["installation"].Value, jour);
         }
 
+        var restauration = FormeDUneCopieDAvantUneRestauration().Match(nom);
+        if (restauration.Success
+            && DateTime.TryParseExact(restauration.Groups["instant"].Value, FormatDeLHorodatage, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var instant))
+        {
+            return new CopieNommee.AvantRestauration(nom, instant);
+        }
+
         var avant = FormeDUneCopieDAvant().Match(nom);
         return avant.Success ? new CopieNommee.AvantMiseAJour(nom, avant.Groups["migration"].Value) : null;
     }
+
+    private const string MarqueAvantRestauration = "avant-restauration-";
+
+    private const string FormatDeLHorodatage = "yyyyMMdd-HHmmssfff";
+
+    private static string Horodatage(DateTimeOffset instant) =>
+        instant.UtcDateTime.ToString(FormatDeLHorodatage, CultureInfo.InvariantCulture);
 
     /// <summary>Vrai pour un fichier provisoire laissé par une copie de cette installation, ou d'avant une mise à jour.</summary>
     public static bool EstUnProvisoireDe(string nom, string? installation) =>
@@ -103,6 +129,9 @@ public static partial class NomsDesCopies
 
     [GeneratedRegex(@"^sollicito-avant-(?<migration>[0-9]{14}_[A-Za-z0-9_]+)\.db$", RegexOptions.CultureInvariant)]
     private static partial Regex FormeDUneCopieDAvant();
+
+    [GeneratedRegex(@"^sollicito-avant-restauration-(?<instant>[0-9]{8}-[0-9]{9})\.db$", RegexOptions.CultureInvariant)]
+    private static partial Regex FormeDUneCopieDAvantUneRestauration();
 }
 
 /// <summary>Une copie, telle que son nom la désigne.</summary>
@@ -113,4 +142,7 @@ public abstract record CopieNommee(string Nom)
 
     /// <summary>La copie d'avant la mise à jour qui vise cette migration.</summary>
     public sealed record AvantMiseAJour(string Nom, string Migration) : CopieNommee(Nom);
+
+    /// <summary>La copie d'avant une restauration, faite à cet instant, en UTC (#28).</summary>
+    public sealed record AvantRestauration(string Nom, DateTime Instant) : CopieNommee(Nom);
 }

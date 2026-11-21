@@ -1,52 +1,90 @@
 import { useEffect, useRef, useState } from "react";
-import type { ClientDeLApi, EtatDesSauvegardes } from "../api/clientDeLApi.ts";
+import type { ClientDeLApi, CopieGardee, EtatDesSauvegardes } from "../api/clientDeLApi.ts";
 import { afficherLInstant } from "../candidatures/affichage.ts";
-import type { IssueDuChoixDuDossier } from "../hote/canalDeLHote.ts";
-import { ANNONCE_DE_LA_COPIE, ANNONCE_DU_RETOUR, ANNONCES_DU_CHOIX, LIBELLES_DES_SORTES, texteDeLAlerte } from "./affichage.ts";
+import type { IssueDeLaRestauration, IssueDuChoixDuDossier } from "../hote/canalDeLHote.ts";
+import {
+  ANNONCE_DE_LA_COPIE,
+  ANNONCE_DU_RETOUR,
+  ANNONCES_DE_LA_RESTAURATION,
+  ANNONCES_DU_CHOIX,
+  ATTENTE_DE_LA_CONFIRMATION,
+  afficherLaDateDUneCopie,
+  LIBELLES_DES_SORTES,
+  RESTAURATION_EN_COURS,
+  texteDeLAlerte,
+} from "./affichage.ts";
 
 type Chargement = { etape: "chargement" } | { etape: "pret"; etat: EtatDesSauvegardes } | { etape: "echec" };
+
+/** Où en est une restauration demandée depuis la section. */
+type Restauration = { etape: "confirmation" } | { etape: "enCours" };
+
+/** Le délai entre deux lectures de l'état, tant que la vérification du lancement n'est pas faite (#88). */
+export const RELECTURE_AVANT_LA_VERIFICATION_EN_MS = 1_000;
 
 /**
  * La section « Sauvegardes » des réglages (#26) : le dossier des copies, la dernière copie, les copies gardées, et ce
  * que l'utilisateur en fait. Elle dit, toujours, que les copies ne sont pas chiffrées. Le dossier ne se choisit que par
- * le dialogue de la fenêtre hôte : la page n'envoie jamais de chemin. Elle ne propose pas de restaurer une copie (#28).
+ * le dialogue de la fenêtre hôte : la page n'envoie jamais de chemin. Chaque copie se restaure (#28) : la page n'envoie
+ * que son identifiant à l'hôte, qui demande lui-même le oui de l'utilisateur. Tant que la vérification du lancement
+ * n'est pas faite, la section relit l'état et le dit (#88).
  */
 export function SectionDesSauvegardes({
   client,
   choisirLeDossier,
+  restaurer,
+  quandRestauree,
 }: {
   client: ClientDeLApi;
   /** Ouvre le dialogue de dossier de la fenêtre hôte ; absent hors de la fenêtre. */
   choisirLeDossier?: () => Promise<IssueDuChoixDuDossier>;
+  /** Demande à la fenêtre hôte de restaurer une copie, par son identifiant ; absent hors de la fenêtre (#28). */
+  restaurer?: (copie: string, quandEnCours: () => void) => Promise<IssueDeLaRestauration>;
+  /** Une copie vient de remplacer la base : l'interface relit tout (#28). */
+  quandRestauree?: (issue: "restauree" | "restaureeDepuisUneBaseAbimee", copie: CopieGardee) => void;
 }) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
   const [annonce, setAnnonce] = useState<string>();
   const [erreur, setErreur] = useState(false);
   const [enCours, setEnCours] = useState(false);
+  const [restauration, setRestauration] = useState<Restauration>();
   // Garde du double clic : l'état de React ne change qu'au rendu suivant.
   const occupe = useRef(false);
 
+  const verifie = chargement.etape === "pret" && chargement.etat.verifie;
   useEffect(() => {
+    if (verifie) {
+      return;
+    }
+
     let affichee = true;
-    client.lireLesSauvegardes().then(
-      (etat) => {
-        if (affichee) {
-          setChargement({ etape: "pret", etat });
-        }
-      },
-      () => {
-        if (affichee) {
-          setChargement({ etape: "echec" });
-        }
-      },
-    );
+    let minuterie: ReturnType<typeof setTimeout> | undefined;
+    const lire = () =>
+      client.lireLesSauvegardes().then(
+        (etat) => {
+          if (!affichee) {
+            return;
+          }
+          setChargement((avant) => (avant.etape === "pret" && avant.etat.verifie ? avant : { etape: "pret", etat }));
+          if (!etat.verifie) {
+            minuterie = setTimeout(lire, RELECTURE_AVANT_LA_VERIFICATION_EN_MS);
+          }
+        },
+        () => {
+          if (affichee) {
+            setChargement((avant) => (avant.etape === "pret" ? avant : { etape: "echec" }));
+          }
+        },
+      );
+    void lire();
     return () => {
       affichee = false;
+      clearTimeout(minuterie);
     };
-  }, [client]);
+  }, [client, verifie]);
 
   // Une action à la fois : elle rend l'état à jour et l'annonce à faire.
-  const agir = async (action: () => Promise<{ etat: EtatDesSauvegardes; annonce?: string }>) => {
+  const agir = async (action: () => Promise<{ etat: EtatDesSauvegardes; annonce?: string } | undefined>) => {
     if (occupe.current) {
       return;
     }
@@ -56,14 +94,17 @@ export function SectionDesSauvegardes({
     setAnnonce(undefined);
     setErreur(false);
     try {
-      const { etat, annonce: texte } = await action();
-      setChargement({ etape: "pret", etat });
-      setAnnonce(texte);
+      const resultat = await action();
+      if (resultat !== undefined) {
+        setChargement({ etape: "pret", etat: resultat.etat });
+        setAnnonce(resultat.annonce);
+      }
     } catch {
       setErreur(true);
     } finally {
       occupe.current = false;
       setEnCours(false);
+      setRestauration(undefined);
     }
   };
 
@@ -87,12 +128,24 @@ export function SectionDesSauvegardes({
       return { etat, annonce: etat.echec === null ? ANNONCE_DE_LA_COPIE : undefined };
     });
 
+  const restaurerLaCopie = (copie: CopieGardee) =>
+    agir(async () => {
+      setRestauration({ etape: "confirmation" });
+      const issue = await restaurer!(copie.id, () => setRestauration({ etape: "enCours" }));
+      if (issue === "restauree" || issue === "restaureeDepuisUneBaseAbimee") {
+        quandRestauree?.(issue, copie);
+        return undefined;
+      }
+
+      return { etat: await client.lireLesSauvegardes(), annonce: ANNONCES_DE_LA_RESTAURATION[issue] };
+    });
+
   return (
-    <section className="sauvegardes" aria-labelledby="titre-des-sauvegardes">
+    <section className="sauvegardes" aria-labelledby="titre-des-sauvegardes" aria-busy={restauration !== undefined}>
       <h3 id="titre-des-sauvegardes">Sauvegardes</h3>
       <p>
         Sollicito copie votre base une fois par jour d'utilisation, et refait la copie du jour à la fermeture. Il garde
-        les sept dernières.
+        les sept dernières. Vous pouvez revenir à l'une d'elles : Sollicito copie d'abord votre base actuelle.
       </p>
       <p className="avertissement">
         Les copies ne sont pas chiffrées : toute personne qui accède à leur dossier peut les lire.
@@ -109,9 +162,11 @@ export function SectionDesSauvegardes({
           annonce={annonce}
           erreur={erreur}
           enCours={enCours}
+          restauration={restauration}
           choisir={choisirLeDossier === undefined ? undefined : choisir}
           revenir={revenir}
           sauvegarder={sauvegarder}
+          restaurer={restaurer === undefined ? undefined : restaurerLaCopie}
         />
       )}
     </section>
@@ -123,21 +178,32 @@ function ContenuDesSauvegardes({
   annonce,
   erreur,
   enCours,
+  restauration,
   choisir,
   revenir,
   sauvegarder,
+  restaurer,
 }: {
   etat: EtatDesSauvegardes;
   annonce?: string;
   erreur: boolean;
   enCours: boolean;
+  restauration?: Restauration;
   choisir?: () => void;
   revenir: () => void;
   sauvegarder: () => void;
+  restaurer?: (copie: CopieGardee) => void;
 }) {
   const alerte = texteDeLAlerte(etat);
+  // Les plus récentes d'abord, toutes sortes mêlées : on revient à un moment.
+  const copies = [...etat.copies].sort((a, b) => Date.parse(b.faiteLe) - Date.parse(a.faiteLe));
   return (
     <>
+      {restauration !== undefined && (
+        <p className="annonce" role="status">
+          {restauration.etape === "confirmation" ? ATTENTE_DE_LA_CONFIRMATION : RESTAURATION_EN_COURS}
+        </p>
+      )}
       {annonce !== undefined && (
         <p className="annonce" role="status">
           {annonce}
@@ -158,7 +224,9 @@ function ContenuDesSauvegardes({
         <dd className="chemin">{etat.dossier}</dd>
         <dt>Dernière copie</dt>
         <dd>
-          {etat.derniereCopie === null ? (
+          {!etat.verifie ? (
+            "Vérification des copies…"
+          ) : etat.derniereCopie === null ? (
             "Aucune copie pour l'instant."
           ) : (
             <time dateTime={etat.derniereCopie}>{afficherLInstant(etat.derniereCopie)}</time>
@@ -191,26 +259,44 @@ function ContenuDesSauvegardes({
           Sauvegarder maintenant
         </button>
       </div>
-      {etat.copies.length === 0 ? (
+      {!etat.verifie ? null : copies.length === 0 ? (
         <p>Aucune copie gardée pour l'instant.</p>
       ) : (
         <table className="candidatures copies">
-          <caption>Les copies gardées : celles du jour, les plus récentes d'abord, puis celles d'avant une mise à jour.</caption>
+          <caption>Les copies gardées, des plus récentes aux plus anciennes.</caption>
           <thead>
             <tr>
               <th scope="col">Faite le</th>
               <th scope="col">Copie</th>
               <th scope="col">Fichier</th>
+              {restaurer !== undefined && (
+                <th scope="col">
+                  <span className="visuellement-cache">Action</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {etat.copies.map((copie) => (
-              <tr key={copie.nom}>
+            {copies.map((copie) => (
+              <tr key={copie.id}>
                 <td>
                   <time dateTime={copie.faiteLe}>{afficherLInstant(copie.faiteLe)}</time>
                 </td>
                 <td>{LIBELLES_DES_SORTES[copie.sorte] ?? copie.sorte}</td>
                 <td className="chemin">{copie.nom}</td>
+                {restaurer !== undefined && (
+                  <td>
+                    <button
+                      type="button"
+                      className="secondaire"
+                      disabled={enCours}
+                      aria-label={`Restaurer la copie du ${afficherLaDateDUneCopie(copie.faiteLe)}`}
+                      onClick={() => restaurer(copie)}
+                    >
+                      Restaurer…
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

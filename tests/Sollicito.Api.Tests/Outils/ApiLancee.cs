@@ -35,7 +35,24 @@ public sealed class ApiLancee : IAsyncLifetime
             // Avant les réglages du test, qui peuvent encore le remplacer.
             builder.ConfigureTestServices(services => services.AddSingleton(new DossierDeLaBase(DossierDeDonnees)));
             ajuster(builder);
+            // Après eux : la garde voit le dossier qui servira.
+            builder.ConfigureTestServices(GarderLeDossierDeLUtilisateur);
         });
+    }
+
+    // Garde (#28) : aucun test ne construit l'API sur le dossier de données de l'utilisateur, où une restauration
+    // remplacerait sa vraie base. Elle joue pendant la construction, avant que la préparation de la base ne démarre.
+    private static void GarderLeDossierDeLUtilisateur(IServiceCollection services)
+    {
+        var dossier = services.LastOrDefault(service => service.ServiceType == typeof(DossierDeLaBase))?.ImplementationInstance as DossierDeLaBase
+            ?? throw new InvalidOperationException("Un test donne toujours son propre dossier de données à l'API.");
+        var chemin = Path.TrimEndingDirectorySeparator(Path.GetFullPath(dossier.Chemin));
+        var deLUtilisateur = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Donnees.DossierDeDonnees.DeLUtilisateur()));
+        if (string.Equals(chemin, deLUtilisateur, StringComparison.OrdinalIgnoreCase)
+            || chemin.StartsWith(deLUtilisateur + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Un test ne démarre jamais l'API sur le dossier de données de l'utilisateur.");
+        }
     }
 
     /// <summary>Le dossier temporaire où vit la base de ce lancement.</summary>

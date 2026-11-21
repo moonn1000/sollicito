@@ -17,7 +17,8 @@ internal static class RoutesDesSauvegardes
         routes.MapGet("/api/sauvegardes", Lire)
             .WithName("LireLesSauvegardes")
             .WithSummary("L'état des sauvegardes : le dossier, la dernière copie, les copies gardées, et ce qui empêche une copie")
-            .WithTags("Sauvegardes");
+            .WithTags("Sauvegardes")
+            .SansLaBase();
 
         routes.MapPost("/api/sauvegardes", SauvegarderMaintenantAsync)
             .WithName("SauvegarderMaintenant")

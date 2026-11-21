@@ -229,7 +229,13 @@ public sealed class DossierDesSauvegardesTests : IAsyncLifetime
             Assert.Equal(IssueDuChoix.Choisi, await premiere.Sauvegardes().ChoisirLeDossierAsync(_ailleurs, TestContext.Current.CancellationToken));
 
             Assert.Equal([.. siennes.Append(premiere.CopieDuJour(Le18)).Order(StringComparer.Ordinal)], Fichiers(_ailleurs));
-            Assert.Equal([premiere.CopieDuJour(Le18)], premiere.Sauvegardes().Etat.Copies.Where(copie => copie.Sorte == SorteDeCopie.DuJour).Select(copie => copie.Nom));
+            var copies = premiere.Sauvegardes().Etat.Copies;
+            Assert.Equal([premiere.CopieDuJour(Le18)], copies.Where(copie => copie is { Sorte: SorteDeCopie.DuJour, Lieu: LieuDUneCopie.DossierDesCopies }).Select(copie => copie.Nom));
+            // Pour la restauration (#28), la liste montre aussi les copies de la seconde, à part, et la copie du lancement
+            // restée dans le dossier par défaut ; la dernière copie ne compte que la sienne.
+            Assert.Equal([.. siennes.Reverse()], copies.Where(copie => copie.Sorte == SorteDeCopie.DuJourDUneAutreInstallation).Select(copie => copie.Nom));
+            Assert.Equal([premiere.CopieDuJour(Le18)], copies.Where(copie => copie.Lieu == LieuDUneCopie.DossierParDefaut).Select(copie => copie.Nom));
+            Assert.Equal(File.GetLastWriteTimeUtc(Path.Combine(_ailleurs, premiere.CopieDuJour(Le18))), premiere.Sauvegardes().Etat.DerniereCopie);
         }
         finally
         {

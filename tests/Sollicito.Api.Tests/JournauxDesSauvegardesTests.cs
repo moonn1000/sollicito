@@ -152,6 +152,96 @@ public sealed class JournauxDesSauvegardesTests : IAsyncLifetime
         SansCheminNiDonnee(entrees);
     }
 
+    [Fact]
+    public async Task Aucun_chemin_ni_aucune_donnee_n_entre_dans_un_journal_de_la_restauration()
+    {
+        // La restauration (#28) sur chacun de ses chemins : réussie, refusée pour chaque motif, impossible, porte fermée,
+        // et depuis une base abîmée.
+        var donnees = Path.Combine(Profil, "AppData", "Local", "Sollicito");
+        Directory.CreateDirectory(donnees);
+        var parDefaut = new DossierDeLaBase(donnees).DossierDesSauvegardes;
+        var etapes = new EtapesDeTest { Arret = Application.Sauvegardes.EtapeDeLaRestauration.PorteFermee };
+        await using (var api = await LancerSurAsync(donnees, new HorlogeDeTest(), builder =>
+        {
+            ToutJournaliser(builder);
+            AppelsDeLaRestauration.AvecLesEtapes(etapes)(builder);
+        }))
+        {
+            await api.AttendreLaPremiereVerificationAsync();
+            _installations.Add(api.Sauvegardes().Installation);
+            await api.EnregistrerAvecSuccesAsync(Donnee, Donnee, "2026-11-02T10:00");
+            await api.SauvegarderMaintenantAsync();
+            var duJour = api.Copie(api.CopieDuJour(new DateOnly(2026, 11, 18)));
+
+            // Réussie, porte fermée un moment : une requête refusée.
+            var restauration = Task.Run(() => api.RestaurerAsync(duJour));
+            await etapes.Atteinte.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            using (await api.EnregistrerAsync(Donnee, Donnee, "2026-11-03T10:00"))
+            {
+            }
+
+            etapes.Relacher();
+            Assert.Equal(Application.Sauvegardes.IssueDeLaRestauration.Restauree, await restauration);
+            etapes.Arret = null;
+
+            // Refusée : abîmée, étrangère, plus récente, puis changée et introuvable.
+            var saine = Path.Combine(parDefaut, api.CopieDuJour(new DateOnly(2026, 11, 18)));
+            var abimee = Application.Sauvegardes.NomsDesCopies.DuJour(api.Sauvegardes().Installation, new DateOnly(2026, 11, 10));
+            var etrangere = Application.Sauvegardes.NomsDesCopies.DuJour(api.Sauvegardes().Installation, new DateOnly(2026, 11, 11));
+            var plusRecente = Application.Sauvegardes.NomsDesCopies.DuJour(api.Sauvegardes().Installation, new DateOnly(2026, 11, 12));
+            var octets = Octets(saine);
+            Array.Fill(octets, (byte)0x5A, octets.Length / 2 / 4096 * 4096, 4096);
+            await File.WriteAllBytesAsync(Path.Combine(parDefaut, abimee), octets, TestContext.Current.CancellationToken);
+            using (var connexion = Ouvrir(Path.Combine(parDefaut, etrangere), Microsoft.Data.Sqlite.SqliteOpenMode.ReadWriteCreate))
+            {
+                connexion.Executer($"CREATE TABLE Notes (Texte TEXT); INSERT INTO Notes VALUES ('{Donnee} {Compte}')");
+            }
+            File.Copy(saine, Path.Combine(parDefaut, plusRecente));
+            using (var connexion = Ouvrir(Path.Combine(parDefaut, plusRecente)))
+            {
+                connexion.Executer("INSERT INTO __EFMigrationsHistory (MigrationId, ProductVersion) VALUES ('29991231000000_UneVersionAVenir', '10.0.15')");
+            }
+
+            await api.SauvegarderMaintenantAsync();
+            await api.RestaurerAsync(api.Copie(abimee));
+            await api.RestaurerAsync(api.Copie(etrangere));
+            await api.RestaurerAsync(api.Copie(plusRecente));
+            var demande = (await api.Restauration().PreparerAsync(api.Copie(api.CopieDuJour(new DateOnly(2026, 11, 18))).Id, TestContext.Current.CancellationToken)).Demande!;
+            await api.SauvegarderMaintenantAsync();
+            await api.Restauration().RestaurerAsync(demande, TestContext.Current.CancellationToken);
+            await EffacerAsync(Path.Combine(parDefaut, plusRecente));
+            await api.Restauration().RestaurerAsync(demande with { Nom = plusRecente }, TestContext.Current.CancellationToken);
+
+            // Impossible : la place qui manque, à la copie de travail.
+            etapes.Arret = Application.Sauvegardes.EtapeDeLaRestauration.CopieDeTravailEcrite;
+            etapes.Erreur = new IOException($"Disque plein (essai) : {Compte}", unchecked((int)0x80070070));
+            await api.RestaurerAsync(api.Copie(api.CopieDuJour(new DateOnly(2026, 11, 18))));
+            etapes.Arret = null;
+
+            // Depuis une base abîmée : sa copie brute.
+            var fichier = new DossierDeLaBase(donnees).Fichier;
+            var base_ = Octets(fichier);
+            Array.Fill(base_, (byte)0x5A, Math.Max(1, base_.Length / 4096 / 2) * 4096, 4096);
+            await File.WriteAllBytesAsync(fichier, base_, TestContext.Current.CancellationToken);
+            await api.RestaurerAsync(api.Copie(api.CopieDuJour(new DateOnly(2026, 11, 18))));
+        }
+
+        var entrees = _capture.Entrees.ToArray();
+        // Témoins : chaque chemin a bien été parcouru.
+        Assert.Contains(entrees, entree => entree.Contains("Base restaurée depuis une copie (DuJour, 0 migration(s)", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Requête refusée : une restauration de la base est en cours.", StringComparison.Ordinal));
+        foreach (var motif in new[] { "Abimee", "Etrangere", "PlusRecente", "Changee", "Introuvable" })
+        {
+            Assert.Contains(entrees, entree => entree.Contains($"Restauration refusée ({motif})", StringComparison.Ordinal));
+        }
+
+        Assert.Contains(entrees, entree => entree.Contains("Restauration impossible (CopieDeTravail, IOException)", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Copie d'avant la restauration faite (verifiee)", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Copie d'avant la restauration faite (brute)", StringComparison.Ordinal));
+        SansCheminNiDonnee(entrees);
+        Assert.DoesNotContain(entrees, entree => entree.Contains("sollicito-avant-restauration", StringComparison.OrdinalIgnoreCase));
+    }
+
     private void ToutJournaliser(IWebHostBuilder builder) =>
         builder
             .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(LesPlusBavards))

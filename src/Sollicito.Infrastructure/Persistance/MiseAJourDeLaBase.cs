@@ -15,7 +15,9 @@ namespace Sollicito.Infrastructure.Persistance;
 /// base, qui garde son mode WAL.</item>
 /// </list>
 /// Avant la dernière étape, la base n'est jamais écrite : une migration qui échoue, ou un arrêt brutal, la laisse telle
-/// qu'avant, et la version précédente de Sollicito l'ouvre toujours. Un échec lève <see cref="MiseAJourDeLaBaseEchouee"/>,
+/// qu'avant, et la version précédente de Sollicito l'ouvre toujours. Seule une ligne abandonnée du verrou des migrations
+/// (#79) s'en retire avant, par la préparation de la base, et donc s'écrit ; une table du verrou vide ne s'écrit pas (#88).
+/// Un échec lève <see cref="MiseAJourDeLaBaseEchouee"/>,
 /// dont le message ne cite aucun chemin, et qui ne garde pas l'erreur d'origine : son message en citerait un.
 /// </summary>
 public static class MiseAJourDeLaBase

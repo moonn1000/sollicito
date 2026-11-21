@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Sollicito.Application.Sauvegardes;
 
 namespace Sollicito.Fenetre;
 
@@ -39,18 +40,89 @@ internal static class ReglesDeLaFenetre
 
     /// <summary>
     /// Vrai si le message vient de l'interface (la source est de son origine) et signale qu'elle est prête : la
-    /// fenêtre lui remet alors le jeton. Un message mal formé ou d'un autre type ne reçoit rien.
+    /// fenêtre lui remet alors le jeton. Le message ne porte que son type : un champ de plus, un message mal formé ou
+    /// d'un autre type ne reçoit rien (#88).
     /// </summary>
     public static bool DemandeLeJeton(string? source, string? messageEnJson, Uri origine) =>
-        EstUnMessageDeLInterface(source, messageEnJson, origine, "prete");
+        EstUnMessageDeLInterface(source, messageEnJson, origine, "prete", champs: 1);
 
     /// <summary>
     /// Vrai si le message vient de l'interface et demande le choix du dossier des sauvegardes (#26) : la fenêtre ouvre
-    /// alors le dialogue de dossier de Windows. Sous le même contrôle de la source que le canal du jeton ; un message
-    /// mal formé ou d'un autre type n'ouvre rien. Le message ne porte aucun chemin : seul le dialogue en donne un.
+    /// alors le dialogue de dossier de Windows. Sous le même contrôle de la source que le canal du jeton. Le message ne
+    /// porte que son type, aucun chemin : seul le dialogue en donne un. Un champ de plus, répété compris, un message mal
+    /// formé ou d'un autre type n'ouvre rien (#88).
     /// </summary>
     public static bool DemandeLeChoixDuDossier(string? source, string? messageEnJson, Uri origine) =>
-        EstUnMessageDeLInterface(source, messageEnJson, origine, "choisirLeDossierDesSauvegardes");
+        EstUnMessageDeLInterface(source, messageEnJson, origine, "choisirLeDossierDesSauvegardes", champs: 1);
+
+    /// <summary>
+    /// Vrai si le message vient de l'interface et demande la restauration d'une copie gardée (#28, ADR-0012) : la fenêtre
+    /// ouvre alors son dialogue de confirmation. Sous le même contrôle de la source que le canal du jeton. Le message
+    /// porte son type et l'identifiant de la copie, seize caractères hexadécimaux en minuscules, et rien d'autre : jamais
+    /// un chemin. Un champ de plus, répété compris, un identifiant d'une autre forme, un message mal formé ou d'un autre
+    /// type n'ouvre rien.
+    /// </summary>
+    public static bool DemandeLaRestauration(string? source, string? messageEnJson, Uri origine, out string copie)
+    {
+        copie = "";
+        if (!EstUnMessageDeLInterface(source, messageEnJson, origine, "restaurerUneSauvegarde", champs: 2))
+        {
+            return false;
+        }
+
+        using var message = JsonDocument.Parse(messageEnJson!, new JsonDocumentOptions { MaxDepth = 8 });
+        if (message.RootElement.TryGetProperty("copie", out var identifiant)
+            && identifiant.ValueKind == JsonValueKind.String
+            && IdentifiantsDesCopies.AEnLaForme(identifiant.GetString()))
+        {
+            copie = identifiant.GetString()!;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Le message qui rend à l'interface où en est la restauration de cette copie, sans chemin ni donnée : en cours après
+    /// le oui, puis son issue.
+    /// </summary>
+    public static string MessageDeLaRestauration(string copie, IssueDansLaFenetre issue) => JsonSerializer.Serialize(new
+    {
+        type = "restauration",
+        copie,
+        issue = issue switch
+        {
+            IssueDansLaFenetre.EnCours => "enCours",
+            IssueDansLaFenetre.Annulee => "annulee",
+            IssueDansLaFenetre.Restauree => "restauree",
+            IssueDansLaFenetre.RestaureeDepuisUneBaseAbimee => "restaureeDepuisUneBaseAbimee",
+            IssueDansLaFenetre.Abimee => "abimee",
+            IssueDansLaFenetre.Etrangere => "etrangere",
+            IssueDansLaFenetre.PlusRecente => "plusRecente",
+            IssueDansLaFenetre.Introuvable => "introuvable",
+            IssueDansLaFenetre.Changee => "changee",
+            IssueDansLaFenetre.BaseChangee => "baseChangee",
+            IssueDansLaFenetre.Occupee => "occupee",
+            IssueDansLaFenetre.CopieDAvantImpossible => "copieDAvantImpossible",
+            _ => "impossible",
+        },
+    });
+
+    /// <summary>L'issue d'une restauration, telle que la fenêtre la rend à la page.</summary>
+    public static IssueDansLaFenetre DansLaFenetre(IssueDeLaRestauration issue) => issue switch
+    {
+        IssueDeLaRestauration.Restauree => IssueDansLaFenetre.Restauree,
+        IssueDeLaRestauration.RestaureeDepuisUneBaseAbimee => IssueDansLaFenetre.RestaureeDepuisUneBaseAbimee,
+        IssueDeLaRestauration.Abimee => IssueDansLaFenetre.Abimee,
+        IssueDeLaRestauration.Etrangere => IssueDansLaFenetre.Etrangere,
+        IssueDeLaRestauration.PlusRecente => IssueDansLaFenetre.PlusRecente,
+        IssueDeLaRestauration.Introuvable => IssueDansLaFenetre.Introuvable,
+        IssueDeLaRestauration.Changee => IssueDansLaFenetre.Changee,
+        IssueDeLaRestauration.BaseChangee => IssueDansLaFenetre.BaseChangee,
+        IssueDeLaRestauration.Occupee => IssueDansLaFenetre.Occupee,
+        IssueDeLaRestauration.CopieDAvantImpossible => IssueDansLaFenetre.CopieDAvantImpossible,
+        _ => IssueDansLaFenetre.Impossible,
+    };
 
     /// <summary>
     /// Vrai si le message vient de l'interface et demande le brouillon d'une relance (#14, ADR-0011) : la fenêtre
@@ -106,8 +178,9 @@ internal static class ReglesDeLaFenetre
         },
     });
 
-    // Un message de l'interface, du type attendu : une source de l'origine, un objet JSON, un type en texte.
-    private static bool EstUnMessageDeLInterface(string? source, string? messageEnJson, Uri origine, string typeAttendu)
+    // Un message de l'interface, du type attendu : une source de l'origine, un objet JSON, un type en texte, et, si
+    // `champs` est donné, exactement ce nombre de champs, un champ répété comptant pour deux.
+    private static bool EstUnMessageDeLInterface(string? source, string? messageEnJson, Uri origine, string typeAttendu, int? champs = null)
     {
         if (!EstDeLOrigine(source, origine) || string.IsNullOrEmpty(messageEnJson))
         {
@@ -120,7 +193,8 @@ internal static class ReglesDeLaFenetre
             return message.RootElement.ValueKind == JsonValueKind.Object
                 && message.RootElement.TryGetProperty("type", out var type)
                 && type.ValueKind == JsonValueKind.String
-                && type.ValueEquals(typeAttendu);
+                && type.ValueEquals(typeAttendu)
+                && (champs is null || message.RootElement.EnumerateObject().Count() == champs);
         }
         catch (JsonException)
         {
@@ -140,4 +214,47 @@ internal enum IssueDuChoixDuDossier
 
     /// <summary>La copie n'a pas pu se faire dans le dossier choisi : l'ancien reste.</summary>
     Refuse,
+}
+
+/// <summary>Où en est une restauration, telle que la fenêtre le rend à l'interface (#28).</summary>
+internal enum IssueDansLaFenetre
+{
+    /// <summary>L'utilisateur a dit oui : la restauration est en cours.</summary>
+    EnCours,
+
+    /// <summary>L'utilisateur a fermé le dialogue sans restaurer : rien n'a changé.</summary>
+    Annulee,
+
+    /// <summary>La base est remplacée par la copie ; sa copie d'avant se restaure.</summary>
+    Restauree,
+
+    /// <summary>La base abîmée est remplacée par la copie ; ses fichiers sont gardés tels quels.</summary>
+    RestaureeDepuisUneBaseAbimee,
+
+    /// <summary>La copie ne se relit pas saine.</summary>
+    Abimee,
+
+    /// <summary>Le fichier n'est pas une copie que cette version sait lire.</summary>
+    Etrangere,
+
+    /// <summary>La copie vient d'une version plus récente.</summary>
+    PlusRecente,
+
+    /// <summary>La copie, ou son dossier, a disparu.</summary>
+    Introuvable,
+
+    /// <summary>La copie a changé depuis l'affichage de la liste.</summary>
+    Changee,
+
+    /// <summary>L'état de la base a changé depuis la confirmation.</summary>
+    BaseChangee,
+
+    /// <summary>Une autre restauration, ou des requêtes en cours, occupent la base.</summary>
+    Occupee,
+
+    /// <summary>La base en cours n'a pas pu se copier : elle n'a pas été remplacée.</summary>
+    CopieDAvantImpossible,
+
+    /// <summary>Une erreur, comme la place qui manque : rien n'a changé.</summary>
+    Impossible,
 }

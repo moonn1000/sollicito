@@ -1,5 +1,6 @@
 using Sollicito.Application.Candidatures;
 using Sollicito.Application.Relances;
+using Sollicito.Api.Sauvegardes;
 
 namespace Sollicito.Api.Relances;
 
@@ -10,14 +11,29 @@ namespace Sollicito.Api.Relances;
 /// d'envoi, validés eux aussi. Le service ouvre sa propre portée, comme une requête : la fenêtre le résout dans les
 /// services de l'API, hors de toute requête.
 /// </summary>
-public sealed class BrouillonsDesRelances(IServiceScopeFactory portees, TimeProvider horloge)
+public sealed class BrouillonsDesRelances(IServiceScopeFactory portees, TimeProvider horloge, PorteDeLaBase porte)
 {
-    /// <summary>Le brouillon de la relance, si elle est à faire ; rien si elle n'existe pas, ou si elle est close.</summary>
+    /// <summary>
+    /// Le brouillon de la relance, si elle est à faire ; rien si elle n'existe pas, si elle est close, ou pendant une
+    /// restauration, porte de la base fermée (#28).
+    /// </summary>
     public async Task<BrouillonDeRelance?> PreparerAsync(int relanceId, CancellationToken annulation)
     {
-        await using var portee = portees.CreateAsyncScope();
-        var depot = portee.ServiceProvider.GetRequiredService<IDepotDesCandidatures>();
-        var relance = await depot.LireLaRelancePourLeBrouillonAsync(relanceId, annulation);
-        return relance is null ? null : BrouillonDeRelance.De(relance, horloge.LocalTimeZone);
+        if (!porte.EssayerDEntrer())
+        {
+            return null;
+        }
+
+        try
+        {
+            await using var portee = portees.CreateAsyncScope();
+            var depot = portee.ServiceProvider.GetRequiredService<IDepotDesCandidatures>();
+            var relance = await depot.LireLaRelancePourLeBrouillonAsync(relanceId, annulation);
+            return relance is null ? null : BrouillonDeRelance.De(relance, horloge.LocalTimeZone);
+        }
+        finally
+        {
+            porte.Sortir();
+        }
     }
 }

@@ -5,6 +5,7 @@ import type {
   ClientDeLApi,
   ClotureDeRelanceLue,
   ContactConnu,
+  CopieGardee,
   EntrepriseConnue,
   EtapeLue,
   EtatDesSauvegardes,
@@ -23,10 +24,22 @@ export function sauvegardesFictives(modifications: Partial<EtatDesSauvegardes> =
     parDefaut: true,
     dossierParDefaut: DOSSIER_PAR_DEFAUT_FICTIF,
     derniereCopie: "2026-11-18T13:30:00Z",
-    copies: [{ nom: "sollicito-1a2b3c4d-2026-11-18.db", sorte: "DuJour", faiteLe: "2026-11-18T13:30:00Z" }],
+    copies: [copieFictive()],
     reglageIllisible: false,
     echec: null,
     verifie: true,
+    ...modifications,
+  };
+}
+
+/** Une copie gardée fictive : la copie du jour de ce poste, le 18/11/2026 à 14:30, dans le dossier des copies. */
+export function copieFictive(modifications: Partial<CopieGardee> = {}): CopieGardee {
+  return {
+    nom: "sollicito-1a2b3c4d-2026-11-18.db",
+    sorte: "DuJour",
+    faiteLe: "2026-11-18T13:30:00Z",
+    lieu: "DossierDesCopies",
+    id: "0123456789abcdef",
     ...modifications,
   };
 }

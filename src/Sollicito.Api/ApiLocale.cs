@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.FileProviders;
 using Sollicito.Api.Candidatures;
 using Sollicito.Api.Contacts;
@@ -44,7 +45,8 @@ public static class ApiLocale
     /// </summary>
     /// <param name="fichiersDeLInterface">Les fichiers de l'interface React construite (index.html, assets).</param>
     /// <param name="dossierDeDonnees">Le dossier de données de l'utilisateur, déjà créé : la racine du contenu et le dossier de la base.</param>
-    public static WebApplication ConstruirePourLaFenetre(IFileProvider fichiersDeLInterface, string dossierDeDonnees)
+    /// <param name="etapesDeLaRestauration">Ce qui voit passer les étapes d'une restauration : la version de test seule en donne (#28).</param>
+    public static WebApplication ConstruirePourLaFenetre(IFileProvider fichiersDeLInterface, string dossierDeDonnees, IEtapesDeLaRestauration? etapesDeLaRestauration = null)
     {
         ArgumentNullException.ThrowIfNull(fichiersDeLInterface);
         ArgumentException.ThrowIfNullOrEmpty(dossierDeDonnees);
@@ -69,6 +71,10 @@ public static class ApiLocale
                 }
 
                 builder.Services.AddSingleton(new FichiersDeLInterface(fichiersDeLInterface));
+                if (etapesDeLaRestauration is not null)
+                {
+                    builder.Services.AddSingleton(etapesDeLaRestauration);
+                }
             });
     }
 
@@ -104,6 +110,11 @@ public static class ApiLocale
         // sous le verrou du dossier.
         builder.Services.AddSingleton<SauvegardesDeLaBase>();
         builder.Services.AddHostedService<SauvegardesAutomatiques>();
+        // La restauration d'une copie (#28), que seule la fenêtre hôte demande, et la porte de la base qu'elle ferme : les
+        // routes et les brouillons y passent. Les étapes ne servent qu'aux tests et à la version de test de la fenêtre.
+        builder.Services.AddSingleton<PorteDeLaBase>();
+        builder.Services.AddSingleton<RestaurationDeLaBase>();
+        builder.Services.TryAddSingleton<IEtapesDeLaRestauration>(AucuneEtape.Instance);
         builder.Services.AddScoped<EnregistrementDesCandidatures>();
         builder.Services.AddScoped<SuiviDesCandidatures>();
         builder.Services.AddScoped<ModificationDesCandidatures>();
@@ -141,11 +152,14 @@ public static class ApiLocale
         app.UseMiddleware<ControleDeLOrigine>();
         // Le routage ne vient qu'après les contrôles : une requête refusée n'est jamais routée (OrdreDesControlesTests).
         app.UseRouting();
+        // Après le routage : la porte de la base lit la marque de la route, et refuse (503) pendant une restauration (#28).
+        app.UseMiddleware<PorteDesRequetes>();
 
-        app.MapOpenApi("/api/openapi/{documentName}.json");
+        app.MapOpenApi("/api/openapi/{documentName}.json").SansLaBase();
         app.MapGet("/api/etat", () => TypedResults.Ok(EtatDeLApplication.Pret))
             .WithName("EtatDeLApplication")
-            .WithSummary("État de l'application");
+            .WithSummary("État de l'application")
+            .SansLaBase();
         RoutesDesCandidatures.Declarer(app);
         RoutesDesSauvegardes.Declarer(app);
         RoutesDesContacts.Declarer(app);

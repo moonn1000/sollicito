@@ -192,3 +192,32 @@ test("l'alerte des sauvegardes du tableau de bord mène aux réglages", async ()
   expect(await screen.findByRole("heading", { level: 2, name: "Réglages" })).toBeDefined();
   expect(await screen.findByRole("region", { name: "Sauvegardes" })).toBeDefined();
 });
+
+test("une copie restaurée ramène au tableau de bord, qui relit la base et annonce la restauration (#28)", async () => {
+  const client = clientSimule({
+    listerLesCandidatures: vi
+      .fn()
+      .mockResolvedValueOnce([candidatureFictive()])
+      .mockResolvedValue([candidatureFictive({ id: 9, poste: "Poste fictif de la copie" })]),
+  });
+  const restaurerUneSauvegarde = vi.fn(async (_copie: string, quandEnCours: () => void) => {
+    quandEnCours();
+    return "restauree" as const;
+  });
+  render(<App connecter={async () => client} restaurerUneSauvegarde={restaurerUneSauvegarde} />);
+  await screen.findByRole("heading", { level: 2, name: "Tableau de bord" });
+  await waitFor(() => expect(client.listerLesCandidatures).toHaveBeenCalledOnce());
+
+  fireEvent.click(screen.getByRole("button", { name: "Réglages" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Restaurer la copie du 18 novembre 2026 à 14:30" }));
+
+  expect(
+    await screen.findByText(
+      "Base restaurée : vous retrouvez la copie du 18 novembre 2026 à 14:30. Votre base d'avant est gardée dans la copie « Avant une restauration ».",
+    ),
+  ).toBeDefined();
+  expect(screen.getByRole("heading", { level: 2, name: "Tableau de bord" })).toBeDefined();
+  expect(await screen.findByText("Poste fictif de la copie")).toBeDefined();
+  expect(restaurerUneSauvegarde).toHaveBeenCalledWith("0123456789abcdef", expect.any(Function));
+  expect(client.listerLesCandidatures).toHaveBeenCalledTimes(2);
+});

@@ -15,12 +15,15 @@ public static class VerrouDesMigrations
 
     // Des requêtes constantes, sans aucune valeur venue d'ailleurs.
     private const string TableExiste = "SELECT COUNT(*) AS \"Value\" FROM sqlite_master WHERE type = 'table' AND name = '" + Table + "'";
+    private const string CompterLesLignes = "SELECT COUNT(*) AS \"Value\" FROM \"" + Table + "\"";
     private const string ViderLaTable = "DELETE FROM \"" + Table + "\"";
 
     /// <summary>
     /// Retire une ligne abandonnée du verrou des migrations, et rend le nombre de lignes retirées. À n'appeler que sous
     /// le <see cref="VerrouDeLInstance"/> du dossier : aucun autre lancement ne peut alors migrer la base, et une ligne
-    /// présente ne peut venir que d'un processus arrêté pendant ses migrations.
+    /// présente ne peut venir que d'un processus arrêté pendant ses migrations. Sans ligne, rien ne s'écrit : même sur une
+    /// table vide, un <c>DELETE</c> écrirait une page dans le journal de la base, avant la copie d'avant une mise à jour
+    /// (#88).
     /// </summary>
     public static async Task<int> RetirerUneLigneAbandonneeAsync(DatabaseFacade baseDeDonnees, CancellationToken annulation)
     {
@@ -29,7 +32,12 @@ public static class VerrouDesMigrations
         try
         {
             var tables = await baseDeDonnees.SqlQueryRaw<int>(TableExiste).SingleAsync(annulation);
-            return tables == 0 ? 0 : await baseDeDonnees.ExecuteSqlRawAsync(ViderLaTable, annulation);
+            if (tables == 0 || await baseDeDonnees.SqlQueryRaw<int>(CompterLesLignes).SingleAsync(annulation) == 0)
+            {
+                return 0;
+            }
+
+            return await baseDeDonnees.ExecuteSqlRawAsync(ViderLaTable, annulation);
         }
         finally
         {

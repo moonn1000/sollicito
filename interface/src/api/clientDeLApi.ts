@@ -249,16 +249,25 @@ export type ResultatDeLaCorrectionDEtape =
   | { issue: "refusee"; refus: RefusDeLEtape }
   | { issue: "perimee"; motif: string };
 
-/** La sorte d'une copie de la base (#26) : celle d'un jour d'utilisation, ou celle d'avant une mise à jour. */
-export type SorteDeCopie = "DuJour" | "AvantMiseAJour";
+/**
+ * La sorte d'une copie de la base : celle d'un jour d'utilisation, de ce poste ou d'une autre installation qui partage le
+ * dossier (#28), celle d'avant une mise à jour (#26), ou celle d'avant une restauration (#28).
+ */
+export type SorteDeCopie = "DuJour" | "AvantMiseAJour" | "DuJourDUneAutreInstallation" | "AvantRestauration";
 
-/** Une copie gardée de la base. */
+/** Le dossier d'une copie : celui des copies, ou celui par défaut quand un autre est choisi. */
+export type LieuDUneCopie = "DossierDesCopies" | "DossierParDefaut";
+
+/** Une copie gardée de la base, que l'utilisateur peut restaurer (#28). */
 export interface CopieGardee {
   /** Son nom de fichier, sans le dossier. */
   nom: string;
   sorte: SorteDeCopie;
   /** L'instant où elle a été écrite, en UTC. */
   faiteLe: string;
+  lieu: LieuDUneCopie;
+  /** Son identifiant, seize caractères hexadécimaux, que la page envoie à l'hôte pour la restaurer : jamais un chemin. */
+  id: string;
 }
 
 /** Ce qui empêche les copies : un dossier qui manque, ou une copie qui ne peut pas s'y écrire. */

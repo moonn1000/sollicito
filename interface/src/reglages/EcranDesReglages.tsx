@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import type { ClientDeLApi } from "../api/clientDeLApi.ts";
-import type { IssueDuChoixDuDossier } from "../hote/canalDeLHote.ts";
+import type { ClientDeLApi, CopieGardee } from "../api/clientDeLApi.ts";
+import type { IssueDeLaRestauration, IssueDuChoixDuDossier } from "../hote/canalDeLHote.ts";
 import { SectionDesRelances } from "../relances/SectionDesRelances.tsx";
 import { SectionDesSauvegardes } from "../sauvegardes/SectionDesSauvegardes.tsx";
 
@@ -12,11 +12,17 @@ import { SectionDesSauvegardes } from "../sauvegardes/SectionDesSauvegardes.tsx"
 export function EcranDesReglages({
   client,
   choisirLeDossierDesSauvegardes,
+  restaurerUneSauvegarde,
+  quandRestauree,
   prendreLeFocus = false,
 }: {
   client: ClientDeLApi;
   /** Ouvre le dialogue de dossier de la fenêtre hôte ; absent hors de la fenêtre. */
   choisirLeDossierDesSauvegardes?: () => Promise<IssueDuChoixDuDossier>;
+  /** Demande à la fenêtre hôte de restaurer une copie ; absent hors de la fenêtre (#28). */
+  restaurerUneSauvegarde?: (copie: string, quandEnCours: () => void) => Promise<IssueDeLaRestauration>;
+  /** Une copie vient de remplacer la base (#28). */
+  quandRestauree?: (issue: "restauree" | "restaureeDepuisUneBaseAbimee", copie: CopieGardee) => void;
   /** Vrai quand l'utilisateur vient d'y être mené : son titre reçoit alors le focus. */
   prendreLeFocus?: boolean;
 }) {
@@ -34,7 +40,12 @@ export function EcranDesReglages({
       <h2 id="titre-des-reglages" ref={titre} tabIndex={-1}>
         Réglages
       </h2>
-      <SectionDesSauvegardes client={client} choisirLeDossier={choisirLeDossierDesSauvegardes} />
+      <SectionDesSauvegardes
+        client={client}
+        choisirLeDossier={choisirLeDossierDesSauvegardes}
+        restaurer={restaurerUneSauvegarde}
+        quandRestauree={quandRestauree}
+      />
       <SectionDesRelances client={client} />
     </section>
   );
