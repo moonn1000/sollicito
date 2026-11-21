@@ -75,11 +75,15 @@ public static class CopiesBrutes
     /// Pousse sur le disque ce que le système garde encore en mémoire d'un fichier : une copie d'avant doit survivre à une
     /// panne de courant pendant le remplacement qui la suit.
     /// </summary>
-    public static void ForcerSurLeDisque(string fichier)
-    {
-        using var flux = new FileStream(fichier, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
-        flux.Flush(flushToDisk: true);
-    }
+    public static Task ForcerSurLeDisqueAsync(string fichier, CancellationToken annulation) =>
+        // Repris quelques fois : un antivirus examine souvent un fichier tout juste renommé.
+        CopiesVerifiees.ReessayerAsync(
+            () =>
+            {
+                using var flux = new FileStream(fichier, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+                flux.Flush(flushToDisk: true);
+            },
+            annulation);
 
     private static async Task EffacerSiPresentAsync(string fichier)
     {

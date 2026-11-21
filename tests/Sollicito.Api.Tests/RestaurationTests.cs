@@ -294,9 +294,12 @@ public sealed class RestaurationTests : IAsyncLifetime
 
         Assert.Null(await api.Services.GetRequiredService<BrouillonsDesRelances>().PreparerAsync(relance["id"]!.GetValue<int>(), TestContext.Current.CancellationToken));
         Assert.Equal(IssueDeLaRestauration.Occupee, await api.RestaurerAsync(copie));
+        // « Sauvegarder maintenant » n'entre pas dans la porte : il attend la fin de la restauration, sans la retenir.
+        var sauvegarde = Task.Run(() => api.SauvegarderMaintenantAsync());
 
         etapes.Relacher();
         Assert.Equal(IssueDeLaRestauration.Restauree, await restauration.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
+        await sauvegarde.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         using var apres = await api.EnregistrerAsync("Après fictif", "Admis", "2026-11-05T09:00");
         Assert.Equal(HttpStatusCode.Created, apres.StatusCode);
         Assert.NotNull(await api.Services.GetRequiredService<BrouillonsDesRelances>().PreparerAsync(relance["id"]!.GetValue<int>(), TestContext.Current.CancellationToken));

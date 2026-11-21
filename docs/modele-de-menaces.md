@@ -305,7 +305,7 @@ Une copie peut venir d'un dossier partagé, où un autre poste ou une autre pers
 
 ### La porte de la base
 
-Pendant la copie d'avant et le remplacement, la porte de la base est fermée : toute route de `/api` qui touche la base répond 503, les brouillons sont refusés, et les requêtes déjà entrées finissent d'abord. Une route ajoutée plus tard y passe d'office ; seules celles marquées « sans la base » restent ouvertes : l'état de l'application, l'état des sauvegardes, le délai des relances et la documentation OpenAPI. Les copies du jour, la rotation et le choix d'un dossier attendent la fin de la restauration.
+Pendant la copie d'avant et le remplacement, la porte de la base est fermée : toute route de `/api` qui touche la base répond 503, les brouillons sont refusés, et les requêtes déjà entrées finissent d'abord. Une route ajoutée plus tard y passe d'office ; seules celles marquées « sans la base » restent ouvertes : l'état de l'application, l'état des sauvegardes, le délai des relances, la documentation OpenAPI, et les deux routes des copies (« Sauvegarder maintenant », le retour au dossier par défaut), qui attendent la fin de la restauration sous le sémaphore des copies. Les copies du jour, la rotation et le choix d'un dossier attendent la fin de la restauration.
 
 ### La base d'avant
 

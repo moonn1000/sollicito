@@ -199,7 +199,7 @@ public sealed partial class RestaurationDeLaBase(
                     etapes.Atteinte(EtapeDeLaRestauration.CopieDAvantEcrite);
                     return await CopieDeLaBase.EstSaineAsync(fichier, jeton);
                 });
-                CopiesBrutes.ForcerSurLeDisque(copieDAvant);
+                await CopiesBrutes.ForcerSurLeDisqueAsync(copieDAvant, annulation);
             }
             else
             {

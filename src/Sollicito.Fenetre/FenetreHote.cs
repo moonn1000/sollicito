@@ -196,7 +196,14 @@ internal sealed class FenetreHote : Form
         }
         else if (ReglesDeLaFenetre.DemandeLaRestauration(args.Source, args.WebMessageAsJson, _origine, out var copie))
         {
-            if (_choixEnCours || _restaurationEnCours)
+            if (_restaurationEnCours)
+            {
+                // Une seule restauration à la fois. Pas de réponse : la page qui attend la sienne recevra sa vraie issue,
+                // et une réponse ici, du même identifiant, la clorait trop tôt.
+                return;
+            }
+
+            if (_choixEnCours)
             {
                 // Un seul dialogue de l'hôte à la fois : la page apprend que Sollicito est occupé.
                 _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDeLaRestauration(copie, IssueDansLaFenetre.Occupee));
@@ -222,6 +229,11 @@ internal sealed class FenetreHote : Form
             {
                 issue = ReglesDeLaFenetre.DansLaFenetre(preparation.Refus ?? IssueDeLaRestauration.Impossible);
             }
+            else if (IsDisposed || _fermeture.IsCancellationRequested)
+            {
+                // La fenêtre s'est fermée pendant la préparation : aucun dialogue, rien ne change.
+                issue = IssueDansLaFenetre.Annulee;
+            }
             else if (!_lancement.ConfirmationDeLaRestauration.Confirmer(this, TextesDeLaRestauration.Question(demande, TimeZoneInfo.Local)))
             {
                 issue = IssueDansLaFenetre.Annulee;
@@ -242,7 +254,8 @@ internal sealed class FenetreHote : Form
         catch (Exception erreur) when (erreur is DbException or InvalidOperationException or IOException or UnauthorizedAccessException
             or ArgumentException or ExternalException)
         {
-            // Rien ne se ferme : la restauration n'a pas eu lieu, ou s'est défaite.
+            // Rien ne se ferme : la restauration n'a pas eu lieu, ou s'est défaite. ObjectDisposedException, une fenêtre
+            // fermée entre-temps, est une InvalidOperationException.
         }
         finally
         {
@@ -271,6 +284,8 @@ internal sealed class FenetreHote : Form
             return;
         }
 
+        // Une préparation en cours, avant le dialogue, s'arrête : la restauration n'aura pas lieu.
+        _fermeture.Cancel();
         base.OnFormClosing(e);
     }
 
