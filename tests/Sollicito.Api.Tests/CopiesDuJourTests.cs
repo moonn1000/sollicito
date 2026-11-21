@@ -286,7 +286,9 @@ public sealed class CopiesDuJourTests : IAsyncLifetime
             await api.AttendreLaPremiereVerificationAsync();
             copie = Path.Combine(ParDefaut, api.CopieDuJour(Le18));
             avant = File.GetLastWriteTimeUtc(copie);
-            // Un lest de 128 Mo : la copie de la fermeture dure le temps que le délai échoie pendant qu'elle écrit.
+            // Un lest de 128 Mo : la copie de la fermeture dure le temps que le délai échoie pendant qu'elle écrit, ou pendant
+            // qu'elle se vérifie sur un disque lent. Son fichier provisoire se voit pendant les deux, qui s'interrompent toutes
+            // deux : le test vaut pour l'une comme pour l'autre.
             using var connexion = Ouvrir(Base);
             connexion.Executer("CREATE TABLE Lest (Octets BLOB)");
             connexion.Executer("WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 512) INSERT INTO Lest SELECT randomblob(262144) FROM n");
@@ -306,8 +308,8 @@ public sealed class CopiesDuJourTests : IAsyncLifetime
             await Task.Delay(1, TestContext.Current.CancellationToken);
         }
 
-        // Le délai échoit en pleine écriture, puis l'horloge n'avance plus : la fermeture ne finit que si la copie s'arrête
-        // d'elle-même, son fichier provisoire retiré.
+        // Le délai échoit pendant la copie, en pleine écriture ou pendant sa vérification, puis l'horloge n'avance plus : la
+        // fermeture ne finit que si la copie s'arrête d'elle-même, son fichier provisoire retiré.
         horloge.Avancer(SauvegardesDeLaBase.DelaiDeLaCopieDeFermeture);
         await fermeture.WaitAsync(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken);
         Assert.Empty(Directory.EnumerateFiles(ParDefaut, "*.partielle"));
