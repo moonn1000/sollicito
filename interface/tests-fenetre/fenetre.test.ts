@@ -444,9 +444,14 @@ test("une relance se planifie depuis la fiche, et son brouillon passe par l'hôt
   await attendre(1_500);
   expect(await lignes(brouillons)).toHaveLength(1);
 
-  // Un champ de plus dans le message n'entre pas dans le brouillon : l'hôte le bâtit à partir de la base. La relance de
-  // ce test est la première de la base du dossier de données, neuf.
+  // Un champ de plus que le type et la relance, et rien ne s'ouvre, même pour une relance à faire : celle de ce test est
+  // la première de la base du dossier de données, neuf.
   await envoyerALHote([{ type: "ouvrirLeBrouillon", relance: 1, destinataire: "pirate@exemple.invalid", corps: "autre" }]);
+  await attendre(1_500);
+  expect(await lignes(brouillons)).toHaveLength(1);
+
+  // Réduit à sa forme, le même message rouvre le même brouillon : l'hôte le bâtit à partir de la base.
+  await envoyerALHote([{ type: "ouvrirLeBrouillon", relance: 1 }]);
   for (let essai = 1; (await lignes(brouillons)).length < 2; essai++) {
     expect(essai).toBeLessThan(80);
     await attendre(250);

@@ -55,8 +55,8 @@ internal static class ReglesDeLaFenetre
     /// <summary>
     /// Vrai si le message vient de l'interface et demande le brouillon d'une relance (#14, ADR-0011) : la fenêtre
     /// l'ouvre alors dans la messagerie de l'utilisateur. Sous le même contrôle de la source que le canal du jeton. Le
-    /// message ne porte que l'identifiant de la relance, un entier positif : un autre champ n'est jamais lu, et un message
-    /// mal formé, d'un autre type, ou sans identifiant, n'ouvre rien.
+    /// message porte son type et l'identifiant de la relance, un entier positif, et rien d'autre : un champ de plus, et
+    /// rien ne s'ouvre, pas plus que pour un message mal formé, d'un autre type, ou sans identifiant.
     /// </summary>
     public static bool DemandeLeBrouillon(string? source, string? messageEnJson, Uri origine, out int relance)
     {
@@ -67,7 +67,9 @@ internal static class ReglesDeLaFenetre
         }
 
         using var message = JsonDocument.Parse(messageEnJson!, new JsonDocumentOptions { MaxDepth = 8 });
-        return message.RootElement.TryGetProperty("relance", out var identifiant)
+        // Deux champs, dont le type et la relance : la forme est stricte, un champ répété compte aussi.
+        return message.RootElement.EnumerateObject().Count() == 2
+            && message.RootElement.TryGetProperty("relance", out var identifiant)
             && identifiant.ValueKind == JsonValueKind.Number
             && identifiant.TryGetInt32(out relance)
             && relance > 0;

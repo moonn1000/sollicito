@@ -88,13 +88,23 @@ public sealed class LienDuBrouillonTests
 
     [Theory]
     [InlineData("http://127.0.0.1:52344/", """{"type":"ouvrirLeBrouillon","relance":7}""", 7)]
-    [InlineData("http://127.0.0.1:52344/index.html", """{"type":"ouvrirLeBrouillon","relance":2147483647,"destinataire":"pirate@exemple.invalid","corps":"autre"}""", 2147483647)]
+    [InlineData("http://127.0.0.1:52344/index.html", """{"relance":2147483647,"type":"ouvrirLeBrouillon"}""", 2147483647)]
     public void L_interface_demande_le_brouillon_d_une_relance_par_son_seul_identifiant(string source, string message, int attendue)
     {
         Assert.True(ReglesDeLaFenetre.DemandeLeBrouillon(source, message, Origine, out var relance));
         Assert.Equal(attendue, relance);
         Assert.False(ReglesDeLaFenetre.DemandeLeJeton(source, message, Origine));
         Assert.False(ReglesDeLaFenetre.DemandeLeChoixDuDossier(source, message, Origine));
+    }
+
+    [Theory]
+    [InlineData("""{"type":"ouvrirLeBrouillon","relance":7,"destinataire":"pirate@exemple.invalid","corps":"autre"}""")]
+    [InlineData("""{"type":"ouvrirLeBrouillon","relance":7,"autre":null}""")]
+    [InlineData("""{"type":"ouvrirLeBrouillon","relance":7,"relance":8}""")]
+    [InlineData("""{"type":"ouvrirLeBrouillon","type":"ouvrirLeBrouillon","relance":7}""")]
+    public void Un_champ_de_plus_que_le_type_et_la_relance_n_ouvre_aucun_brouillon(string message)
+    {
+        Assert.False(ReglesDeLaFenetre.DemandeLeBrouillon("http://127.0.0.1:52344/", message, Origine, out _));
     }
 
     [Theory]
