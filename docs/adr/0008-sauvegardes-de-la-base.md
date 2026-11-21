@@ -1,8 +1,8 @@
 # ADR-0008 : sauvegardes de la base, migration sur une copie et premier réglage
 
-- **Statut** : proposée
+- **Statut** : acceptée
 - **Date** : 2026-11-20
-- **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D3 (les migrations s'appliquent à une copie de la base) et D10 (moment, rotation et dossier des sauvegardes, copies d'avant une mise à jour, réglages hors de la base) ; [ADR-0003](0003-hote-interface-webview2.md), « Durcissement de la fenêtre » (une seconde demande de la page à l'hôte, après le brouillon de relance)
+- **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D3 (les migrations s'appliquent à une copie de la base) et D10 (moment, rotation et dossier des sauvegardes, copies d'avant une mise à jour, réglages hors de la base) ; [ADR-0003](0003-hote-interface-webview2.md), « Durcissement de la fenêtre » (une seconde demande de la page à l'hôte, après le brouillon de relance) ; [ADR-0004](0004-v1-resserree-paliers.md), « Ce que livre la V1 », données (« les sept dernières » : les copies du jour des sept derniers jours d'utilisation, par installation ; « une avant chaque migration » : une par mise à jour, nommée d'après la dernière migration qui attend)
 
 ## Contexte
 
@@ -19,7 +19,7 @@ Trois faits, relevés le 2026-11-20, pèsent sur la façon de faire :
 ### Une copie par jour d'utilisation, qui suit la base jusqu'au soir
 
 - **Au lancement**, une fois la base prête, en arrière-plan : la copie du jour, si le dossier n'en a pas encore.
-- **À la fermeture**, la copie du jour est refaite : elle garde l'état de la base à la fin de la dernière séance. Elle ne retient pas la fermeture plus de dix secondes ; au-delà, elle est abandonnée, et celle d'avant reste. Elle ne se fait qu'une fois, même quand l'hôte arrête deux fois ses services (relevé sous l'hôte des tests), et chaque arrêt l'attend.
+- **À la fermeture**, la copie du jour est refaite : elle garde l'état de la base à la fin de la dernière séance. Elle ne retient pas la fermeture plus de dix secondes ; au-delà, elle est abandonnée, et celle d'avant reste. Abandonnée, elle s'interrompt et retire son fichier provisoire avant la sortie du processus, en deux secondes au plus. Un fichier resté malgré tout, qu'un autre programme tient, ou d'une copie qui ne s'est pas arrêtée à temps, se retire au lancement suivant, même si la copie du jour est déjà faite. Elle ne se fait qu'une fois, même quand l'hôte arrête deux fois ses services (relevé sous l'hôte des tests), et chaque arrêt l'attend.
 - **Chaque heure**, par une minuterie dans le processus de l'API, sans autre processus : la copie du nouveau jour d'une séance restée ouverte après minuit, et un nouvel essai après un échec.
 - **« Sauvegarder maintenant »**, et « Réessayer » dans l'alerte du tableau de bord, refont la copie du jour.
 - Le dossier garde **les sept dernières copies du jour**, soit les sept derniers jours d'utilisation.
@@ -28,7 +28,7 @@ Une copie du jour se nomme `sollicito-<installation>-<AAAA-MM-JJ>.db`. L'install
 
 ### Copier une base ouverte : `VACUUM INTO`, puis vérifier
 
-Chaque copie s'écrit par `VACUUM INTO` vers un nom provisoire du dossier de destination, se relit par `PRAGMA integrity_check`, puis prend son nom final par un renommage. `VACUUM INTO` écrit un instantané cohérent de la base, ce qui dort dans le journal WAL compris, dans un fichier autonome[^vacuum]. Son chemin passe en paramètre lié. Une copie manquée retire son fichier provisoire, et la rotation n'efface une ancienne copie qu'après une nouvelle copie vérifiée. Une opération sur un fichier qu'un autre programme tient un instant, comme un antivirus qui examine un fichier tout juste écrit, se reprend quelques fois. Les appels de SQLite ne rendent la main qu'une fois finis : la copie de la fermeture tourne donc sur un autre fil, pour que son délai de dix secondes coure dès son début.
+Chaque copie s'écrit par `VACUUM INTO` vers un nom provisoire du dossier de destination, se relit par `PRAGMA integrity_check`, puis prend son nom final par un renommage. `VACUUM INTO` écrit un instantané cohérent de la base, ce qui dort dans le journal WAL compris, dans un fichier autonome[^vacuum]. Son chemin passe en paramètre lié. Une copie manquée retire son fichier provisoire, et la rotation n'efface une ancienne copie qu'après une nouvelle copie vérifiée. Une opération sur un fichier qu'un autre programme tient un instant, comme un antivirus qui examine un fichier tout juste écrit, se reprend quelques fois. Les appels de SQLite ne rendent la main qu'une fois finis : la copie de la fermeture tourne donc sur un autre fil, pour que son délai de dix secondes coure dès son début. Ils ne regardent pas non plus l'annulation. Une copie annulée s'interrompt donc par `sqlite3_interrupt`[^interrupt] en pleine écriture. Une base qu'une autre connexion occupe se réessaie jusqu'à trente secondes, le délai que `Microsoft.Data.Sqlite` donne d'office à une commande, mais par tranches d'une seconde : ses propres essais ne regardent pas l'annulation, qui se voit entre deux tranches.
 
 Le 2026-11-20, une sonde sur le SQLite de Python (3.50.4), puis les tests d'intégration sur celui de `Microsoft.Data.Sqlite` (3.53.3), l'ont vérifié. La copie emporte une ligne validée restée dans le WAL, et laisse une écriture non validée. Le fichier obtenu, en journal `delete`, se relit sain.
 
@@ -41,6 +41,8 @@ Au lancement, quand des migrations attendent sur une base existante :
 3. **La copie migrée remplace le contenu de la base** par l'API de sauvegarde de SQLite[^sauvegarde][^backupdatabase], en une transaction de la base, qui garde son mode WAL : aucun renommage qu'un antivirus pourrait bloquer, aucun journal laissé à côté de la base qui serait rejoué sur un autre fichier.
 
 Avant la troisième étape, la base n'est jamais écrite. Une migration qui échoue, ou un arrêt brutal, la laisse telle qu'avant, et la version précédente de Sollicito l'ouvre toujours. Le lancement s'arrête alors sur un message pour l'utilisateur, sans chemin : la base n'a pas changé, et une copie en a été faite dans `%LOCALAPPDATA%\Sollicito\Sauvegardes`, écrit en toutes lettres. Sans migration en attente, ni copie ni attente. Sollicito ne lance jamais `Down()` : revenir à une version précédente passe par la copie d'avant la mise à jour, que #28 saura restaurer.
+
+La seconde copie pèse autant que la base, et son nom porte une marque tirée au hasard : `sollicito.db.<marque>.migration`. Celle qu'un arrêt brutal a laissée, et son journal, se retirent au lancement suivant, sous le verrou du dossier, avant toute mise à jour, comme les fichiers provisoires de `reglages.json` et de `sauvegardes.json`. La base et ses journaux n'y répondent jamais.
 
 **La base se crée en mode WAL** : une base neuve n'a ni verrou abandonné ni rien à copier, et les migrations la créent elles-mêmes. Une base créée avant #26, restée en mode `delete`, passe en WAL au lancement suivant. Le mode WAL ne vaut pas sur un système de fichiers en réseau[^wal] : la base vit dans `%LOCALAPPDATA%`, et une copie, en journal `delete`, peut aller sur un partage. La version embarquée de SQLite (3.53.3) corrige le défaut de remise à zéro du WAL décrit par SQLite, présent jusqu'à la 3.51.2[^wal].
 
@@ -65,7 +67,7 @@ Un fichier absent vaut des réglages par défaut. Un fichier illisible n'arrête
 
 ### Un dossier qui manque : ni copie, ni repli
 
-Si le dossier choisi manque (clé retirée, partage débranché), Sollicito ne fait aucune copie, n'en efface aucune, et ne se replie pas ailleurs. Il ne recrée jamais le dossier : une autre clé a pu prendre la même lettre. Le tableau de bord affiche une alerte : depuis quand aucune copie n'a réussi, et quoi faire. L'instant de la dernière copie réussie se garde dans `sauvegardes.json`, à côté des réglages, sans chemin : relancé alors que le dossier manque, Sollicito le dit encore. Sollicito réessaie chaque heure, à la fermeture, au lancement suivant et sur « Réessayer » ; l'alerte part dès qu'une copie réussit. Elle se lit dans l'état que l'API tient en mémoire, sans toucher au dossier, qu'un partage débranché pourrait bloquer plusieurs secondes.
+Si le dossier choisi manque (clé retirée, partage débranché), Sollicito ne fait aucune copie, n'en efface aucune, et ne se replie pas ailleurs. Il ne recrée jamais le dossier : une autre clé a pu prendre la même lettre. Le tableau de bord affiche une alerte : depuis quand aucune copie n'a réussi, et quoi faire. L'instant de la dernière copie réussie se garde dans `sauvegardes.json`, à côté des réglages, sans chemin : relancé alors que le dossier manque, Sollicito le dit encore. Sollicito réessaie chaque heure, à la fermeture, au lancement suivant et sur « Réessayer » ; l'alerte part dès qu'une copie réussit. Elle se lit dans l'état que l'API tient en mémoire, sans toucher au dossier, qu'un partage débranché pourrait bloquer plusieurs secondes. Le tableau de bord relit cet état toutes les trente secondes tant qu'il est affiché, et chaque seconde pendant la vérification du lancement : l'alerte vient et part sans qu'on change d'écran, et l'état lu remplace l'ancien sans rien effacer entre-temps. Une relecture partie avant un « Réessayer » réussi ne la ramène pas.
 
 ### La restauration attend #28
 
@@ -92,7 +94,7 @@ Aucun journal ne cite le dossier de données, le dossier des sauvegardes ni une 
 - **Positives** : une copie par jour, qui garde la fin de la séance ; aucune mise à jour qui laisse une base à moitié migrée ; un dossier que seul l'utilisateur choisit ; des copies d'un poste que la rotation d'un autre ne touche pas ; une base en mode WAL, comme EF Core la crée ; un fichier de réglages prêt pour #14 et #43.
 - **Négatives** :
   - les copies ne sont pas chiffrées : toute personne qui accède à leur dossier les lit, et une clé formatée en FAT32 ou exFAT n'a pas de permissions (#51 étudiera le chiffrement) ;
-  - une copie de fermeture abandonnée continue jusqu'à la fin du processus ;
+  - une copie de fermeture abandonnée qui ne s'arrête pas en deux secondes, ou dont le fichier provisoire ne s'efface pas, le laisse jusqu'au lancement suivant ;
   - une séance qui se termine par un arrêt brutal ne refait pas la copie du jour : la copie du lancement reste ;
   - les copies d'avant une mise à jour restent sur le disque de la base, quel que soit le dossier choisi ;
   - un fichier de réglages perdu fait revenir au dossier par défaut sans alerte, et le dossier choisi ne reçoit plus de copie ;
@@ -101,7 +103,6 @@ Aucun journal ne cite le dossier de données, le dossier des sauvegardes ni une 
 ## À vérifier
 
 - **Dialogue de Windows** : le dialogue de la version publiée ne se pilote pas par le protocole CDP ; la version de test le remplace par un dossier écrit dans un fichier. À vérifier à la main sur l'exe publié : le dialogue s'ouvre sur le dossier courant, admet un dossier en réseau, et son annulation ne change rien.
-- **Annulation des appels de SQLite** : une copie bloquée sur une base occupée attend le délai des commandes de SQLite. La fermeture ne l'attend pas au-delà de dix secondes, mais la copie, elle, ne s'interrompt pas.
 
 ## Sources
 
@@ -109,12 +110,14 @@ Aucun journal ne cite le dossier de données, le dossier des sauvegardes ni une 
 - [ADR-0001](0001-cadrage-architecture-v1.md), D3 et D10 ; [ADR-0004](0004-v1-resserree-paliers.md), « Ce que livre la V1 » et « Paliers »
 - Constats de #25, point 1 (`Down()` de `CorrectionsDesEtapes`) : <https://github.com/moonn1000/sollicito/issues/85>
 - Relevés du 2026-11-20 : chaîne `PRAGMA journal_mode = 'wal';` dans `Microsoft.EntityFrameworkCore.Sqlite.dll` 10.0.15 ; version 3.53.3 (source du 2026-06-26) dans `e_sqlite3.dll` de `SQLitePCLRaw.lib.e_sqlite3` 2.1.13 ; mode `delete` de la base créée par `main`
+- Relevé du 2026-11-21 : `Microsoft.Data.Sqlite` (dépôt `dotnet/efcore`, branche `release/10.0`, `SqliteDataReader.cs` et `SqliteCommand.cs`) réessaie une base occupée par `Thread.Sleep(150)` jusqu'au délai de la commande, trente secondes d'office, sans regarder l'annulation, que ses méthodes asynchrones ne lisent qu'au départ
 
 Consultées le 2026-11-20 :
 
 [^vacuum]: SQLite, `VACUUM INTO` (instantané cohérent, nom en expression, fichier cible absent ou vide, sortie incomplète si interrompue) : <https://www.sqlite.org/lang_vacuum.html>
 [^sauvegarde]: SQLite, API de sauvegarde en ligne : <https://www.sqlite.org/backup.html>
 [^backupdatabase]: Microsoft Learn, `Microsoft.Data.Sqlite`, sauvegarde par `BackupDatabase` : <https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/backup>
+[^interrupt]: SQLite, `sqlite3_interrupt()` (s'appelle d'un autre fil, sur une connexion qui ne se ferme pas avant son retour ; sans instruction en cours, il est sans effet), consultée le 2026-11-21 : <https://www.sqlite.org/c3ref/interrupt.html>
 [^wal]: SQLite, mode WAL (persistant ; dernière connexion qui reprend et efface le journal ; pas de système de fichiers en réseau ; défaut de remise à zéro du WAL, versions 3.7.0 à 3.51.2) : <https://www.sqlite.org/wal.html>
 [^dialogue]: Microsoft Learn, `FolderBrowserDialog` : <https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.folderbrowserdialog>
 [^service]: Microsoft Learn, .NET 6, exception non gérée d'un `BackgroundService` (écrite au journal, hôte arrêté par défaut) : <https://learn.microsoft.com/en-us/dotnet/core/compatibility/core-libraries/6.0/hosting-exception-handling>
