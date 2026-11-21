@@ -58,7 +58,7 @@ Ces deux derniers échanges ne viennent pas du code de Sollicito : le runtime, p
 - Monolithe modulaire en Clean Architecture : Candidatures, Offres et connecteurs, Relances, IA ; le module Profil arrive en V2.
 - Des connecteurs d'offres branchés derrière une interface unique (ports et adaptateurs) : ajouter une source ne touche pas au cœur de l'application. La V1 en a deux : le texte collé et le fichier CSV.
 
-L'architecture de la V1 sera documentée en UML dans `docs/` au fil des paliers, avec son modèle de menaces. Les décisions et leurs raisons : [docs/adr](docs/adr/README.md).
+L'architecture de la V1 est documentée en UML dans [docs/](docs/README.md), au fil des paliers, avec son modèle de menaces. Les décisions et leurs raisons : [docs/adr](docs/adr/README.md).
 
 ## Construire et tester
 
