@@ -124,6 +124,85 @@ export function demanderLeBrouillon(
   });
 }
 
+/**
+ * L'issue de la restauration d'une copie (#28), telle que l'hôte la rend : restaurée (sa copie d'avant se restaure, ou,
+ * d'une base abîmée, n'est qu'une copie brute), annulée dans le dialogue, ou le motif du refus. Seule une issue
+ * « restauree… » a changé la base.
+ */
+export type IssueDeLaRestauration =
+  | "restauree"
+  | "restaureeDepuisUneBaseAbimee"
+  | "annulee"
+  | "abimee"
+  | "etrangere"
+  | "plusRecente"
+  | "introuvable"
+  | "changee"
+  | "baseChangee"
+  | "occupee"
+  | "copieDAvantImpossible"
+  | "impossible";
+
+const ISSUES_DE_LA_RESTAURATION: readonly IssueDeLaRestauration[] = [
+  "restauree",
+  "restaureeDepuisUneBaseAbimee",
+  "annulee",
+  "abimee",
+  "etrangere",
+  "plusRecente",
+  "introuvable",
+  "changee",
+  "baseChangee",
+  "occupee",
+  "copieDAvantImpossible",
+  "impossible",
+];
+
+// Seize caractères hexadécimaux en minuscules : la forme de l'identifiant d'une copie.
+const FORME_D_UNE_COPIE = /^[0-9a-f]{16}$/;
+
+/**
+ * Demande à l'hôte de restaurer une copie gardée, désignée par son seul identifiant, jamais par un chemin (#28,
+ * ADR-0012). L'hôte demande lui-même le oui de l'utilisateur dans son dialogue, puis signale que la restauration est en
+ * cours (`quandEnCours`), puis rend son issue. Pas de délai : l'utilisateur prend le temps qu'il veut dans le dialogue.
+ * Une réponse d'une autre forme, ou pour une autre copie, est ignorée.
+ */
+export function demanderLaRestauration(canal: CanalDeLHote, copie: string, quandEnCours?: () => void): Promise<IssueDeLaRestauration> {
+  if (!FORME_D_UNE_COPIE.test(copie)) {
+    return Promise.reject(new RangeError("L'identifiant d'une copie tient en seize caractères hexadécimaux."));
+  }
+
+  return new Promise((resoudre) => {
+    const ecouter = (evenement: MessageEvent) => {
+      const issue = lireLIssueDeLaRestauration(evenement.data, copie);
+      if (issue === "enCours") {
+        quandEnCours?.();
+      } else if (issue !== undefined) {
+        canal.removeEventListener("message", ecouter);
+        resoudre(issue);
+      }
+    };
+
+    canal.addEventListener("message", ecouter);
+    canal.postMessage({ type: "restaurerUneSauvegarde", copie });
+  });
+}
+
+function lireLIssueDeLaRestauration(message: unknown, copieAttendue: string): IssueDeLaRestauration | "enCours" | undefined {
+  if (typeof message !== "object" || message === null) {
+    return undefined;
+  }
+
+  const { type, copie, issue } = message as { type?: unknown; copie?: unknown; issue?: unknown };
+  if (type !== "restauration" || copie !== copieAttendue) {
+    return undefined;
+  }
+
+  return issue === "enCours" || ISSUES_DE_LA_RESTAURATION.includes(issue as IssueDeLaRestauration)
+    ? (issue as IssueDeLaRestauration | "enCours")
+    : undefined;
+}
+
 function lireLIssueDuBrouillon(message: unknown, relanceAttendue: number): IssueDuBrouillon | undefined {
   if (typeof message !== "object" || message === null) {
     return undefined;

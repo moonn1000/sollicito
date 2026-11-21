@@ -39,7 +39,7 @@ internal static class Program
             }
 
             Directory.CreateDirectory(lancement.DossierDeDonnees);
-            api = ApiLocale.ConstruirePourLaFenetre(fichiers, lancement.DossierDeDonnees);
+            api = ApiLocale.ConstruirePourLaFenetre(fichiers, lancement.DossierDeDonnees, lancement.EtapesDeLaRestauration);
             api.StartAsync().GetAwaiter().GetResult();
         }
         catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -56,7 +56,8 @@ internal static class Program
             var jeton = api.Services.GetRequiredService<JetonDeLancement>();
             var sauvegardes = api.Services.GetRequiredService<SauvegardesDeLaBase>();
             var brouillons = api.Services.GetRequiredService<BrouillonsDesRelances>();
-            using var fenetre = new FenetreHote(origine, jeton, lancement, sauvegardes, brouillons);
+            var restauration = api.Services.GetRequiredService<RestaurationDeLaBase>();
+            using var fenetre = new FenetreHote(origine, jeton, lancement, sauvegardes, brouillons, restauration);
             System.Windows.Forms.Application.Run(fenetre);
             return fenetre.CodeDeSortie;
         }

@@ -23,6 +23,8 @@ DataProtection-Keys/
 *.sqlite3-*
 *.bak
 /data/
+# Sauf la copie de référence de la restauration (#28) : données fictives, figée dans les tests.
+!/tests/Sollicito.Api.Tests/Reference/copie-de-reference-28.db
 /backups/
 /exports/
 

@@ -8,6 +8,8 @@ namespace Sollicito.Fenetre;
 /// <param name="NoterUneNavigationAnnulee">Ce qui note chaque navigation annulée ; rien dans la version publiée.</param>
 /// <param name="ChoixDUnDossier">Ce qui fait choisir le dossier des sauvegardes : le dialogue de Windows dans la version publiée.</param>
 /// <param name="OuvreurDeBrouillons">Ce qui ouvre le brouillon d'une relance : la messagerie par défaut dans la version publiée.</param>
+/// <param name="ConfirmationDeLaRestauration">Ce qui demande le oui d'une restauration : le dialogue de Windows dans la version publiée (#28).</param>
+/// <param name="EtapesDeLaRestauration">Ce qui voit passer les étapes d'une restauration : rien dans la version publiée.</param>
 internal sealed record Lancement(
     string DossierDeDonnees,
     string? ArgumentsDuNavigateur,
@@ -15,7 +17,9 @@ internal sealed record Lancement(
     string? DossierDesTelechargements,
     Action<string>? NoterUneNavigationAnnulee,
     IChoixDUnDossier ChoixDUnDossier,
-    IOuvreurDeBrouillons OuvreurDeBrouillons)
+    IOuvreurDeBrouillons OuvreurDeBrouillons,
+    IConfirmationDeLaRestauration ConfirmationDeLaRestauration,
+    Api.Sauvegardes.IEtapesDeLaRestauration? EtapesDeLaRestauration)
 {
     /// <summary>Le lancement de cet exe.</summary>
     public static Lancement Lire()
@@ -30,7 +34,9 @@ internal sealed record Lancement(
             DossierDesTelechargements: null,
             NoterUneNavigationAnnulee: null,
             new ChoixParLeDialogue(),
-            new OuvreurDeBrouillonsParLeShell());
+            new OuvreurDeBrouillonsParLeShell(),
+            new ConfirmationParLeDialogue(),
+            EtapesDeLaRestauration: null);
 #endif
     }
 }

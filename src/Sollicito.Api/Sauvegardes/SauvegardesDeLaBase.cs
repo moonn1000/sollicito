@@ -325,14 +325,82 @@ public sealed partial class SauvegardesDeLaBase
             Path.TrimEndingDirectorySeparator(_base.DossierDesSauvegardes),
             StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Mène une restauration seule (#28) : aucune copie du jour, aucune rotation, aucun choix de dossier ni aucune copie de
+    /// fermeture ne passe pendant elle. Rend <see cref="IssueDeLaRestauration.Occupee"/> si une autre opération sur les
+    /// copies ne laisse pas la place dans <paramref name="attente"/>. L'état se republie après elle, copie d'avant
+    /// comprise.
+    /// </summary>
+    internal async Task<IssueDeLaRestauration> RestaurerSeuleAsync(Func<Task<IssueDeLaRestauration>> restauration, TimeSpan attente, CancellationToken annulation)
+    {
+        if (!await _uneALaFois.WaitAsync(attente, annulation))
+        {
+            return IssueDeLaRestauration.Occupee;
+        }
+
+        try
+        {
+            Charger();
+            return await restauration();
+        }
+        finally
+        {
+            try
+            {
+                await PublierAsync();
+            }
+            finally
+            {
+                _uneALaFois.Release();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Le chemin de la copie que l'utilisateur a choisie, relue sur le disque : elle doit porter encore le nom et l'instant
+    /// que la liste montrait, donc le même identifiant. Sinon, le motif du refus : introuvable, ou changée. À n'appeler
+    /// que pendant <see cref="RestaurerSeuleAsync"/>.
+    /// </summary>
+    internal (string? Chemin, IssueDeLaRestauration? Refus) RetrouverLaCopie(DemandeDeRestauration demande)
+    {
+        ArgumentNullException.ThrowIfNull(demande);
+        if (NomsDesCopies.Lire(demande.Nom) is null)
+        {
+            return (null, IssueDeLaRestauration.Introuvable);
+        }
+
+        var dossier = demande.Lieu == LieuDUneCopie.DossierParDefaut ? _base.DossierDesSauvegardes : DossierDesCopies;
+        var chemin = Path.Combine(dossier, demande.Nom);
+        DateTime faiteLe;
+        try
+        {
+            if (!File.Exists(chemin))
+            {
+                return (null, IssueDeLaRestauration.Introuvable);
+            }
+
+            faiteLe = DateTime.SpecifyKind(File.GetLastWriteTimeUtc(chemin), DateTimeKind.Utc);
+        }
+        catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException)
+        {
+            return (null, IssueDeLaRestauration.Introuvable);
+        }
+
+        return IdentifiantsDesCopies.De(demande.Lieu, demande.Nom, faiteLe) == demande.Copie
+            ? (chemin, null)
+            : (null, IssueDeLaRestauration.Changee);
+    }
+
     // Relit les copies gardées, puis publie l'état. Un dossier qui ne se lit plus garde la date de la dernière copie
-    // réussie, que sauvegardes.json garde aussi d'une séance à l'autre.
+    // réussie, que sauvegardes.json garde aussi d'une séance à l'autre. Toutes les copies de Sollicito des deux dossiers se
+    // listent, pour la restauration (#28) ; la dernière copie ne compte que les copies du jour de cette installation, dans
+    // le dossier des copies.
     private async Task<EtatDesSauvegardes> PublierAsync()
     {
         var copies = new List<CopieGardee>();
         var dossier = DossierDesCopies;
         var noms = LireLesNoms(dossier);
-        copies.AddRange(Garder(dossier, PlanDesCopies.CopiesDuJour(noms ?? [], _installation), SorteDeCopie.DuJour));
+        copies.AddRange(Garder(dossier, PlanDesCopies.CopiesDuJour(noms ?? [], _installation), SorteDeCopie.DuJour, LieuDUneCopie.DossierDesCopies));
         if (copies.Select(copie => (DateTime?)copie.FaiteLe).Max() is { } lue && lue != _derniereCopie)
         {
             _derniereCopie = lue;
@@ -347,7 +415,25 @@ public sealed partial class SauvegardesDeLaBase
             }
         }
 
-        copies.AddRange(Garder(_base.DossierDesSauvegardes, PlanDesCopies.CopiesDAvantUneMiseAJour(LireLesNoms(_base.DossierDesSauvegardes) ?? []), SorteDeCopie.AvantMiseAJour));
+        copies.AddRange(Garder(dossier, PlanDesCopies.CopiesDuJourDesAutresInstallations(noms ?? [], _installation), SorteDeCopie.DuJourDUneAutreInstallation, LieuDUneCopie.DossierDesCopies));
+        var parDefaut = _base.DossierDesSauvegardes;
+        var lieuParDefaut = LieuDUneCopie.DossierDesCopies;
+        var nomsParDefaut = noms;
+        if (_dossierChoisi is not null)
+        {
+            // Un autre dossier est choisi. Il peut garder lui aussi des copies d'avant : le dossier des sauvegardes d'une
+            // installation d'avant, recopié sur une clé, par exemple. Celui par défaut garde les copies d'avant de cette
+            // installation, et les copies du jour d'avant le choix.
+            copies.AddRange(Garder(dossier, PlanDesCopies.CopiesDAvantUneRestauration(noms ?? []), SorteDeCopie.AvantRestauration, LieuDUneCopie.DossierDesCopies));
+            copies.AddRange(Garder(dossier, PlanDesCopies.CopiesDAvantUneMiseAJour(noms ?? []), SorteDeCopie.AvantMiseAJour, LieuDUneCopie.DossierDesCopies));
+            lieuParDefaut = LieuDUneCopie.DossierParDefaut;
+            nomsParDefaut = LireLesNoms(parDefaut);
+            copies.AddRange(Garder(parDefaut, PlanDesCopies.CopiesDuJour(nomsParDefaut ?? [], _installation), SorteDeCopie.DuJour, lieuParDefaut));
+            copies.AddRange(Garder(parDefaut, PlanDesCopies.CopiesDuJourDesAutresInstallations(nomsParDefaut ?? [], _installation), SorteDeCopie.DuJourDUneAutreInstallation, lieuParDefaut));
+        }
+
+        copies.AddRange(Garder(parDefaut, PlanDesCopies.CopiesDAvantUneRestauration(nomsParDefaut ?? []), SorteDeCopie.AvantRestauration, lieuParDefaut));
+        copies.AddRange(Garder(parDefaut, PlanDesCopies.CopiesDAvantUneMiseAJour(nomsParDefaut ?? []), SorteDeCopie.AvantMiseAJour, lieuParDefaut));
         var etat = new EtatDesSauvegardes(
             dossier,
             ParDefaut: _dossierChoisi is null,
@@ -361,7 +447,7 @@ public sealed partial class SauvegardesDeLaBase
         return etat;
     }
 
-    private static IEnumerable<CopieGardee> Garder(string dossier, IEnumerable<CopieNommee> copies, SorteDeCopie sorte)
+    private static IEnumerable<CopieGardee> Garder(string dossier, IEnumerable<CopieNommee> copies, SorteDeCopie sorte, LieuDUneCopie lieu)
     {
         foreach (var copie in copies)
         {
@@ -378,7 +464,8 @@ public sealed partial class SauvegardesDeLaBase
             // Une copie effacée entre la lecture du dossier et celle de sa date rend le 1er janvier 1601 : elle n'est plus.
             if (faiteLe > DateTime.FromFileTimeUtc(0))
             {
-                yield return new CopieGardee(copie.Nom, sorte, DateTime.SpecifyKind(faiteLe, DateTimeKind.Utc));
+                var instant = DateTime.SpecifyKind(faiteLe, DateTimeKind.Utc);
+                yield return new CopieGardee(copie.Nom, sorte, instant, lieu, IdentifiantsDesCopies.De(lieu, copie.Nom, instant));
             }
         }
     }

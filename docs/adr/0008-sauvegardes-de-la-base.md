@@ -1,6 +1,6 @@
 # ADR-0008 : sauvegardes de la base, migration sur une copie et premier réglage
 
-- **Statut** : acceptée ; « Le premier réglage de l'application, hors de la base » précisé par l'[ADR-0011](0011-relances-et-brouillon.md) (le délai des relances, second réglage, lu et écrit à part)
+- **Statut** : acceptée ; « Le premier réglage de l'application, hors de la base » précisé par l'[ADR-0011](0011-relances-et-brouillon.md) (le délai des relances, second réglage, lu et écrit à part) ; « La restauration attend #28 », la liste des copies, les restes d'un arrêt, et « Avant la troisième étape, la base n'est jamais écrite » (hors retrait d'un verrou des migrations abandonné) précisés par l'[ADR-0012](0012-restauration-d-une-sauvegarde.md), qui fait aussi avancer la troisième étape par tranches
 - **Date** : 2026-11-20
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D3 (les migrations s'appliquent à une copie de la base) et D10 (moment, rotation et dossier des sauvegardes, copies d'avant une mise à jour, réglages hors de la base) ; [ADR-0003](0003-hote-interface-webview2.md), « Durcissement de la fenêtre » (une seconde demande de la page à l'hôte, après le brouillon de relance) ; [ADR-0004](0004-v1-resserree-paliers.md), « Ce que livre la V1 », données (« les sept dernières » : les copies du jour des sept derniers jours d'utilisation, par installation ; « une avant chaque migration » : une par mise à jour, nommée d'après la dernière migration qui attend)
 
@@ -38,7 +38,7 @@ Au lancement, quand des migrations attendent sur une base existante :
 
 1. **La copie d'avant**, vérifiée, dans le dossier par défaut, sur le disque de la base : une mise à jour n'attend jamais un support amovible. Elle se nomme `sollicito-avant-<migration>.db`, d'après la dernière migration qui attend. Les copies d'avant se gardent toutes, à part des sept copies du jour, une par mise à jour. Un nouvel essai de la même mise à jour remplace la sienne, car la base a pu changer entre deux essais.
 2. **Les migrations s'appliquent à une seconde copie**, dans le dossier de données, qui se vérifie à son tour.
-3. **La copie migrée remplace le contenu de la base** par l'API de sauvegarde de SQLite[^sauvegarde][^backupdatabase], en une transaction de la base, qui garde son mode WAL : aucun renommage qu'un antivirus pourrait bloquer, aucun journal laissé à côté de la base qui serait rejoué sur un autre fichier.
+3. **La copie migrée remplace le contenu de la base** par l'API de sauvegarde de SQLite[^sauvegarde][^backupdatabase], en une transaction de la base, qui garde son mode WAL : aucun renommage qu'un antivirus pourrait bloquer, aucun journal laissé à côté de la base qui serait rejoué sur un autre fichier. Depuis #28, ce pas avance par tranches de huit pages, toujours en une seule transaction, qui ne se valide qu'à la dernière ([ADR-0012](0012-restauration-d-une-sauvegarde.md)).
 
 Avant la troisième étape, la base n'est jamais écrite. Une migration qui échoue, ou un arrêt brutal, la laisse telle qu'avant, et la version précédente de Sollicito l'ouvre toujours. Le lancement s'arrête alors sur un message pour l'utilisateur, sans chemin : la base n'a pas changé, et une copie en a été faite dans `%LOCALAPPDATA%\Sollicito\Sauvegardes`, écrit en toutes lettres. Sans migration en attente, ni copie ni attente. Sollicito ne lance jamais `Down()` : revenir à une version précédente passe par la copie d'avant la mise à jour, que #28 saura restaurer.
 
@@ -116,7 +116,7 @@ Consultées le 2026-11-20 :
 
 [^vacuum]: SQLite, `VACUUM INTO` (instantané cohérent, nom en expression, fichier cible absent ou vide, sortie incomplète si interrompue) : <https://www.sqlite.org/lang_vacuum.html>
 [^sauvegarde]: SQLite, API de sauvegarde en ligne : <https://www.sqlite.org/backup.html>
-[^backupdatabase]: Microsoft Learn, `Microsoft.Data.Sqlite`, sauvegarde par `BackupDatabase` : <https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/backup>
+[^backupdatabase]: Microsoft Learn, `Microsoft.Data.Sqlite`, sauvegarde par `BackupDatabase` : <https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/backup>. Depuis #28, `CopieDeLaBase.RemplacerAsync` n'appelle plus `BackupDatabase`, qui copie tout en un pas, mais `sqlite3_backup_step` par tranches de huit pages, la même API de SQLite : un arrêt pendant le remplacement s'essaie entre deux tranches ([ADR-0012](0012-restauration-d-une-sauvegarde.md), « Dans l'ordre », 6).
 [^interrupt]: SQLite, `sqlite3_interrupt()` (s'appelle d'un autre fil, sur une connexion qui ne se ferme pas avant son retour ; sans instruction en cours, il est sans effet), consultée le 2026-11-21 : <https://www.sqlite.org/c3ref/interrupt.html>
 [^wal]: SQLite, mode WAL (persistant ; dernière connexion qui reprend et efface le journal ; pas de système de fichiers en réseau ; défaut de remise à zéro du WAL, versions 3.7.0 à 3.51.2) : <https://www.sqlite.org/wal.html>
 [^dialogue]: Microsoft Learn, `FolderBrowserDialog` : <https://learn.microsoft.com/en-us/dotnet/api/system.windows.forms.folderbrowserdialog>

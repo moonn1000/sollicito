@@ -1,5 +1,6 @@
 #if VERSION_DE_TEST
 using System.Globalization;
+using Sollicito.Application.Sauvegardes;
 
 namespace Sollicito.Fenetre;
 
@@ -19,18 +20,26 @@ namespace Sollicito.Fenetre;
 /// <item>le dialogue de dossier des sauvegardes remplacé par le dossier que le test écrit dans un fichier de ce
 /// dossier, sans dialogue (#26) ; sans ce fichier, le choix est annulé ;</item>
 /// <item>le lien <c>mailto</c> du brouillon d'une relance noté dans un fichier de ce dossier au lieu d'être ouvert dans
-/// la messagerie (#14).</item>
+/// la messagerie (#14) ;</item>
+/// <item>le dialogue de la restauration remplacé par un fichier de ce dossier (#28) : il vaut le oui s'il contient
+/// « restaurer » ; sans lui, la restauration est annulée. La question du dialogue est notée dans un autre fichier ;</item>
+/// <item>un point d'arrêt de la restauration (#28) : à l'étape que donne une variable d'environnement, la restauration
+/// écrit un fichier de ce dossier, puis attend que le test tue le processus, pour essayer un arrêt brutal.</item>
 /// </list>
 /// </summary>
 internal static class VersionDeTest
 {
     public const string VariableDuDossierDeDonnees = "SOLLICITO_TEST_DOSSIER_DONNEES";
     public const string VariableDuPortCdp = "SOLLICITO_TEST_PORT_CDP";
+    public const string VariableDeLArretDeLaRestauration = "SOLLICITO_TEST_ARRET_RESTAURATION";
     public const string FichierDesLiensOuverts = "liens-ouverts.txt";
     public const string FichierDesNavigationsAnnulees = "navigations-annulees.txt";
     public const string DossierDesTelechargements = "telechargements";
     public const string FichierDuDossierAChoisir = "dossier-a-choisir.txt";
     public const string FichierDesBrouillonsOuverts = "brouillons-ouverts.txt";
+    public const string FichierDeLaConfirmation = "restauration-a-confirmer.txt";
+    public const string FichierDesRestaurationsDemandees = "restaurations-demandees.txt";
+    public const string FichierDeLArret = "restauration-arretee.txt";
 
     public static Lancement Lancement()
     {
@@ -56,7 +65,45 @@ internal static class VersionDeTest
             Path.Combine(dossier, DossierDesTelechargements),
             adresse => File.AppendAllText(navigationsAnnulees, adresse + Environment.NewLine),
             new ChoixLuDansUnFichier(Path.Combine(dossier, FichierDuDossierAChoisir)),
-            new JournalDesBrouillons(Path.Combine(dossier, FichierDesBrouillonsOuverts)));
+            new JournalDesBrouillons(Path.Combine(dossier, FichierDesBrouillonsOuverts)),
+            new ConfirmationLueDansUnFichier(Path.Combine(dossier, FichierDeLaConfirmation), Path.Combine(dossier, FichierDesRestaurationsDemandees)),
+            EtapesArreteesParLeTest.Lire(Environment.GetEnvironmentVariable(VariableDeLArretDeLaRestauration), Path.Combine(dossier, FichierDeLArret)));
+    }
+
+    /// <summary>
+    /// Le oui de la restauration, lu dans le fichier que le test écrit ; sans lui, la restauration est annulée. La question
+    /// du dialogue est notée, une ligne pour le titre et une pour le texte, pour que le test vérifie la date et la perte.
+    /// </summary>
+    private sealed class ConfirmationLueDansUnFichier(string reponse, string questions) : IConfirmationDeLaRestauration
+    {
+        public bool Confirmer(IWin32Window proprietaire, QuestionDeRestauration question)
+        {
+            File.AppendAllText(questions, question.Titre + Environment.NewLine + question.Texte.ReplaceLineEndings(" ") + Environment.NewLine);
+            return File.Exists(reponse) && File.ReadAllText(reponse).Trim() == "restaurer";
+        }
+    }
+
+    /// <summary>
+    /// Le point d'arrêt de la restauration : à l'étape donnée, écrit son nom dans un fichier, puis attend sans fin, sur le
+    /// fil de la restauration ; le test tue alors le processus par son PID. Sans étape valide, rien ne s'arrête.
+    /// </summary>
+    private sealed class EtapesArreteesParLeTest(EtapeDeLaRestauration arret, string fichier) : Api.Sauvegardes.IEtapesDeLaRestauration
+    {
+        public static Api.Sauvegardes.IEtapesDeLaRestauration? Lire(string? etape, string fichier) =>
+            Enum.TryParse<EtapeDeLaRestauration>(etape, ignoreCase: false, out var arret) && Enum.IsDefined(arret)
+                ? new EtapesArreteesParLeTest(arret, fichier)
+                : null;
+
+        public void Atteinte(EtapeDeLaRestauration etape)
+        {
+            if (etape != arret)
+            {
+                return;
+            }
+
+            File.WriteAllText(fichier, etape.ToString());
+            Thread.Sleep(Timeout.Infinite);
+        }
     }
 
     /// <summary>Note chaque lien que la version publiée ouvrirait dans le navigateur par défaut.</summary>

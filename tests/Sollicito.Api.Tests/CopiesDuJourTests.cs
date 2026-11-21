@@ -1,3 +1,4 @@
+using System.Net;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Data.Sqlite;
@@ -340,6 +341,21 @@ public sealed class CopiesDuJourTests : IAsyncLifetime
             // Celui d'une autre installation reste : il n'est pas à ce poste.
             Assert.True(File.Exists(autre));
         }
+    }
+
+    [Fact]
+    public async Task Un_lancement_qui_echoue_apres_le_demarrage_des_copies_ne_laisse_aucune_copie()
+    {
+        // Une écoute de trop fait échouer le lancement une fois tous les services démarrés, celui des copies compris
+        // (EcouteDeLApiTests).
+        await Assert.ThrowsAsync<InvalidOperationException>(() => LancerSurAsync(_dossier, new HorlogeDeTest(),
+            builder => builder.ConfigureKestrel(kestrel => kestrel.Listen(IPAddress.Parse("127.0.0.2"), 0))));
+
+        // Quand le lancement rend la main, aucune copie n'est en cours, et aucune ne finit plus tard : une copie commencée
+        // aurait laissé son fichier provisoire, ou fini dans ce délai.
+        Assert.Empty(Fichiers(ParDefaut));
+        await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        Assert.Empty(Fichiers(ParDefaut));
     }
 
     [Fact]

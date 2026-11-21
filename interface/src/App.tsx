@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
-import type { Candidature, ClientDeLApi, FicheDUneCandidature as Fiche } from "./api/clientDeLApi.ts";
+import { Fragment, useEffect, useState } from "react";
+import type { Candidature, ClientDeLApi, CopieGardee, FicheDUneCandidature as Fiche } from "./api/clientDeLApi.ts";
 import { FicheDUneCandidature } from "./candidatures/FicheDUneCandidature.tsx";
 import { ModificationDUneCandidature } from "./candidatures/ModificationDUneCandidature.tsx";
 import { SaisieDUneCandidature } from "./candidatures/SaisieDUneCandidature.tsx";
 import { TableauDeBord } from "./candidatures/TableauDeBord.tsx";
 import { HorsDeLaFenetre } from "./connexion.ts";
-import type { IssueDuBrouillon, IssueDuChoixDuDossier } from "./hote/canalDeLHote.ts";
+import type { IssueDeLaRestauration, IssueDuBrouillon, IssueDuChoixDuDossier } from "./hote/canalDeLHote.ts";
 import { MiseEnPage, type Ecran } from "./miseEnPage/MiseEnPage.tsx";
 import { EcranDesReglages } from "./reglages/EcranDesReglages.tsx";
+import { annonceDeLaRestauration } from "./sauvegardes/affichage.ts";
 
 type Connexion =
   | { etat: "connexion" }
@@ -30,16 +31,21 @@ export function App({
   connecter,
   choisirLeDossierDesSauvegardes,
   ouvrirLeBrouillon,
+  restaurerUneSauvegarde,
 }: {
   connecter: () => Promise<ClientDeLApi>;
   /** Ouvre le dialogue de dossier de la fenêtre hôte ; absent hors de la fenêtre. */
   choisirLeDossierDesSauvegardes?: () => Promise<IssueDuChoixDuDossier>;
   /** Demande à la fenêtre hôte d'ouvrir le brouillon d'une relance dans la messagerie ; absent hors de la fenêtre (#14). */
   ouvrirLeBrouillon?: (relance: number) => Promise<IssueDuBrouillon>;
+  /** Demande à la fenêtre hôte de restaurer une copie gardée ; absent hors de la fenêtre (#28). */
+  restaurerUneSauvegarde?: (copie: string, quandEnCours: () => void) => Promise<IssueDeLaRestauration>;
 }) {
   const [connexion, setConnexion] = useState<Connexion>({ etat: "connexion" });
   const [ecran, setEcran] = useState<Ecran>({ nom: "tableau" });
   const [annonce, setAnnonce] = useState<string>();
+  // Changée à chaque restauration : tous les écrans se remontent et relisent la base, dont les identifiants ont changé.
+  const [generation, setGeneration] = useState(0);
   // Vrai dès que l'utilisateur a changé d'écran : le titre de l'écran atteint reçoit alors le focus.
   const [navigue, setNavigue] = useState(false);
 
@@ -88,6 +94,12 @@ export function App({
   const quandSupprimee = (fiche: Fiche) =>
     annoncer(`Candidature supprimée : ${fiche.poste}, chez ${fiche.entreprise.nom}.`, { nom: "tableau" });
 
+  // La base vient d'être remplacée : retour au tableau de bord, qui relit tout, avec l'annonce de la restauration.
+  const quandRestauree = (issue: "restauree" | "restaureeDepuisUneBaseAbimee", copie: CopieGardee) => {
+    setGeneration((avant) => avant + 1);
+    annoncer(annonceDeLaRestauration(issue, copie.faiteLe), { nom: "tableau" });
+  };
+
   const ecranOuvert = () => {
     if (connexion.etat !== "prete") {
       return null;
@@ -113,6 +125,8 @@ export function App({
           <EcranDesReglages
             client={connexion.client}
             choisirLeDossierDesSauvegardes={choisirLeDossierDesSauvegardes}
+            restaurerUneSauvegarde={restaurerUneSauvegarde}
+            quandRestauree={quandRestauree}
             prendreLeFocus={navigue}
           />
         );
@@ -148,7 +162,7 @@ export function App({
       naviguer={connexion.etat === "prete" ? naviguer : undefined}
       etatDeLaConnexion={MESSAGES[connexion.etat]}
     >
-      {ecranOuvert()}
+      <Fragment key={generation}>{ecranOuvert()}</Fragment>
     </MiseEnPage>
   );
 }

@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { CanalSimule, JETON_FICTIF } from "../tests/canalSimule.ts";
-import { demanderLeBrouillon, demanderLeChoixDuDossier, demanderLeJeton } from "./canalDeLHote.ts";
+import { demanderLaRestauration, demanderLeBrouillon, demanderLeChoixDuDossier, demanderLeJeton } from "./canalDeLHote.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -115,5 +115,47 @@ test("un identifiant qui n'est pas un entier positif ne part pas", async () => {
   await expect(demanderLeBrouillon(canal, 0)).rejects.toThrow(RangeError);
   await expect(demanderLeBrouillon(canal, 1.5)).rejects.toThrow(RangeError);
   await expect(demanderLeBrouillon(canal, Number.NaN)).rejects.toThrow(RangeError);
+  expect(canal.messagesRecus).toEqual([]);
+});
+
+test("la page demande la restauration d'une copie par son seul identifiant, apprend qu'elle est en cours, puis reçoit son issue (#28)", async () => {
+  const canal = new CanalSimule();
+  const quandEnCours = vi.fn();
+
+  const issue = demanderLaRestauration(canal, "0123456789abcdef", quandEnCours);
+  expect(canal.messagesRecus).toEqual([{ type: "restaurerUneSauvegarde", copie: "0123456789abcdef" }]);
+  canal.envoyer({ type: "restauration", copie: "0123456789abcdef", issue: "enCours" });
+  expect(quandEnCours).toHaveBeenCalledOnce();
+  expect(canal.abonnes).toBe(1);
+  canal.envoyer({ type: "restauration", copie: "0123456789abcdef", issue: "restauree" });
+
+  await expect(issue).resolves.toBe("restauree");
+  expect(canal.abonnes).toBe(0);
+});
+
+test("une réponse à la restauration d'une autre forme, ou pour une autre copie, est ignorée", async () => {
+  const canal = new CanalSimule();
+  const quandEnCours = vi.fn();
+
+  const issue = demanderLaRestauration(canal, "0123456789abcdef", quandEnCours);
+  canal.envoyer({ type: "restauration", copie: "fedcba9876543210", issue: "restauree" });
+  canal.envoyer({ type: "restauration", copie: "fedcba9876543210", issue: "enCours" });
+  canal.envoyer({ type: "restauration", copie: "0123456789abcdef", issue: String.raw`C:\Users\Compte.Fictif\copie.db` });
+  canal.envoyer({ type: "brouillonDeRelance", copie: "0123456789abcdef", issue: "restauree" });
+  canal.envoyer({ type: "dossierDesSauvegardes", issue: "choisi" });
+  canal.envoyer("restauree");
+  expect(quandEnCours).not.toHaveBeenCalled();
+  expect(canal.abonnes).toBe(1);
+  canal.envoyer({ type: "restauration", copie: "0123456789abcdef", issue: "abimee" });
+
+  await expect(issue).resolves.toBe("abimee");
+});
+
+test("un identifiant de copie d'une autre forme ne part pas : jamais un chemin", async () => {
+  const canal = new CanalSimule();
+
+  for (const copie of ["0123456789ABCDEF", "0123456789abcde", "0123456789abcdef0", String.raw`C:\Sauvegardes\copie.db`, "../sollicito.db", ""]) {
+    await expect(demanderLaRestauration(canal, copie)).rejects.toThrow(RangeError);
+  }
   expect(canal.messagesRecus).toEqual([]);
 });

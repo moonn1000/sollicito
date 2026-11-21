@@ -73,6 +73,41 @@ public sealed class DossierDesSauvegardesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Les_copies_d_avant_rangees_dans_un_dossier_choisi_se_listent_et_se_restaurent()
+    {
+        // Le dossier des sauvegardes d'une installation d'avant, recopié sur une clé, puis choisi : ses copies d'avant une
+        // restauration et d'avant une mise à jour se listent avec les autres, et se restaurent (#28).
+        var ancienne = Directory.CreateTempSubdirectory("sollicito-tests-ancienne-").FullName;
+        try
+        {
+            await BaseDe12.PeuplerAsync(new DossierDeLaBase(ancienne));
+            var avantMiseAJour = NomsDesCopies.AvantMiseAJour(BaseDe12.Migration);
+            File.Copy(new DossierDeLaBase(ancienne).Fichier, Path.Combine(_ailleurs, avantMiseAJour));
+            await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest());
+            await api.AttendreLaPremiereVerificationAsync();
+            await api.EnregistrerAvecSuccesAsync("Atelier Azur fictif", "Comptable A", "2026-11-02T09:00");
+            await api.SauvegarderMaintenantAsync();
+            var avantRestauration = NomsDesCopies.AvantRestauration(new DateTimeOffset(2026, 11, 10, 9, 0, 0, TimeSpan.Zero));
+            File.Copy(Path.Combine(ParDefaut, api.CopieDuJour(Le18)), Path.Combine(_ailleurs, avantRestauration));
+            await api.EnregistrerAvecSuccesAsync("Beta Logistique fictif", "Chauffeur B", "2026-11-03T09:00");
+
+            Assert.Equal(IssueDuChoix.Choisi, await api.Sauvegardes().ChoisirLeDossierAsync(_ailleurs, TestContext.Current.CancellationToken));
+
+            var duDossierChoisi = api.Sauvegardes().Etat.Copies.Where(copie => copie.Lieu == LieuDUneCopie.DossierDesCopies).ToList();
+            Assert.Contains(duDossierChoisi, copie => copie.Sorte == SorteDeCopie.AvantRestauration && copie.Nom == avantRestauration);
+            Assert.Contains(duDossierChoisi, copie => copie.Sorte == SorteDeCopie.AvantMiseAJour && copie.Nom == avantMiseAJour);
+            Assert.Equal(IssueDeLaRestauration.Restauree, await api.RestaurerAsync(api.Copie(avantRestauration)));
+            Assert.Equal(["Comptable A"], (await api.ListerAsync()).Select(candidature => candidature!["poste"]!.GetValue<string>()));
+            Assert.Equal(IssueDeLaRestauration.Restauree, await api.RestaurerAsync(api.Copie(avantMiseAJour)));
+            Assert.Equal(["Brasseuse", "Comptable"], (await api.ListerAsync()).Select(candidature => candidature!["poste"]!.GetValue<string>()).Order(StringComparer.Ordinal));
+        }
+        finally
+        {
+            await SupprimerAsync(ancienne);
+        }
+    }
+
+    [Fact]
     public async Task Un_dossier_choisi_absent_est_refuse_et_l_ancien_reste()
     {
         await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest());
@@ -229,7 +264,13 @@ public sealed class DossierDesSauvegardesTests : IAsyncLifetime
             Assert.Equal(IssueDuChoix.Choisi, await premiere.Sauvegardes().ChoisirLeDossierAsync(_ailleurs, TestContext.Current.CancellationToken));
 
             Assert.Equal([.. siennes.Append(premiere.CopieDuJour(Le18)).Order(StringComparer.Ordinal)], Fichiers(_ailleurs));
-            Assert.Equal([premiere.CopieDuJour(Le18)], premiere.Sauvegardes().Etat.Copies.Where(copie => copie.Sorte == SorteDeCopie.DuJour).Select(copie => copie.Nom));
+            var copies = premiere.Sauvegardes().Etat.Copies;
+            Assert.Equal([premiere.CopieDuJour(Le18)], copies.Where(copie => copie is { Sorte: SorteDeCopie.DuJour, Lieu: LieuDUneCopie.DossierDesCopies }).Select(copie => copie.Nom));
+            // Pour la restauration (#28), la liste montre aussi les copies de la seconde, à part, et la copie du lancement
+            // restée dans le dossier par défaut ; la dernière copie ne compte que la sienne.
+            Assert.Equal([.. siennes.Reverse()], copies.Where(copie => copie.Sorte == SorteDeCopie.DuJourDUneAutreInstallation).Select(copie => copie.Nom));
+            Assert.Equal([premiere.CopieDuJour(Le18)], copies.Where(copie => copie.Lieu == LieuDUneCopie.DossierParDefaut).Select(copie => copie.Nom));
+            Assert.Equal(File.GetLastWriteTimeUtc(Path.Combine(_ailleurs, premiere.CopieDuJour(Le18))), premiere.Sauvegardes().Etat.DerniereCopie);
         }
         finally
         {

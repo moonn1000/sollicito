@@ -53,6 +53,33 @@ public static class PlanDesCopies
             .OrderByDescending(copie => copie.Jour)];
     }
 
+    /// <summary>
+    /// Les copies du jour des autres installations qui partagent le dossier, de la plus récente à la plus ancienne (#28) :
+    /// elles se restaurent, mais la rotation et la dernière copie de cette installation ne les comptent jamais.
+    /// </summary>
+    public static IReadOnlyList<CopieNommee.DuJour> CopiesDuJourDesAutresInstallations(IEnumerable<string> noms, string installation)
+    {
+        ArgumentNullException.ThrowIfNull(noms);
+
+        return [.. noms
+            .Select(NomsDesCopies.Lire)
+            .OfType<CopieNommee.DuJour>()
+            .Where(copie => !string.Equals(copie.Installation, installation, StringComparison.Ordinal))
+            .OrderByDescending(copie => copie.Jour)
+            .ThenBy(copie => copie.Nom, StringComparer.Ordinal)];
+    }
+
+    /// <summary>Les copies d'avant une restauration, de la plus récente à la plus ancienne (#28).</summary>
+    public static IReadOnlyList<CopieNommee.AvantRestauration> CopiesDAvantUneRestauration(IEnumerable<string> noms)
+    {
+        ArgumentNullException.ThrowIfNull(noms);
+
+        return [.. noms
+            .Select(NomsDesCopies.Lire)
+            .OfType<CopieNommee.AvantRestauration>()
+            .OrderByDescending(copie => copie.Instant)];
+    }
+
     /// <summary>Les copies d'avant une mise à jour, dans l'ordre des migrations, de la plus récente à la plus ancienne.</summary>
     public static IReadOnlyList<CopieNommee.AvantMiseAJour> CopiesDAvantUneMiseAJour(IEnumerable<string> noms)
     {

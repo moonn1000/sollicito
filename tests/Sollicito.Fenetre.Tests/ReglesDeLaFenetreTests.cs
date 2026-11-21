@@ -76,13 +76,16 @@ public sealed class ReglesDeLaFenetreTests
 
     [Theory]
     [InlineData("http://127.0.0.1:52344/", """{"type":"prete"}""")]
-    [InlineData("http://127.0.0.1:52344/index.html", """{"type":"prete","autre":1}""")]
+    [InlineData("http://127.0.0.1:52344/index.html", """{ "type" : "prete" }""")]
     public void L_interface_prete_recoit_le_jeton(string source, string message)
     {
         Assert.True(ReglesDeLaFenetre.DemandeLeJeton(source, message, Origine));
     }
 
     [Theory]
+    // Le message ne porte que son type (#88) : un champ de plus, répété compris, et rien n'est remis.
+    [InlineData("http://127.0.0.1:52344/index.html", """{"type":"prete","autre":1}""")]
+    [InlineData("http://127.0.0.1:52344/", """{"type":"prete","type":"prete"}""")]
     [InlineData("http://localhost:52344/", """{"type":"prete"}""")]
     [InlineData("https://exemple.invalid/", """{"type":"prete"}""")]
     [InlineData("about:blank", """{"type":"prete"}""")]
@@ -111,7 +114,7 @@ public sealed class ReglesDeLaFenetreTests
 
     [Theory]
     [InlineData("http://127.0.0.1:52344/", """{"type":"choisirLeDossierDesSauvegardes"}""")]
-    [InlineData("http://127.0.0.1:52344/index.html", """{"type":"choisirLeDossierDesSauvegardes","dossier":"\\\\serveur\\partage"}""")]
+    [InlineData("http://127.0.0.1:52344/index.html", """{ "type": "choisirLeDossierDesSauvegardes" }""")]
     public void L_interface_demande_le_choix_du_dossier_des_sauvegardes(string source, string message)
     {
         Assert.True(ReglesDeLaFenetre.DemandeLeChoixDuDossier(source, message, Origine));
@@ -121,6 +124,9 @@ public sealed class ReglesDeLaFenetreTests
     }
 
     [Theory]
+    // Le message ne porte que son type, jamais un chemin (#88) : un champ de plus, répété compris, et rien ne s'ouvre.
+    [InlineData("http://127.0.0.1:52344/index.html", """{"type":"choisirLeDossierDesSauvegardes","dossier":"\\\\serveur\\partage"}""")]
+    [InlineData("http://127.0.0.1:52344/", """{"type":"choisirLeDossierDesSauvegardes","type":"choisirLeDossierDesSauvegardes"}""")]
     [InlineData("http://localhost:52344/", """{"type":"choisirLeDossierDesSauvegardes"}""")]
     [InlineData("https://exemple.invalid/", """{"type":"choisirLeDossierDesSauvegardes"}""")]
     [InlineData("about:blank", """{"type":"choisirLeDossierDesSauvegardes"}""")]

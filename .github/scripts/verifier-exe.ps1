@@ -13,7 +13,9 @@
       (dossier du dépôt, profil Windows, dossier temporaire, nom du compte), en UTF-8 comme en UTF-16, sans tenir
       compte de la casse ;
     - que les chemins de symboles des assemblies de Sollicito commencent par /_/ (ContinuousIntegrationBuild). Lire
-      ces chemins dans les fichiers décompressés sert aussi de témoin : le contrôle voit bien l'intérieur du paquet.
+      ces chemins dans les fichiers décompressés sert aussi de témoin : le contrôle voit bien l'intérieur du paquet ;
+    - qu'aucun fichier, ni l'exe, ne contient une marque de la version de test de la restauration (#28) : le fichier
+      qui remplace son dialogue, et la variable de son point d'arrêt. Un témoin de la version publiée doit s'y lire.
   Le script ne lance pas l'exe. Il sort avec le code 1 au premier écart, après les avoir tous signalés.
 
 .PARAMETER Dossier
@@ -211,6 +213,41 @@ foreach ($entree in $entrees) {
 Write-Host "Chemins de symboles lus dans les assemblies de Sollicito : $cheminsDeSymboles."
 if ($cheminsDeSymboles -eq 0) {
     Signaler "aucun chemin de symboles lu dans les assemblies de Sollicito : le contrôle ne voit pas l'intérieur du paquet"
+}
+
+# --- Aucune marque de la version de test de la restauration (#28) ---
+# Le remplaçant du dialogue de la restauration et son point d'arrêt ne se compilent que dans la version de test : leurs
+# marques ne se lisent nulle part dans l'exe publié, ni dans ses fichiers décompressés. Les marques des autres écarts de
+# la version de test attendent #91. Témoin : le type du message de la restauration, que la version publiée porte, se lit
+# dans Sollicito.dll décompressé.
+$marquesDeTest = @('restauration-a-confirmer.txt', 'SOLLICITO_TEST_ARRET_RESTAURATION')
+$temoinPublie = 'restaurerUneSauvegarde'
+function Contient-Texte([byte[]]$contenu, [string]$texte) {
+    $enOctets = $latin1.GetString([Text.Encoding]::UTF8.GetBytes($texte))
+    return $latin1.GetString($contenu).IndexOf($enOctets, [StringComparison]::Ordinal) -ge 0 -or
+        [Text.Encoding]::Unicode.GetString($contenu).IndexOf($texte, [StringComparison]::Ordinal) -ge 0 -or
+        ($contenu.Length -gt 1 -and [Text.Encoding]::Unicode.GetString($contenu, 1, $contenu.Length - 1).IndexOf($texte, [StringComparison]::Ordinal) -ge 0)
+}
+$temoinLu = $false
+$lectures = @([pscustomobject]@{ Nom = 'Sollicito.exe'; Contenu = $octets })
+foreach ($entree in $entrees) {
+    if ([IO.Path]::GetFileName($entree.Nom) -like 'Sollicito*.dll') {
+        $lectures += [pscustomobject]@{ Nom = $entree.Nom; Contenu = (Lire-Entree $entree) }
+    }
+}
+foreach ($lecture in $lectures) {
+    foreach ($marque in $marquesDeTest) {
+        if (Contient-Texte $lecture.Contenu $marque) {
+            Signaler "$($lecture.Nom) contient une marque de la version de test : $marque"
+        }
+    }
+    if ($lecture.Nom -eq 'Sollicito.dll' -and (Contient-Texte $lecture.Contenu $temoinPublie)) {
+        $temoinLu = $true
+    }
+}
+Write-Host "Marques de la version de test cherchées : $($marquesDeTest.Count), dans $($lectures.Count) fichiers."
+if (-not $temoinLu) {
+    Signaler "le témoin « $temoinPublie » ne se lit pas dans Sollicito.dll : le contrôle des marques de la version de test ne voit pas l'intérieur du paquet"
 }
 
 if ($ecarts.Count -gt 0) {

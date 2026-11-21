@@ -12,9 +12,10 @@ namespace Sollicito.Fenetre;
 /// <summary>
 /// La fenêtre hôte de l'ADR-0003 : WebView2 dans une fenêtre WinForms, qui n'affiche que l'interface locale et ne
 /// laisse rien sortir vers une autre origine (ADR-0001, D9, « Fenêtre »). Elle remet le jeton à l'interface par son
-/// canal interne, lui ouvre le dialogue de dossier des sauvegardes (#26, ADR-0008), et ouvre dans la messagerie le
-/// brouillon d'une relance (#14, ADR-0011). Le contrôle WebView2 n'est touché que depuis le fil de la fenêtre, où
-/// arrivent tous ses événements.
+/// canal interne, lui ouvre le dialogue de dossier des sauvegardes (#26, ADR-0008), ouvre dans la messagerie le
+/// brouillon d'une relance (#14, ADR-0011), et restaure une copie gardée après le oui de l'utilisateur dans son propre
+/// dialogue (#28, ADR-0012). Le contrôle WebView2 n'est touché que depuis le fil de la fenêtre, où arrivent tous ses
+/// événements.
 /// </summary>
 internal sealed class FenetreHote : Form
 {
@@ -23,6 +24,7 @@ internal sealed class FenetreHote : Form
     private readonly Lancement _lancement;
     private readonly SauvegardesDeLaBase _sauvegardes;
     private readonly BrouillonsDesRelances _brouillons;
+    private readonly RestaurationDeLaBase _restauration;
     private readonly WebView2 _vue = new() { Dock = DockStyle.Fill };
     private CoreWebView2Environment? _environnement;
     // Les demandes de brouillon reçues pendant un autre, servies dans l'ordre ; au-delà, une demande est ignorée.
@@ -30,14 +32,19 @@ internal sealed class FenetreHote : Form
     private readonly Queue<int> _brouillonsEnAttente = new();
     private bool _choixEnCours;
     private bool _brouillonEnCours;
+    // Une restauration à la fois, du message jusqu'à son issue ; la fermeture de la fenêtre l'attend.
+    private bool _restaurationEnCours;
+    private Task? _remplacementEnCours;
+    private readonly CancellationTokenSource _fermeture = new();
 
-    public FenetreHote(Uri origine, JetonDeLancement jeton, Lancement lancement, SauvegardesDeLaBase sauvegardes, BrouillonsDesRelances brouillons)
+    public FenetreHote(Uri origine, JetonDeLancement jeton, Lancement lancement, SauvegardesDeLaBase sauvegardes, BrouillonsDesRelances brouillons, RestaurationDeLaBase restauration)
     {
         _origine = origine;
         _jeton = jeton;
         _lancement = lancement;
         _sauvegardes = sauvegardes;
         _brouillons = brouillons;
+        _restauration = restauration;
         Text = "Sollicito";
         ClientSize = new Size(1200, 800);
         MinimumSize = new Size(640, 480);
@@ -169,7 +176,7 @@ internal sealed class FenetreHote : Form
         {
             _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDuJeton(_jeton.Valeur()));
         }
-        else if (ReglesDeLaFenetre.DemandeLeChoixDuDossier(args.Source, args.WebMessageAsJson, _origine) && !_choixEnCours)
+        else if (ReglesDeLaFenetre.DemandeLeChoixDuDossier(args.Source, args.WebMessageAsJson, _origine) && !_choixEnCours && !_restaurationEnCours)
         {
             // Un seul dialogue à la fois, ouvert après ce gestionnaire : un dialogue modal ouvert pendant un événement de
             // WebView2 relancerait la boucle des messages au milieu de cet événement (modèle de threads de WebView2).
@@ -187,6 +194,99 @@ internal sealed class FenetreHote : Form
                 OuvrirLeBrouillonSuivant();
             }
         }
+        else if (ReglesDeLaFenetre.DemandeLaRestauration(args.Source, args.WebMessageAsJson, _origine, out var copie))
+        {
+            if (_restaurationEnCours)
+            {
+                // Une seule restauration à la fois. Pas de réponse : la page qui attend la sienne recevra sa vraie issue,
+                // et une réponse ici, du même identifiant, la clorait trop tôt.
+                return;
+            }
+
+            if (_choixEnCours)
+            {
+                // Un seul dialogue de l'hôte à la fois : la page apprend que Sollicito est occupé.
+                _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDeLaRestauration(copie, IssueDansLaFenetre.Occupee));
+                return;
+            }
+
+            // Le dialogue s'ouvre après ce gestionnaire, comme celui du choix d'un dossier.
+            _restaurationEnCours = true;
+            BeginInvoke(() => RestaurerLaCopie(copie));
+        }
+    }
+
+    // La restauration d'une copie : sa préparation, hors du fil de la fenêtre ; le dialogue, où l'utilisateur seul dit oui ;
+    // puis la restauration, hors du fil de la fenêtre aussi, qui reste vivante. La page reçoit « en cours », puis l'issue,
+    // sans chemin ni donnée.
+    private async void RestaurerLaCopie(string copie)
+    {
+        var issue = IssueDansLaFenetre.Impossible;
+        try
+        {
+            var preparation = await Task.Run(() => _restauration.PreparerAsync(copie, _fermeture.Token));
+            if (preparation.Demande is not { } demande)
+            {
+                issue = ReglesDeLaFenetre.DansLaFenetre(preparation.Refus ?? IssueDeLaRestauration.Impossible);
+            }
+            else if (IsDisposed || _fermeture.IsCancellationRequested)
+            {
+                // La fenêtre s'est fermée pendant la préparation : aucun dialogue, rien ne change.
+                issue = IssueDansLaFenetre.Annulee;
+            }
+            else if (!_lancement.ConfirmationDeLaRestauration.Confirmer(this, TextesDeLaRestauration.Question(demande, TimeZoneInfo.Local)))
+            {
+                issue = IssueDansLaFenetre.Annulee;
+            }
+            else
+            {
+                Poster(copie, IssueDansLaFenetre.EnCours);
+                var restauration = Task.Run(() => _restauration.RestaurerAsync(demande, _fermeture.Token));
+                _remplacementEnCours = restauration;
+                issue = ReglesDeLaFenetre.DansLaFenetre(await restauration);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // La fenêtre se ferme : la préparation s'est interrompue, et la base n'a pas changé.
+            issue = IssueDansLaFenetre.Annulee;
+        }
+        catch (Exception erreur) when (erreur is DbException or InvalidOperationException or IOException or UnauthorizedAccessException
+            or ArgumentException or ExternalException)
+        {
+            // Rien ne se ferme : la restauration n'a pas eu lieu, ou s'est défaite. ObjectDisposedException, une fenêtre
+            // fermée entre-temps, est une InvalidOperationException.
+        }
+        finally
+        {
+            _restaurationEnCours = false;
+        }
+
+        Poster(copie, issue);
+    }
+
+    private void Poster(string copie, IssueDansLaFenetre issue)
+    {
+        if (!IsDisposed && _vue.CoreWebView2 is { } navigateur)
+        {
+            navigateur.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDeLaRestauration(copie, issue));
+        }
+    }
+
+    // Fermer pendant une restauration attend sa fin : la préparation s'interrompt, un remplacement commencé va au bout.
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (_remplacementEnCours is { IsCompleted: false } restauration)
+        {
+            e.Cancel = true;
+            _fermeture.Cancel();
+            restauration.ContinueWith(_ => BeginInvoke(Close), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+            return;
+        }
+
+        // Une préparation en cours, avant le dialogue, s'arrête : la restauration n'aura pas lieu.
+        _fermeture.Cancel();
+        base.OnFormClosing(e);
     }
 
     private void OuvrirLeBrouillonSuivant()
@@ -272,6 +372,7 @@ internal sealed class FenetreHote : Form
         if (disposing)
         {
             _vue.Dispose();
+            _fermeture.Dispose();
         }
 
         base.Dispose(disposing);

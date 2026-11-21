@@ -17,13 +17,17 @@ internal static class RoutesDesSauvegardes
         routes.MapGet("/api/sauvegardes", Lire)
             .WithName("LireLesSauvegardes")
             .WithSummary("L'état des sauvegardes : le dossier, la dernière copie, les copies gardées, et ce qui empêche une copie")
-            .WithTags("Sauvegardes");
+            .WithTags("Sauvegardes")
+            .SansLaBase();
 
         routes.MapPost("/api/sauvegardes", SauvegarderMaintenantAsync)
             .WithName("SauvegarderMaintenant")
             .WithSummary("Refaire aussitôt la copie du jour dans le dossier des sauvegardes")
             .WithDescription("L'état rendu dit si la copie a réussi ; une copie manquée n'efface aucune copie.")
-            .WithTags("Sauvegardes");
+            .WithTags("Sauvegardes")
+            // Hors de la porte de la base : la copie attend déjà la fin d'une restauration, qui tient le sémaphore des
+            // copies ; entrée dans la porte, elle ferait attendre la restauration, qui l'attendrait (#28).
+            .SansLaBase();
 
         routes.MapPost("/api/sauvegardes/dossier-par-defaut", RevenirAuDossierParDefautAsync)
             .WithName("RevenirAuDossierParDefaut")
@@ -32,7 +36,8 @@ internal static class RoutesDesSauvegardes
                 "Une copie s'y fait d'abord : réussie, il redevient le dossier des sauvegardes ; manquée, refusé (409), et "
                 + "l'ancien dossier reste. Les copies de l'ancien dossier y restent.")
             .ProducesProblem(StatusCodes.Status409Conflict)
-            .WithTags("Sauvegardes");
+            .WithTags("Sauvegardes")
+            .SansLaBase();
     }
 
     private static Ok<EtatDesSauvegardes> Lire(SauvegardesDeLaBase sauvegardes) => TypedResults.Ok(sauvegardes.Etat);

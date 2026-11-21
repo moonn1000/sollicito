@@ -24,5 +24,5 @@ Sont notamment concernés :
 - la fenêtre de l'application : chargement d'un contenu tiers, ouverture de liens, accès aux permissions du navigateur ;
 - le stockage des clés d'API d'IA et des données de l'utilisateur ;
 - le traitement des offres importées, qui sont du contenu non fiable : injection de script, injection d'instructions dans l'IA, récupération d'une adresse qui viserait la machine ou le réseau interne ;
-- la sauvegarde, l'export et l'import des données ;
+- la sauvegarde, la restauration, l'export et l'import des données ;
 - l'exe publié et, en V2, l'installeur.
