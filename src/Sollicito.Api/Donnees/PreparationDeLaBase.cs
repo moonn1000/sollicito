@@ -31,6 +31,12 @@ internal sealed partial class PreparationDeLaBase(
         {
             Directory.CreateDirectory(dossier.Chemin);
             _verrou = VerrouDeLInstance.Prendre(dossier);
+            // Sous le verrou, avant toute mise à jour : la copie de travail d'une mise à jour interrompue par un arrêt
+            // brutal, et les fichiers provisoires des réglages. La base elle-même n'y répond jamais.
+            if (await RestesDUnArret.RetirerAsync(dossier) is var restes and > 0)
+            {
+                RestesRetires(journal, restes);
+            }
 
             await using var portee = portees.CreateAsyncScope();
             var baseDeDonnees = portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().Database;
@@ -120,4 +126,7 @@ internal sealed partial class PreparationDeLaBase(
 
     [LoggerMessage(EventId = 15, Level = LogLevel.Error, Message = "Mise à jour de la base échouée ({Raison}, {TypeDErreur}) : la base est restée telle qu'avant.")]
     private static partial void MiseAJourEchouee(ILogger journal, RaisonDeLEchec raison, string typeDErreur);
+
+    [LoggerMessage(EventId = 16, Level = LogLevel.Warning, Message = "Restes d'un arrêt brutal retirés du dossier de données : {Restes} fichier(s).")]
+    private static partial void RestesRetires(ILogger journal, int restes);
 }

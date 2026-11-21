@@ -134,6 +134,41 @@ public sealed class MiseAJourDeLaBaseTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Les_restes_d_une_mise_a_jour_interrompue_se_retirent_au_lancement_sans_toucher_a_la_base()
+    {
+        await using (var api = await LancerSurAsync(_dossier, new HorlogeDeTest()))
+        {
+            await api.AttendreLaPremiereVerificationAsync();
+        }
+
+        // Ce que laisse un arrêt brutal en pleine mise à jour : la copie de travail et son journal, et les fichiers
+        // provisoires des réglages. À côté, des fichiers qui ne sont pas à Sollicito, et le journal de la base elle-même.
+        string[] restes =
+        [
+            "sollicito.db.0123456789abcdef0123456789abcdef.migration",
+            "sollicito.db.0123456789abcdef0123456789abcdef.migration-journal",
+            "sollicito.db.fedcba9876543210fedcba9876543210.migration-journal",
+            "reglages.json.0123456789abcdef0123456789abcdef.provisoire",
+            "sauvegardes.json.0123456789abcdef0123456789abcdef.provisoire",
+        ];
+        string[] autres = ["sollicito.db.copie-personnelle", "notes.migration", "sollicito.db.0123.migration"];
+        foreach (var nom in restes.Concat(autres))
+        {
+            await File.WriteAllTextAsync(Path.Combine(_dossier, nom), "fictif", TestContext.Current.CancellationToken);
+        }
+
+        var empreinte = Empreinte(DossierDeLaBase.Fichier);
+        await using (var relancee = await LancerSurAsync(_dossier, new HorlogeDeTest()))
+        {
+            await relancee.AttendreLaPremiereVerificationAsync();
+        }
+
+        Assert.All(restes, nom => Assert.False(File.Exists(Path.Combine(_dossier, nom)), nom));
+        Assert.All(autres, nom => Assert.True(File.Exists(Path.Combine(_dossier, nom)), nom));
+        Assert.Equal(empreinte, Empreinte(DossierDeLaBase.Fichier));
+    }
+
+    [Fact]
     public async Task Une_copie_d_avant_impossible_n_essaie_aucune_migration_et_le_dit()
     {
         await BaseDe12.PeuplerAsync(DossierDeLaBase);
