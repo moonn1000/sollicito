@@ -11,15 +11,20 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
-  <!-- Publication : un exe autonome d'un seul fichier, runtimes .NET embarqués, bibliothèques natives extraites au
-       lancement. Pas de trimming : WinForms ne le permet pas. Aucun fichier de symboles à côté de l'exe, et aucun
-       symbole pour ce projet. Les DLL des projets référencés gardent pourtant le chemin de leur fichier de symboles,
-       donc celui du dossier de compilation et le nom du compte Windows (prototype de #9) : l'exe distribué sortira de
-       la CI (#54), où ce chemin n'est plus celui d'un poste. -->
+  <!-- Publication : un exe autonome d'un seul fichier, compressé (ADR-0009), runtimes .NET embarqués, bibliothèques
+       natives extraites au lancement. Pas de trimming : WinForms ne le permet pas. Aucun fichier de symboles à côté de
+       l'exe, et aucun symbole pour ce projet. Les DLL des projets référencés gardent le chemin de leur fichier de
+       symboles : hors CI, celui du dossier de compilation, nom du compte Windows compris (prototype de #9) ; en CI
+       (CI=true), ContinuousIntegrationBuild le réécrit en /_/ (Directory.Build.props). L'exe distribué sort de la CI,
+       et .github/scripts/verifier-exe.ps1 y cherche tout chemin de la machine de construction.
+       Une publication éclatée (-p:PublishSingleFile=false), qui sert à lister les fichiers publiés, réécrit
+       packages.lock.json et en retire Microsoft.NET.ILLink.Tasks : sans fichier unique, le SDK ne demande plus ce
+       paquet, qui ne sert qu'à l'analyseur du fichier unique. Ce verrou réécrit ne se commite pas. -->
   <PropertyGroup>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained Condition="'$(_IsPublishing)' == 'true'">true</SelfContained>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <PublishTrimmed>false</PublishTrimmed>
     <DebugType Condition="'$(_IsPublishing)' == 'true'">none</DebugType>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
@@ -63,12 +68,15 @@
     </ItemGroup>
   </Target>
 
-  <!-- L'exe publié reste seul : ni les symboles des projets référencés (DebugType ne les suit pas), ni les fichiers
-       qui servent à lancer Sollicito.Api seul (deps.json, runtimeconfig.json). -->
+  <!-- L'exe publié reste seul, et n'embarque que ce qui sert : ni les symboles des projets référencés (DebugType ne
+       les suit pas), ni les fichiers qui servent à lancer Sollicito.Api seul (son hôte Sollicito.Api.exe, deps.json,
+       runtimeconfig.json), ni le module d'hébergement sous IIS d'ASP.NET Core (aspnetcorev2_inprocess.dll), dont
+       Kestrel n'a pas besoin. Ces deux derniers sont des fichiers natifs : ils seraient extraits sous %TEMP%\.net au
+       premier lancement. L'hôte de l'API se reconnaît à son chemin publié : son fichier source est obj\…\apphost.exe. -->
   <Target Name="GarderLExeSeul" AfterTargets="ComputeResolvedFilesToPublishList">
     <ItemGroup>
       <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
-                             Condition="'%(Extension)' == '.pdb' Or '%(Filename)%(Extension)' == 'Sollicito.Api.deps.json' Or '%(Filename)%(Extension)' == 'Sollicito.Api.runtimeconfig.json'" />
+                             Condition="'%(Extension)' == '.pdb' Or '%(RelativePath)' == 'Sollicito.Api.exe' Or '%(Filename)%(Extension)' == 'Sollicito.Api.deps.json' Or '%(Filename)%(Extension)' == 'Sollicito.Api.runtimeconfig.json' Or '%(Filename)%(Extension)' == 'aspnetcorev2_inprocess.dll'" />
     </ItemGroup>
   </Target>
 
