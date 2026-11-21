@@ -14,7 +14,7 @@ Chaque décision d'architecture qui compte est consignée ici, avec son contexte
 | [0008](0008-sauvegardes-de-la-base.md) | Sauvegardes de la base, migration sur une copie et premier réglage | Acceptée ; réglages de l'application précisés par 0011 (le délai des relances, lu et écrit à part) | 2026-11-20 |
 | [0009](0009-construction-et-publication-de-l-exe.md) | Construction et publication de l'exe | Acceptée ; textes de release-please et noms des fichiers joints à valider au palier 5 | 2026-11-21 |
 | [0010](0010-nom-sollicito.md) | Le nom « Sollicito » | Proposée ; décision du mainteneur au palier 5 | 2026-11-21 |
-| [0011](0011-relances-et-brouillon.md) | Relances, contact minimal, brouillon ouvert par l'hôte et délai par défaut | Proposée | 2026-11-21 |
+| [0011](0011-relances-et-brouillon.md) | Relances, contact minimal, brouillon ouvert par l'hôte et délai par défaut | Acceptée | 2026-11-21 |
 
 ## Format
 

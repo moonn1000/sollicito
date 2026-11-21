@@ -1,6 +1,6 @@
 # ADR-0011 : relances, contact minimal, brouillon ouvert par l'hôte et délai par défaut
 
-- **Statut** : proposée
+- **Statut** : acceptée
 - **Date** : 2026-11-21
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D5 (le contact minimal et la règle de son adresse) et D8 (le brouillon : quels champs, quel encodage, aucun autre en-tête) ; [ADR-0003](0003-hote-interface-webview2.md), « Durcissement de la fenêtre », point « Brouillon de relance » (un troisième message de la page à l'hôte, qui ne porte que l'identifiant de la relance) ; [ADR-0004](0004-v1-resserree-paliers.md), « Ce qui quitte la machine » (une messagerie en ligne reçoit le brouillon avant tout envoi) ; [ADR-0008](0008-sauvegardes-de-la-base.md), « Le premier réglage de l'application, hors de la base » (un second réglage, lu et écrit à part)
 
@@ -56,7 +56,7 @@ Le délai par défaut vaut 7 jours d'usine, de 1 à 365. Il vit dans `reglages.j
 
 ### Le brouillon, ouvert par l'hôte à partir de la base
 
-- **La page** envoie à l'hôte `{"type":"ouvrirLeBrouillon","relance":<id>}`. Le message ne porte que l'identifiant de la relance, ni adresse ni texte, comme le choix du dossier des sauvegardes ne porte aucun chemin (ADR-0008). Sa source est contrôlée comme celle du canal du jeton. `relance` doit être un entier positif, et un autre champ n'est jamais lu. Un message d'une autre source ou d'une autre forme n'ouvre rien.
+- **La page** envoie à l'hôte `{"type":"ouvrirLeBrouillon","relance":<id>}`. Le message ne porte que l'identifiant de la relance, ni adresse ni texte, comme le choix du dossier des sauvegardes ne porte aucun chemin (ADR-0008). Sa source est contrôlée comme celle du canal du jeton. `relance` doit être un entier positif, et le message ne porte rien d'autre : un champ de plus, et rien ne s'ouvre. Un message d'une autre source ou d'une autre forme n'ouvre rien non plus.
 - **L'hôte** agit après la fin du gestionnaire du message, un brouillon à la fois : une demande reçue pendant un autre brouillon attend son tour, quatre au plus, et reçoit sa réponse. Il demande les champs au service des relances, en mémoire et non par une route. Ce service lit la relance en base, et rend l'adresse du destinataire, l'objet et le corps. Seule une relance à faire a un brouillon.
 - **Le lien** est construit par l'hôte seul :
   - `mailto:`, puis l'adresse, revérifiée par la règle du contact et encodée : tout sauf les caractères non réservés de la RFC 3986 et l'`@` ;
@@ -102,6 +102,7 @@ Sollicito ne contacte aucun serveur pour un brouillon. Mais la messagerie par d�
 - **Négatives** :
   - aucun geste n'est exigé avant un brouillon. Un script injecté qui aurait le jeton pourrait ouvrir le brouillon d'une relance sans clic, après avoir créé par l'API un contact à son adresse et choisi le poste de la candidature. L'envoi reste à l'utilisateur, qui voit le brouillon dans sa messagerie (D8). Contre ce script, restent l'affichage échappé et la politique de sécurité du contenu (modèle de menaces, « Limites ») ;
   - une messagerie en ligne reçoit le brouillon avant tout envoi (voir « Ce qui quitte la machine ») ;
+  - la migration `RelancesEtContacts` est à sens unique. Dès qu'une fiche porte une clôture de relance, la version d'avant ne la lit plus : elle ne connaît pas cette sorte d'événement. Le retour passe par la copie d'avant la mise à jour, que #28 saura restaurer (ADR-0008), jamais par `Down()` ;
   - un contact supprimé quitte aussi les relances closes : leur historique dit « sans destinataire » ;
   - le lien d'un brouillon ordinaire fait environ 500 caractères (sonde du 2026-11-21, encodage ci-dessus), mais peut dépasser 4 000 avec des champs longs et accentués. La longueur qu'accepte chaque messagerie n'est pas connue (voir « À vérifier »).
 
