@@ -76,7 +76,7 @@ Deux textes de release-please ne se règlent pas et restent en anglais : le comm
 
 ### La publication, sur l'étiquette
 
-`publication.yml` tourne avec la copie des workflows que porte l'étiquette. Un rattrapage (`gh workflow run publication.yml --ref refs/tags/vX.Y.Z`) ne répare donc qu'une panne passagère : **un défaut des workflows se corrige par une nouvelle version, jamais en déplaçant l'étiquette.** Ses jobs :
+`publication.yml` tourne avec la copie des workflows que porte l'étiquette. Un rattrapage (`gh workflow run publication.yml --ref vX.Y.Z`) ne répare donc qu'une panne passagère : **un défaut des workflows se corrige par une nouvelle version, jamais en déplaçant l'étiquette.** Ses jobs :
 
 - **Garde** (`contents: read`) : `github.ref` entier, passé par `env:`, doit valoir `refs/tags/vX.Y.Z` (motif `^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`), et son commit doit être sur `main` (`garder-la-publication.sh`). Aucun `run:` ne reçoit `github.ref_name`, une entrée ou une sortie de release-please, que par `env:`.
 - **Exe** : le workflow réutilisable, artefact `exe-candidat-vX.Y.Z`.

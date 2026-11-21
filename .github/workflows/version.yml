@@ -57,5 +57,7 @@ jobs:
             echo "Refus : release-please n'a pas rendu une étiquette vX.Y.Z."
             exit 1
           fi
-          gh workflow run publication.yml --ref "refs/tags/$ETIQUETTE"
-          echo "Publication lancée sur refs/tags/$ETIQUETTE."
+          # Un nom d'étiquette, la forme que documente l'API. La garde de publication.yml refuse toute autre ref
+          # que refs/tags/vX.Y.Z, une branche du même nom comprise.
+          gh workflow run publication.yml --ref "$ETIQUETTE"
+          echo "Publication lancée sur l'étiquette $ETIQUETTE."
