@@ -288,6 +288,15 @@ Ni le dossier de données, ni le dossier des sauvegardes, ni le nom d'une copie 
 - `interface/tests-fenetre/fenetre.test.ts`, dans la vraie fenêtre : la copie du lancement, le choix d'un dossier par le remplaçant du dialogue, le réglage écrit, puis la copie refaite à la fermeture ; aucun fichier du dossier de données, copies comprises, ne contient le jeton.
 - *À vérifier à la main* sur l'exe publié (ADR-0008, « À vérifier ») : le vrai dialogue de Windows, que le protocole CDP ne pilote pas, s'ouvre sur le dossier courant, et son annulation ne change rien.
 
+## Relances et brouillons
+
+Les relances et les contacts (#14, ADR-0011) passent par les deux protections : leurs onze routes par celles de l'API (voir « Routes des contacts et des relances »), leur brouillon par la seule fenêtre hôte (voir « Brouillon d'une relance »). En bref :
+
+- **Le brouillon** : la page ne donne à l'hôte que l'identifiant d'une relance. L'hôte bâtit le lien `mailto` à partir de la base, encodé, sans autre en-tête, puis le lance par le shell de Windows. Sollicito n'envoie rien : l'utilisateur relit et envoie le brouillon dans sa messagerie.
+- **Le délai par défaut** vit dans `reglages.json`, lu et écrit à part du dossier des sauvegardes (voir « Sauvegardes »).
+- **La version de test** note le lien d'un brouillon dans `brouillons-ouverts.txt` au lieu de le lancer (voir « Version de test »).
+- **Les limites** : aucun geste n'est exigé avant un brouillon, et un script qui a le jeton peut en ouvrir un, adressé à un contact qu'il aurait créé ; l'envoi reste à l'utilisateur. Une messagerie en ligne, ou qui range ses brouillons sur un serveur, reçoit le brouillon avant tout envoi (voir « Limites »).
+
 ## Exe distribué
 
 L'exe d'un seul fichier se construit dans la CI, à chaque pull request et sur `main`, comme la publication le construira (#54, ADR-0009). À chaque construction, on contrôle ce qu'il emporte et ce qu'il garde de la machine qui l'a construit :

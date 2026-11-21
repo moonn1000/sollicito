@@ -83,7 +83,7 @@ Sans destinataire, la première ligne devient « Bonjour, ». La date est le jou
 
 ### Ce qui quitte la machine
 
-Sollicito ne contacte aucun serveur pour un brouillon. Mais la messagerie par défaut reçoit, à son ouverture, l'adresse du contact, l'objet et le corps : le poste, la date d'envoi et le nom du contact. Si elle est en ligne, ou si elle range ses brouillons sur un serveur, ce contenu part chez son fournisseur avant tout envoi, même si l'utilisateur renonce (voir « Contexte »). Une application qui garde ses brouillons sur le poste ne fait rien sortir avant l'envoi. Le README le dit, dans sa section « Ce qui quitte votre machine ».
+Sollicito ne contacte aucun serveur pour un brouillon. Mais la messagerie par défaut reçoit, à son ouverture, l'adresse du contact, l'objet et le corps : le poste, la date d'envoi et le nom du contact. Si elle est en ligne, ou si elle range ses brouillons sur un serveur, ce contenu part chez son fournisseur avant tout envoi, même si l'utilisateur renonce (voir « Contexte »). Une application qui garde ses brouillons sur le poste ne fait rien sortir avant l'envoi. Ce que le README en dit à l'utilisateur, dans sa section « Ce qui quitte votre machine », est un texte public, que le mainteneur valide mot pour mot.
 
 ## Alternatives écartées
 

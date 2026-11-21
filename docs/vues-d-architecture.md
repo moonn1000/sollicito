@@ -64,7 +64,7 @@ flowchart TB
 
 ### Ce qui quitte le poste
 
-Sollicito n'a pas de serveur distant. Seuls cinq échanges prévus franchissent la limite du poste, ceux que décrit le [README](../README.md) (« Ce qui quitte votre machine ») ; l'[ADR-0004](adr/0004-v1-resserree-paliers.md) (« Ce qui quitte la machine ») décrit le premier et les deux derniers, l'[ADR-0008](adr/0008-sauvegardes-de-la-base.md) le deuxième, et l'[ADR-0011](adr/0011-relances-et-brouillon.md) le troisième :
+Sollicito n'a pas de serveur distant. Seuls cinq échanges prévus franchissent la limite du poste. L'[ADR-0004](adr/0004-v1-resserree-paliers.md) (« Ce qui quitte la machine ») décrit le premier et les deux derniers, l'[ADR-0008](adr/0008-sauvegardes-de-la-base.md) le deuxième, et l'[ADR-0011](adr/0011-relances-et-brouillon.md) le troisième :
 
 1. ce que l'utilisateur confie à l'IA en ligne, Claude ou OpenAI, s'il en configure une (palier 4) ; un modèle Ollama, qui tourne sur le poste, ne fait rien sortir ;
 2. les copies de la base, non chiffrées, si l'utilisateur range ses sauvegardes dans un dossier en réseau ou synchronisé (palier 2) : elles partent là où ce dossier les envoie ;
