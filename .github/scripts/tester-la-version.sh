@@ -58,8 +58,38 @@ for declencheur in 'push:' '"push":' "'push':" 'push :' 'pull_request:' 'pull_re
 done
 refuse "on: en ligne (liste)" sed -E 's/^on:[[:space:]]*$/on: [push, workflow_dispatch]/'
 refuse "on: en ligne (un seul nom)" sed -E 's/^on:[[:space:]]*$/on: workflow_dispatch/'
-refuse "clé « on » entre guillemets" sed -E 's/^on:[[:space:]]*$/"on":/'
 refuse "second bloc on:" awk '{ print } END { print "on:"; print "  push:" }'
+refuse "second document" awk '{ print } END { print "---"; print "on:"; print "  push:" }'
+
+# Formes qui trompaient une lecture ligne à ligne : le bloc « on: » remplacé par un autre texte (printf %b).
+remplacer() {
+  awk -v bloc="$1" '
+    /^on:[[:space:]]*$/ { while ((getline ligne < bloc) > 0) print ligne; saute = 1; next }
+    saute && /^[^[:space:]]/ { saute = 0 }
+    !saute { print }'
+}
+bloc() {
+  local description="$1" texte="$2"
+  printf '%b' "$texte" > "$essais/bloc"
+  refuse "$description" remplacer "$essais/bloc"
+}
+bloc "CR seul avant push" 'on:\n  workflow_dispatch:\n# c\r  push:\n'
+bloc "NEL avant push" 'on:\n  workflow_dispatch: # c\xc2\x85  push:\n'
+bloc "LS avant push" 'on:\n  workflow_dispatch: # c\xe2\x80\xa8  push:\n'
+bloc "PS avant push" 'on:\n  workflow_dispatch: # c\xe2\x80\xa9  push:\n'
+bloc "leurre en guillemets doubles, clé explicite" 'leurre: "\non:\n  workflow_dispatch:\n  "\n? on\n:\n  push:\n  workflow_dispatch:\n'
+bloc "leurre en guillemets doubles, !!str on" 'leurre: "\non:\n  workflow_dispatch:\n  "\n!!str on:\n  push:\n  workflow_dispatch:\n'
+bloc "leurre en guillemets doubles, échappement" 'leurre: "\non:\n  workflow_dispatch:\n  "\n"\\x6Fn":\n  push:\n  workflow_dispatch:\n'
+bloc "leurre en guillemets simples, clé explicite" "leurre: '\\non:\\n  workflow_dispatch:\\n  '\\n? on\\n:\\n  push:\\n  workflow_dispatch:\\n"
+bloc "« on » entre guillemets, push ajouté" '"on":\n  push:\n  workflow_dispatch:\n'
+bloc "clé true:" 'true:\n  push:\n  workflow_dispatch:\n'
+bloc "clé On:" 'On:\n  push:\n  workflow_dispatch:\n'
+bloc "tabulation" 'on:\n\tpush:\n  workflow_dispatch:\n'
+bloc "clé de fusion" 'on:\n  <<: {push: {}}\n  workflow_dispatch:\n'
+
+# Et une forme juste, admise : le même workflow en CRLF, comme dans une copie Windows.
+tr -d '\r' < "$workflow" | sed 's/$/\r/' > "$essais/crlf.yml"
+exiger "contrôle des déclencheurs : copie en CRLF admise" bash "$controle" "$essais/crlf.yml"
 
 if (( ecarts > 0 )); then
   echo "$ecarts écart(s)."

@@ -92,7 +92,7 @@ Deux textes de release-please ne se règlent pas et restent en anglais : le comm
   - dans Windows PowerShell 5.1 : `gh attestation trusted-root | Out-File -Encoding ascii trusted_root.jsonl`. La redirection `>` y écrit un BOM, ou de l'UTF-16, que `gh` refuse (« failed to proto-json unmarshal trusted root ») ;
   - dans `cmd`, PowerShell 7 ou bash : `gh attestation trusted-root > trusted_root.jsonl`.
 
-  Ensuite, la même commande qu'en ligne, avec `--bundle Sollicito-X.Y.Z-win-x64.exe.sigstore.json --custom-trusted-root trusted_root.jsonl`. La recette pour PowerShell 5.1 a été essayée sur un poste Windows le 21/11/2026, sur une attestation publique : avec `Out-File -Encoding ascii`, comme avec `cmd`, l'attestation se vérifie ; avec `>`, `gh` refuse la racine.
+  Ensuite, la même commande qu'en ligne, avec `--bundle Sollicito-X.Y.Z-win-x64.exe.sigstore.json --custom-trusted-root trusted_root.jsonl`. La recette pour PowerShell 5.1 a été essayée sur un poste Windows le 21/11/2026, sur une attestation publique : avec `Out-File -Encoding ascii`, comme avec `cmd`, l'attestation se vérifie ; avec `>`, `gh` refuse la racine. L'essai s'est fait avec gh 2.83.2, sous la version minimale : l'encodage du fichier ne dépend pas de `gh`, mais la recette reste à rejouer avec une version qui l'atteint.
 
 Le guide « Démarrer » (#60) l'expliquera aux utilisateurs.
 
@@ -101,7 +101,7 @@ Le guide « Démarrer » (#60) l'expliquera aux utilisateurs.
 La CI de chaque pull request passe par la publication en mode d'essai, sans `id-token` ni `contents: write` :
 
 - `tester-la-garde.sh` éprouve la garde sur 13 refs admises et refusées : branche nommée comme une version, injection, commit absent de `main`…
-- `tester-la-version.sh` contrôle la configuration de release-please. Il contrôle aussi, par liste d'autorisation (`controler-les-declencheurs.sh`), que les workflows de version et de publication n'ont que `workflow_dispatch`. Le contrôle est lui-même éprouvé sur 21 copies de `version.yml`, à chacune desquelles on a ajouté un déclencheur ou une forme inattendue ; il doit les refuser toutes.
+- `tester-la-version.sh` contrôle la configuration de release-please. Il contrôle aussi, par liste d'autorisation (`controler-les-declencheurs.sh`), que les workflows de version et de publication n'ont que `workflow_dispatch`. Ce contrôle lit les workflows en YAML, par yq 4.54.3 téléchargé à empreinte vérifiée, et refuse d'office un saut de ligne inattendu (CR seul, NEL, LS, PS). Il est lui-même éprouvé sur 34 copies de `version.yml` : déclencheurs ajoutés, formes en ligne, clés déguisées (`? on`, `!!str on`, `"\x6Fn"`, `true:`), leurres logés dans une chaîne, sauts de ligne cachés. Il doit les refuser toutes, et admettre une copie en CRLF.
 - Le job « Exe » prépare les fichiers d'une version d'essai.
 
 La répétition s'arrête avant l'attestation et l'envoi. Ne tournent pour la première fois qu'au palier 5 : release-please contre le dépôt, le lancement de la publication, l'attestation et l'envoi au brouillon.

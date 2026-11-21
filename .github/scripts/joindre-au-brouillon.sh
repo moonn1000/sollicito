@@ -28,7 +28,7 @@ fi
 # 2. L'empreinte et l'attestation, vérifiées hors ligne. Il faut gh 2.102.0 ou plus : avant, --signer-workflow se
 #    lisait comme un préfixe et --source-ref sans la casse (avis GHSA-wjmr-j3rp-mh2g et GHSA-4mq3-hpgx-9cx8).
 read -r majeure mineure _ <<< "$(gh --version | sed -nE '1s/^gh version ([0-9]+)\.([0-9]+)\.([0-9]+).*/\1 \2 \3/p')"
-if ! [[ "${majeure-}" =~ ^[0-9]+$ && "${mineure-}" =~ ^[0-9]+$ ]] || (( majeure < 2 || (majeure == 2 && mineure < 102) )); then
+if ! [[ "${majeure-}" =~ ^[0-9]+$ && "${mineure-}" =~ ^[0-9]+$ ]] || (( 10#$majeure < 2 || (10#$majeure == 2 && 10#$mineure < 102) )); then
   echo "Refus : il faut gh 2.102.0 ou plus pour vérifier l'attestation." >&2
   exit 1
 fi
