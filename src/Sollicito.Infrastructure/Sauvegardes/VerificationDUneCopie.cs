@@ -203,13 +203,14 @@ public static class VerificationDUneCopie
         return lignes;
     }
 
-    // Seules s'écartent les tables que SQLite tient lui-même, et les index sans texte qu'il crée pour une contrainte UNIQUE
-    // ou PRIMARY KEY, déjà lue dans le texte de leur table. Un autre objet nommé « sqlite_… », que seul writable_schema
-    // peut écrire, se compare comme les autres.
+    // Seules s'écartent les tables que SQLite tient lui-même, les index sans texte qu'il crée pour une contrainte UNIQUE ou
+    // PRIMARY KEY, déjà lue dans le texte de leur table, et la table du verrou des migrations avec ses objets. Un autre
+    // objet nommé « sqlite_… », que seul writable_schema peut écrire, ou un index qui porte le nom du verrou sur une autre
+    // table, se compare comme les autres.
     private static bool EstInterne(ObjetDuSchema objet) =>
         objet is { Type: "table", Nom: "sqlite_sequence" or "sqlite_stat1" or "sqlite_stat2" or "sqlite_stat3" or "sqlite_stat4" }
         || (objet is { Type: "index", Sql.Length: 0 } && objet.Nom.StartsWith("sqlite_autoindex_", StringComparison.Ordinal))
-        || objet.Nom == VerrouDesMigrations.Table
+        || objet is { Type: "table", Nom: VerrouDesMigrations.Table }
         || objet.Table == VerrouDesMigrations.Table;
 
     // Chaque instruction regarde d'abord le jeton : sqlite3_interrupt n'arrête qu'une instruction en cours, et une

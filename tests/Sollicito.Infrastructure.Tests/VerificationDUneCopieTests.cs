@@ -182,6 +182,20 @@ public sealed class VerificationDUneCopieTests : IDisposable
     }
 
     [Fact]
+    public async Task Un_index_unique_nomme_comme_le_verrou_des_migrations_sur_une_autre_table_fait_refuser_la_copie()
+    {
+        await CreerUneBaseAsync(Copie, migration: null);
+        // En SQL ordinaire, sans writable_schema : la table du verrou retirée, un index UNIQUE prend son nom, sur une autre
+        // table. Il refuserait deux candidatures au même poste, et la migration suivante ne recréerait plus le verrou.
+        Executer(Copie, $"DROP TABLE \"{VerrouDesMigrations.Table}\"");
+        Executer(Copie, $"CREATE UNIQUE INDEX \"{VerrouDesMigrations.Table}\" ON Candidatures (Poste)");
+        Assert.Equal(["Candidatures"], Lire(Copie, $"SELECT tbl_name FROM sqlite_master WHERE type = 'index' AND name = '{VerrouDesMigrations.Table}'"));
+        Assert.Equal(["ok"], Lire(Copie, "PRAGMA integrity_check"));
+
+        Assert.Equal(new VerdictDUneCopie(SorteDeVerdict.Etrangere, 0), await VerifierAsync());
+    }
+
+    [Fact]
     public async Task Un_verrou_des_migrations_retouche_se_retire_de_la_copie_de_travail_et_n_arrete_aucune_migration()
     {
         await CreerUneBaseAsync(Copie, migration: null);
