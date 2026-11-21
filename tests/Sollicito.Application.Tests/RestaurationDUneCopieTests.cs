@@ -84,6 +84,7 @@ public sealed class RestaurationDUneCopieTests
     [InlineData("0123456789abcde")]
     [InlineData("0123456789abcdef0")]
     [InlineData("0123456789abcdeg")]
+    [InlineData("0123456789abcdef\n")]
     [InlineData(@"C:\Sauvegardes\copie")]
     [InlineData("sollicito-1a2b3c4d-2026-11-18.db")]
     [InlineData(" 0123456789abcdef")]

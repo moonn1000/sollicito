@@ -25,7 +25,8 @@ public static partial class IdentifiantsDesCopies
     /// <summary>Vrai si le texte a la forme d'un identifiant : exactement seize caractères hexadécimaux, en minuscules.</summary>
     public static bool AEnLaForme(string? texte) => texte is not null && Forme().IsMatch(texte);
 
-    [GeneratedRegex("^[0-9a-f]{16}$", RegexOptions.CultureInvariant)]
+    // \z et non $ : en .NET, $ admet encore un saut de ligne final.
+    [GeneratedRegex(@"^[0-9a-f]{16}\z", RegexOptions.CultureInvariant)]
     private static partial Regex Forme();
 }
 
