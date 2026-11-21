@@ -7,7 +7,7 @@
   "draft": true,
   "force-tag-creation": true,
   "pull-request-title-pattern": "chore${scope}: version${component} ${version}",
-  "pull-request-header": "Version préparée par release-please. La fusionner crée l'étiquette et la version en brouillon, puis lance la construction de l'exe ; le mainteneur publie ensuite le brouillon.",
+  "pull-request-header": "Version préparée par release-please. Après sa fusion, le mainteneur relance le workflow de version, qui crée l'étiquette et la version en brouillon, puis lance la construction de l'exe ; le mainteneur publie ensuite le brouillon.",
   "pull-request-footer": "Pull request ouverte par release-please, à partir des commits fusionnés sur main.",
   "label": "version : en attente",
   "release-label": "version : étiquetée",

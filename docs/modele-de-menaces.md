@@ -1,8 +1,8 @@
 # Modèle de menaces
 
-- **Mis à jour le** : 2026-11-20, avec les sauvegardes de la base (#26)
-- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D9 et D10 ; [ADR-0003](adr/0003-hote-interface-webview2.md), « Règles d'accès » et « Durcissement de la fenêtre » ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md)
-- **Périmètre** : l'API locale, ses journaux et sa base, ses sauvegardes et ses réglages, la fenêtre hôte, et les textes saisis. Les offres et la sortie de l'IA, les clés d'IA et l'exe ajouteront leur section avec les stories qui les construisent.
+- **Mis à jour le** : 2026-11-21, avec l'exe construit dans la CI et la chaîne de publication de ses versions (#54)
+- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D9 et D10 ; [ADR-0003](adr/0003-hote-interface-webview2.md), « Règles d'accès » et « Durcissement de la fenêtre » ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) ; [ADR-0009](adr/0009-construction-et-publication-de-l-exe.md)
+- **Périmètre** : l'API locale, ses journaux et sa base, ses sauvegardes et ses réglages, la fenêtre hôte, les textes saisis, et l'exe distribué, de sa construction à son attestation. Les offres et la sortie de l'IA, et les clés d'IA, ajouteront leur section avec les stories qui les construisent.
 
 ## Ce qui est protégé
 
@@ -271,13 +271,13 @@ Chaque version joint à son exe son empreinte SHA-256 et le paquet de son attest
 - **Ce que l'attestation ne prouve pas** : qu'aucune dépendance n'était piégée. Un paquet npm ou NuGet piégé dans le job de construction peut modifier l'exe avant son envoi : le job à part l'attestera fidèlement. La seconde construction, faite avec les mêmes dépendances, ne le verrait pas. Contre ce risque restent les fichiers de verrouillage, l'âge minimal des paquets de pnpm, la seule source nuget.org et la restauration verrouillée.
 - **Une étiquette posée sur un commit non fusionné** : une personne qui a l'écriture du dépôt peut étiqueter `v1.0.1` le commit d'une branche jamais fusionnée, avec un `publication.yml` modifié, puis lancer ce workflow. Son attestation passerait `--source-ref refs/tags/v1.0.1`. La garde de la publication est logée dans la copie de l'étiquette : elle n'arrête que les erreurs, pas cette personne. La parade est un ruleset des étiquettes `v*`, réglage du mainteneur, à proposer au palier 5 (ADR-0009, « À vérifier »).
 - **Les entrées non fiables** : un nom d'étiquette peut contenir `$ ( ) ; | & ' "`. La garde lit `github.ref` entier, passé par `env:`, contre `^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$`. Aucun `run:` ne reçoit `github.ref_name`, une entrée de workflow ou une sortie de release-please, que par `env:` et après ce motif.
-- **Les outils** : release-please-action v5.0.0 embarque release-please 17.6.0, sans les correctifs de dépendances parus depuis (17.7.0, 17.10.2) : à revoir au palier 5. `gh`, qui lance la publication, vérifie l'attestation et joint les fichiers, vient de l'image du runner, sans version fixée.
+- **Les outils** : release-please-action v5.0.0 embarque release-please 17.6.0, sans les correctifs de dépendances parus depuis (17.7.0, 17.10.2) : à revoir au palier 5. `gh`, qui lance la publication, vérifie l'attestation et joint les fichiers, vient de l'image du runner, sans version fixée. `joindre-au-brouillon.sh` exige au moins la 2.102.0 : avant elle, `--signer-workflow` se lisait comme un préfixe et `--source-ref` sans la casse (avis GHSA-wjmr-j3rp-mh2g et GHSA-4mq3-hpgx-9cx8). Il ajoute aussi `--source-digest`, le commit de l'étiquette. La même version minimale vaut pour l'utilisateur qui vérifie l'exe (ADR-0009, « Vérifier l'exe »).
 
 *Contrôles* :
 
-- dans le job « Exe » de la CI (`.github/workflows/exe.yml`) : `verifier-exe.ps1`, qu'un exe construit hors du mode CI fait échouer ; `lancer-exe.ps1`, qui lance l'exe seul dans un dossier vide et exige sa base, son profil, son navigateur intégré et sa fenêtre, sans boîte de dialogue ; la préparation des fichiers d'une version d'essai ;
+- dans le job « Exe » de la CI (`.github/workflows/exe.yml`) : `verifier-exe.ps1`, qui exige au moins un chemin de symboles lu, et tous en `/_/`. Qu'un exe construit hors du mode CI le fasse échouer a été joué à la PR de #54, sur le poste ; son automatisation est dans #91. Puis `lancer-exe.ps1`, qui lance l'exe seul dans un dossier vide et exige sa base, son profil, son navigateur intégré et sa fenêtre, sans boîte de dialogue ; la préparation des fichiers d'une version d'essai ;
 - le job « Reproductibilité » ;
-- le job « Publication, à blanc » : `tester-la-garde.sh`, sur 13 refs admises et refusées, et `tester-la-version.sh`, qui contrôle la configuration de release-please et le seul déclencheur, `workflow_dispatch`, du workflow de version ;
+- le job « Publication, à blanc » : `tester-la-garde.sh`, sur 13 refs admises et refusées, et `tester-la-version.sh`, qui contrôle la configuration de release-please. Il vérifie aussi, par liste d'autorisation, que les workflows de version et de publication n'ont que `workflow_dispatch`, contrôle éprouvé sur 21 déclencheurs ou formes ajoutés ;
 - *à la première version, au palier 5* : la garde sur la vraie étiquette, l'attestation, sa vérification hors ligne et le condensé des fichiers joints.
 
 ## Textes saisis

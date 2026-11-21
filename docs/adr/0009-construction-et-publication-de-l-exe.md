@@ -32,7 +32,7 @@ Le workflow réutilisable `.github/workflows/exe.yml` construit l'exe. La CI l'a
 2. la publication en Release, en mode CI : restauration verrouillée et `ContinuousIntegrationBuild` ;
 3. un contrôle que la publication n'a réécrit aucun fichier suivi, verrous compris ;
 4. l'empreinte SHA-256 de l'exe ;
-5. `.github/scripts/verifier-exe.ps1`, qui lit le paquet décompressé : chercher les chemins dans les octets de l'exe ne prouverait rien, puisque ses assemblies y sont compressées. Il vérifie qu'aucun fichier superflu n'y entre, et qu'aucun chemin de la machine de construction n'y reste (dossier du dépôt, profil Windows, dossier temporaire, nom du compte, en UTF-8 comme en UTF-16). Il vérifie aussi que les chemins de symboles commencent par `/_/`. Un exe construit hors du mode CI le fait échouer ;
+5. `.github/scripts/verifier-exe.ps1`, qui lit le paquet décompressé : chercher les chemins dans les octets de l'exe ne prouverait rien, puisque ses assemblies y sont compressées. Il vérifie qu'aucun fichier superflu n'y entre, et qu'aucun chemin de la machine de construction n'y reste (dossier du dépôt, profil Windows, dossier temporaire, nom du compte, en UTF-8 comme en UTF-16). Il vérifie aussi que les chemins de symboles commencent par `/_/`, et qu'il en lit au moins un. Qu'un exe construit hors du mode CI le fasse échouer a été joué à la PR de #54, sur le poste ; son automatisation est dans #91 ;
 6. `.github/scripts/lancer-exe.ps1`, un lancement de fumée : l'exe, seul dans un dossier vide, crée sa base et le profil de son navigateur intégré, lance ce navigateur et affiche sa fenêtre, sans aucune boîte de dialogue, et vit encore au bout de 15 s ; puis l'arbre de ses processus est arrêté. Une boîte de dialogue serait une erreur ou le choix d'un dossier, qui ne s'ouvre qu'à la demande de l'utilisateur (#26) : le lancement échoue alors, au lieu de réussir pour une mauvaise raison. Le script refuse de tourner si le dossier de données de Sollicito existe déjà, pour ne jamais toucher aux données d'un poste ;
 7. la préparation, en essai, des fichiers d'une version 0.0.0, par le script de la publication (`preparer-les-fichiers.sh`) ;
 8. un artefact du run, 7 jours : l'exe et son empreinte (`Sollicito.exe.sha256`, au format de `sha256sum`). Il porte le nom `exe-non-publie-<commit>` sur un push vers `main`, et `exe-candidat-vX.Y.Z` dans la publication. Une pull request n'en produit aucun : venue d'un fork, elle ferait héberger sous le nom du projet un exe construit avec son propre code.
@@ -53,7 +53,7 @@ Ces textes deviennent publics au premier lancement du workflow de version. Le ma
 | Réglage | Texte proposé |
 | --- | --- |
 | `pull-request-title-pattern` | `chore${scope}: version${component} ${version}`, soit « chore(main): version 1.0.0 » |
-| `pull-request-header` | « Version préparée par release-please. La fusionner crée l'étiquette et la version en brouillon, puis lance la construction de l'exe ; le mainteneur publie ensuite le brouillon. » |
+| `pull-request-header` | « Version préparée par release-please. Après sa fusion, le mainteneur relance le workflow de version, qui crée l'étiquette et la version en brouillon, puis lance la construction de l'exe ; le mainteneur publie ensuite le brouillon. » |
 | `pull-request-footer` | « Pull request ouverte par release-please, à partir des commits fusionnés sur main. » |
 | `label` | « version : en attente » |
 | `release-label` | « version : étiquetée » |
@@ -86,8 +86,13 @@ Deux textes de release-please ne se règlent pas et restent en anglais : le comm
 ### Vérifier l'exe
 
 - **Empreinte** : `Get-FileHash .\Sollicito-X.Y.Z-win-x64.exe -Algorithm SHA256`, à comparer au fichier `.sha256` ou au condensé que la page de la version affiche pour l'exe.
+- **Version de `gh`** : 2.102.0 ou plus. Avant elle, `gh` lisait `--signer-workflow` comme un préfixe et comparait `--source-ref` sans tenir compte de la casse. Ce sont les avis GHSA-wjmr-j3rp-mh2g et GHSA-4mq3-hpgx-9cx8, corrigés le 30/09/2026. `joindre-au-brouillon.sh` refuse un `gh` plus ancien.
 - **Attestation, en ligne** : `gh attestation verify Sollicito-X.Y.Z-win-x64.exe --repo moonn1000/sollicito --signer-workflow moonn1000/sollicito/.github/workflows/publication.yml --source-ref refs/tags/vX.Y.Z`.
-- **Attestation, hors ligne** : d'abord, en ligne, `gh attestation trusted-root > trusted_root.jsonl`. Ensuite, la même commande, avec `--bundle Sollicito-X.Y.Z-win-x64.exe.sigstore.json --custom-trusted-root trusted_root.jsonl`.
+- **Attestation, hors ligne** : d'abord, en ligne, la racine de confiance de Sigstore :
+  - dans Windows PowerShell 5.1 : `gh attestation trusted-root | Out-File -Encoding ascii trusted_root.jsonl`. La redirection `>` y écrit un BOM, ou de l'UTF-16, que `gh` refuse (« failed to proto-json unmarshal trusted root ») ;
+  - dans `cmd`, PowerShell 7 ou bash : `gh attestation trusted-root > trusted_root.jsonl`.
+
+  Ensuite, la même commande qu'en ligne, avec `--bundle Sollicito-X.Y.Z-win-x64.exe.sigstore.json --custom-trusted-root trusted_root.jsonl`. La recette pour PowerShell 5.1 a été essayée sur un poste Windows le 21/11/2026, sur une attestation publique : avec `Out-File -Encoding ascii`, comme avec `cmd`, l'attestation se vérifie ; avec `>`, `gh` refuse la racine.
 
 Le guide « Démarrer » (#60) l'expliquera aux utilisateurs.
 
@@ -96,7 +101,7 @@ Le guide « Démarrer » (#60) l'expliquera aux utilisateurs.
 La CI de chaque pull request passe par la publication en mode d'essai, sans `id-token` ni `contents: write` :
 
 - `tester-la-garde.sh` éprouve la garde sur 13 refs admises et refusées : branche nommée comme une version, injection, commit absent de `main`…
-- `tester-la-version.sh` contrôle la configuration de release-please et le seul déclencheur du workflow de version.
+- `tester-la-version.sh` contrôle la configuration de release-please. Il contrôle aussi, par liste d'autorisation (`controler-les-declencheurs.sh`), que les workflows de version et de publication n'ont que `workflow_dispatch`. Le contrôle est lui-même éprouvé sur 21 copies de `version.yml`, à chacune desquelles on a ajouté un déclencheur ou une forme inattendue ; il doit les refuser toutes.
 - Le job « Exe » prépare les fichiers d'une version d'essai.
 
 La répétition s'arrête avant l'attestation et l'envoi. Ne tournent pour la première fois qu'au palier 5 : release-please contre le dépôt, le lancement de la publication, l'attestation et l'envoi au brouillon.

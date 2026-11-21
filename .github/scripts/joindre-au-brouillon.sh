@@ -4,7 +4,7 @@
 # confiance de Sigstore. Après, il compare le condensé que GitHub affiche à l'empreinte.
 #
 # Usage : joindre-au-brouillon.sh <dossier préparé> <paquet de l'attestation>
-# Lit GITHUB_REF, GITHUB_REPOSITORY, RUNNER_TEMP et GH_TOKEN dans l'environnement.
+# Lit GITHUB_REF, GITHUB_SHA, GITHUB_REPOSITORY, RUNNER_TEMP et GH_TOKEN dans l'environnement.
 set -euo pipefail
 
 dossier="${1-}"
@@ -25,7 +25,13 @@ if ! [[ "$brouillon" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-# 2. L'empreinte et l'attestation, vérifiées hors ligne.
+# 2. L'empreinte et l'attestation, vérifiées hors ligne. Il faut gh 2.102.0 ou plus : avant, --signer-workflow se
+#    lisait comme un préfixe et --source-ref sans la casse (avis GHSA-wjmr-j3rp-mh2g et GHSA-4mq3-hpgx-9cx8).
+read -r majeure mineure _ <<< "$(gh --version | sed -nE '1s/^gh version ([0-9]+)\.([0-9]+)\.([0-9]+).*/\1 \2 \3/p')"
+if ! [[ "${majeure-}" =~ ^[0-9]+$ && "${mineure-}" =~ ^[0-9]+$ ]] || (( majeure < 2 || (majeure == 2 && mineure < 102) )); then
+  echo "Refus : il faut gh 2.102.0 ou plus pour vérifier l'attestation." >&2
+  exit 1
+fi
 (cd "$dossier" && sha256sum --check --strict "$NOM.sha256")
 racine="$RUNNER_TEMP/trusted_root.jsonl"
 gh attestation trusted-root > "$racine"
@@ -34,7 +40,8 @@ gh attestation verify "$dossier/$NOM" \
   --custom-trusted-root "$racine" \
   --repo "$GITHUB_REPOSITORY" \
   --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/publication.yml" \
-  --source-ref "$GITHUB_REF"
+  --source-ref "$GITHUB_REF" \
+  --source-digest "$GITHUB_SHA"
 cp "$paquet" "$dossier/$NOM.sigstore.json"
 
 # 3. L'envoi au brouillon. gh retrouve un brouillon par son étiquette ; --clobber laisse un rattrapage remplacer

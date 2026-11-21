@@ -36,9 +36,30 @@ version="$(grep 'x-release-please-version' "$props" | sed -nE 's#.*<Version>([0-
 attendue="$(jq -r '.["."] // "0.0.0"' "$manifeste")"
 exiger "version de Directory.Build.props ($version) égale à celle du manifeste ($attendue)" test "$version" = "$attendue"
 
-# Le workflow de version : workflow_dispatch seul, jamais à chaque push.
-exiger "workflow de version lancé à la main seulement" grep -qE '^  workflow_dispatch:' "$workflow"
-exiger "aucun autre déclencheur du workflow de version" bash -c "! grep -qE '^  (push|pull_request|pull_request_target|schedule|workflow_run|release|create|repository_dispatch):' '$workflow'"
+# Le workflow de version : workflow_dispatch seul, par liste d'autorisation.
+controle="$(dirname "$0")/controler-les-declencheurs.sh"
+exiger "workflow de version : workflow_dispatch seul" bash "$controle" "$workflow"
+exiger "workflow de publication : workflow_dispatch seul" bash "$controle" .github/workflows/publication.yml
+
+# Le contrôle lui-même, éprouvé sur des copies du workflow : chaque déclencheur ajouté doit être refusé.
+essais="$(mktemp -d)"
+trap 'rm -rf "$essais"' EXIT
+refuse() {
+  local description="$1" copie="$essais/version.yml"
+  shift
+  "$@" < "$workflow" > "$copie"
+  exiger "contrôle des déclencheurs : $description refusé" bash -c "! bash '$controle' '$copie'"
+}
+ajouter() { awk -v ligne="$1" '{ print } /^on:[[:space:]]*$/ { print ligne }'; }
+for declencheur in 'push:' '"push":' "'push':" 'push :' 'pull_request:' 'pull_request_target:' 'issue_comment:' \
+  'issues:' 'workflow_call:' 'workflow_run:' 'merge_group:' 'watch:' 'check_run:' 'schedule:' 'release:' \
+  'repository_dispatch:' 'create:'; do
+  refuse "$declencheur ajouté" ajouter "  $declencheur"
+done
+refuse "on: en ligne (liste)" sed -E 's/^on:[[:space:]]*$/on: [push, workflow_dispatch]/'
+refuse "on: en ligne (un seul nom)" sed -E 's/^on:[[:space:]]*$/on: workflow_dispatch/'
+refuse "clé « on » entre guillemets" sed -E 's/^on:[[:space:]]*$/"on":/'
+refuse "second bloc on:" awk '{ print } END { print "on:"; print "  push:" }'
 
 if (( ecarts > 0 )); then
   echo "$ecarts écart(s)."
