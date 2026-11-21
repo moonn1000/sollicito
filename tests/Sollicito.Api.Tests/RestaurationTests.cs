@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Sollicito.Api.Relances;
@@ -407,6 +409,78 @@ public sealed class RestaurationTests : IAsyncLifetime
 
         Assert.All(restes, fichier => Assert.False(File.Exists(fichier), fichier));
         Assert.All(autres, fichier => Assert.True(File.Exists(fichier), fichier));
+    }
+
+    [Fact]
+    public async Task Une_verification_trop_longue_s_interrompt_a_sa_borne_et_ne_remplace_rien()
+    {
+        var horloge = new HorlogeAMinuterie(HorlogeDeTest.Reference);
+        var etapes = new EtapesDeTest { Arret = EtapeDeLaRestauration.CopieDeTravailEcrite };
+        await using var api = await LancerSurAsync(_dossier, horloge, AppelsDeLaRestauration.AvecLesEtapes(etapes));
+        var nom = await PoserUneCopieLenteAVerifierAsync(api);
+
+        var restauration = api.RestaurerAsync(api.Copie(nom));
+        await etapes.Atteinte;
+        etapes.Relacher();
+        // La vérification relit la copie (integrity_check, plusieurs secondes) quand sa borne échoit.
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        var depuisLaBorne = Stopwatch.StartNew();
+        horloge.Avancer(RestaurationDeLaBase.DelaiDeLaVerification);
+
+        Assert.Equal(IssueDeLaRestauration.Impossible, await restauration);
+        Assert.True(depuisLaBorne.Elapsed < TimeSpan.FromSeconds(1), $"La vérification a continué {depuisLaBorne.Elapsed} après sa borne.");
+        await RienNAChangeAsync(api);
+    }
+
+    [Fact]
+    public async Task Une_fermeture_pendant_la_verification_l_interrompt_et_ne_remplace_rien()
+    {
+        var etapes = new EtapesDeTest { Arret = EtapeDeLaRestauration.CopieDeTravailEcrite };
+        await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest(), AppelsDeLaRestauration.AvecLesEtapes(etapes));
+        var nom = await PoserUneCopieLenteAVerifierAsync(api);
+        var demande = await PreparerAsync(api, api.Copie(nom));
+        using var fermeture = new CancellationTokenSource();
+
+        var restauration = api.Restauration().RestaurerAsync(demande, fermeture.Token);
+        await etapes.Atteinte;
+        etapes.Relacher();
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        var depuisLaFermeture = Stopwatch.StartNew();
+        await fermeture.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => restauration);
+        Assert.True(depuisLaFermeture.Elapsed < TimeSpan.FromSeconds(1), $"La vérification a continué {depuisLaFermeture.Elapsed} après la fermeture.");
+        await RienNAChangeAsync(api);
+    }
+
+    // Une base saine à restaurer, puis, rangée parmi les copies, une copie lente à vérifier : 30 000 lignes et 50 index,
+    // qu'integrity_check relit en plusieurs secondes. Elle n'a pas le schéma de Sollicito, mais la vérification s'arrête
+    // avant de l'apprendre.
+    private async Task<string> PoserUneCopieLenteAVerifierAsync(ApiLancee api)
+    {
+        await api.AttendreLaPremiereVerificationAsync();
+        await api.EnregistrerAvecSuccesAsync("Atelier Azur fictif", "Comptable A", "2026-11-02T09:00");
+        var nom = NomsDesCopies.DuJour(api.Sauvegardes().Installation, new DateOnly(2026, 11, 10));
+        using (var connexion = Ouvrir(Path.Combine(ParDefaut, nom), SqliteOpenMode.ReadWriteCreate))
+        {
+            connexion.Executer("CREATE TABLE t (id INTEGER PRIMARY KEY, c0 INTEGER, c1 INTEGER, c2 INTEGER, c3 INTEGER, c4 INTEGER, c5 INTEGER, c6 INTEGER, c7 INTEGER, c8 INTEGER, c9 INTEGER)");
+            connexion.Executer("WITH RECURSIVE n(x) AS (SELECT 0 UNION ALL SELECT x + 1 FROM n WHERE x < 29999) INSERT INTO t SELECT NULL, x * 7 % 1000, x * 13 % 997, x % 31, x * 3, x * 5 % 101, x, x * 11 % 89, x % 7, x * 17 % 1013, x * 19 FROM n");
+            for (var index = 0; index < 50; index++)
+            {
+                connexion.Executer($"CREATE INDEX i{index} ON t (c{index % 10}, c{(index + 1 + (index / 10)) % 10}, id)");
+            }
+        }
+
+        await api.SauvegarderMaintenantAsync();
+        return nom;
+    }
+
+    // La base est celle d'avant, la porte rouverte, et aucune copie de travail ne reste.
+    private async Task RienNAChangeAsync(ApiLancee api)
+    {
+        Assert.Equal(["Comptable A"], (await api.ListerAsync()).Select(candidature => candidature!["poste"]!.GetValue<string>()));
+        Assert.DoesNotContain(Fichiers(_dossier), fichier => fichier.Contains(".restauration", StringComparison.Ordinal));
+        Assert.DoesNotContain(api.Sauvegardes().Etat.Copies, copie => copie.Sorte == SorteDeCopie.AvantRestauration);
     }
 
     private static async Task<DemandeDeRestauration> PreparerAsync(ApiLancee api, CopieGardee copie) =>

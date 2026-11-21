@@ -164,6 +164,49 @@ public sealed class VerificationDUneCopieTests : IDisposable
     }
 
     [Fact]
+    public async Task Un_index_unique_renomme_en_sqlite_par_writable_schema_fait_refuser_la_copie()
+    {
+        await CreerUneBaseAsync(Copie, migration: null);
+        // Un index UNIQUE sur le poste, qui refuserait deux candidatures au même poste, renommé « sqlite_piege » dans
+        // sqlite_master : CREATE INDEX refuse ce nom, writable_schema l'écrit quand même, et l'index se charge.
+        Executer(Copie, "CREATE UNIQUE INDEX piege ON Candidatures (Poste)");
+        using (var connexion = Ouvrir(Copie))
+        {
+            ExecuterSur(connexion, "PRAGMA writable_schema = ON; UPDATE sqlite_master SET name = 'sqlite_piege', sql = replace(sql, 'INDEX piege', 'INDEX sqlite_piege') WHERE name = 'piege'; PRAGMA writable_schema = OFF;");
+        }
+
+        Assert.Equal(["sqlite_piege"], Lire(Copie, "SELECT name FROM sqlite_master WHERE type = 'index' AND sql LIKE 'CREATE UNIQUE INDEX sqlite_piege%'"));
+        Assert.Equal(["ok"], Lire(Copie, "PRAGMA integrity_check"));
+
+        Assert.Equal(new VerdictDUneCopie(SorteDeVerdict.Etrangere, 0), await VerifierAsync());
+    }
+
+    [Fact]
+    public async Task Un_verrou_des_migrations_retouche_se_retire_de_la_copie_de_travail_et_n_arrete_aucune_migration()
+    {
+        await CreerUneBaseAsync(Copie, migration: null);
+        var texte = Assert.Single(Lire(Copie, $"SELECT sql FROM sqlite_master WHERE type = 'table' AND name = '{VerrouDesMigrations.Table}'"));
+        // CHECK (0) refuse toute ligne du verrou : EF Core la réessaierait sans fin, au lancement de la version suivante.
+        using (var connexion = Ouvrir(Copie))
+        {
+            using var commande = connexion.CreateCommand();
+            commande.CommandText = "PRAGMA writable_schema = ON; UPDATE sqlite_master SET sql = $texte WHERE type = 'table' AND name = $nom; PRAGMA writable_schema = OFF;";
+            commande.Parameters.AddWithValue("$texte", texte[..texte.LastIndexOf(')')] + ", CHECK (0))");
+            commande.Parameters.AddWithValue("$nom", VerrouDesMigrations.Table);
+            commande.ExecuteNonQuery();
+        }
+
+        Assert.Equal(SorteDeVerdict.Saine, (await VerifierAsync()).Sorte);
+
+        // Le verrou retouché n'est plus dans la copie de travail : la migration qui suit le recrée, et ne l'attend pas.
+        Assert.Empty(Lire(Copie, $"SELECT sql FROM sqlite_master WHERE name = '{VerrouDesMigrations.Table}' AND sql LIKE '%CHECK%'"));
+        var options = new DbContextOptionsBuilder<BaseDeSollicito>().UseSqlite(CopieDeLaBase.ChaineDeConnexion(Copie, SqliteOpenMode.ReadWrite)).Options;
+        await using var suivante = new BaseDeSollicito(options);
+        await suivante.Database.MigrateAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal(["0"], Lire(Copie, $"SELECT COUNT(*) FROM \"{VerrouDesMigrations.Table}\""));
+    }
+
+    [Fact]
     public void Une_connexion_reglee_pour_un_fichier_non_sur_coupe_vues_declencheurs_schema_inscriptible_et_grosses_valeurs()
     {
         using (var connexion = Ouvrir(Copie, SqliteOpenMode.ReadWriteCreate))

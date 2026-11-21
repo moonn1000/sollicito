@@ -16,8 +16,8 @@ namespace Sollicito.Infrastructure.Sauvegardes;
 /// <item><c>PRAGMA integrity_check</c>, puis une taille de page égale à celle de la base ;</item>
 /// <item>l'historique des migrations : celui de l'exe, ou un début de celui-ci ; plus long, la copie est plus récente ;</item>
 /// <item>aucune clé étrangère sans sa ligne (<c>foreign_key_check</c>) ;</item>
-/// <item>une ligne restée dans le verrou des migrations de la copie de travail en est retirée, puis la copie se migre si
-/// elle est plus ancienne, et se relit saine ;</item>
+/// <item>le verrou des migrations de la copie de travail en est retiré, quel qu'il soit (EF Core le recrée), puis la copie
+/// se migre si elle est plus ancienne, et se relit saine ;</item>
 /// <item>son schéma est celui de l'exe, que ses migrations construisent dans une base en mémoire : texte des tables,
 /// colonnes, clés étrangères, texte des index ; puis, de nouveau, aucune clé étrangère sans sa ligne.</item>
 /// </list>
@@ -36,26 +36,29 @@ public static class VerificationDUneCopie
             IReadOnlyList<string> appliquees;
             await using (var connexion = await OuvrirAsync(copieDeTravail, SqliteOpenMode.ReadOnly, annulation))
             {
-                var objets = LireLesObjets(connexion);
+                // Les instructions de SQLite ne regardent pas le jeton : la borne de la vérification et la fermeture les
+                // interrompent (sqlite3_interrupt), integrity_check compris.
+                using var interruption = CopieDeLaBase.InterrompreSurAnnulation(connexion, annulation);
+                var objets = LireLesObjets(connexion, annulation);
                 // Une table virtuelle n'a pas de page racine.
                 if (objets.Any(objet => objet.Type is not ("table" or "index") || (objet.Type == "table" && objet.PageRacine == 0)))
                 {
                     return new VerdictDUneCopie(SorteDeVerdict.Etrangere, 0);
                 }
 
-                if (!LireLeControle(connexion, "PRAGMA integrity_check"))
+                if (!LireLeControle(connexion, "PRAGMA integrity_check", annulation))
                 {
                     return new VerdictDUneCopie(SorteDeVerdict.Abimee, 0);
                 }
 
-                if (Valeur(connexion, "PRAGMA page_size") != await TailleDePageAsync(baseEnCours, annulation)
+                if (Valeur(connexion, "PRAGMA page_size", annulation) != await TailleDePageAsync(baseEnCours, annulation)
                     || !objets.Any(objet => objet is { Type: "table", Nom: "__EFMigrationsHistory" }))
                 {
                     return new VerdictDUneCopie(SorteDeVerdict.Etrangere, 0);
                 }
 
-                appliquees = LireLesLignes(connexion, "SELECT MigrationId FROM \"__EFMigrationsHistory\" ORDER BY MigrationId");
-                if (LireLesLignes(connexion, "PRAGMA foreign_key_check").Count > 0)
+                appliquees = LireLesLignes(connexion, "SELECT MigrationId FROM \"__EFMigrationsHistory\" ORDER BY MigrationId", annulation);
+                if (LireLesLignes(connexion, "PRAGMA foreign_key_check", annulation).Count > 0)
                 {
                     return new VerdictDUneCopie(SorteDeVerdict.Abimee, 0);
                 }
@@ -73,11 +76,11 @@ public static class VerificationDUneCopie
 
             await using (var connexion = await OuvrirAsync(copieDeTravail, SqliteOpenMode.ReadWrite, annulation))
             {
-                // La copie de travail n'est qu'à nous : une ligne restée là ferait attendre ses migrations sans fin (#79).
-                if (LireLesObjets(connexion).Any(objet => objet is { Type: "table", Nom: VerrouDesMigrations.Table }))
-                {
-                    Executer(connexion, $"DELETE FROM \"{VerrouDesMigrations.Table}\"");
-                }
+                using var interruption = CopieDeLaBase.InterrompreSurAnnulation(connexion, annulation);
+                // La copie de travail n'est qu'à nous : son verrou des migrations s'en retire, quel qu'il soit. Une ligne
+                // restée là, ou une contrainte glissée dans la table, ferait attendre ses migrations sans fin (#79). EF Core
+                // le recrée tel qu'il l'écrit, à la migration de la copie, ou au lancement suivant.
+                Executer(connexion, $"DROP TABLE IF EXISTS \"{VerrouDesMigrations.Table}\"", annulation);
 
                 if (aAppliquer > 0)
                 {
@@ -89,18 +92,19 @@ public static class VerificationDUneCopie
 
             await using (var connexion = await OuvrirAsync(copieDeTravail, SqliteOpenMode.ReadOnly, annulation))
             {
-                if (!LireLeControle(connexion, "PRAGMA integrity_check"))
+                using var interruption = CopieDeLaBase.InterrompreSurAnnulation(connexion, annulation);
+                if (!LireLeControle(connexion, "PRAGMA integrity_check", annulation))
                 {
                     return new VerdictDUneCopie(SorteDeVerdict.Abimee, 0);
                 }
 
-                if (!LaStructure(connexion).SequenceEqual(await StructureDeLExeAsync(annulation), StringComparer.Ordinal))
+                if (!LaStructure(connexion, annulation).SequenceEqual(await StructureDeLExeAsync(annulation), StringComparer.Ordinal))
                 {
                     return new VerdictDUneCopie(SorteDeVerdict.Etrangere, 0);
                 }
 
                 // Les clés étrangères, de nouveau : la migration a pu reconstruire des tables.
-                if (LireLesLignes(connexion, "PRAGMA foreign_key_check").Count > 0)
+                if (LireLesLignes(connexion, "PRAGMA foreign_key_check", annulation).Count > 0)
                 {
                     return new VerdictDUneCopie(SorteDeVerdict.Abimee, 0);
                 }
@@ -147,7 +151,7 @@ public static class VerificationDUneCopie
     {
         await using var connexion = new SqliteConnection(CopieDeLaBase.ChaineDeConnexion(fichier, SqliteOpenMode.ReadOnly));
         await connexion.OpenAsync(annulation);
-        return Valeur(connexion, "PRAGMA page_size");
+        return Valeur(connexion, "PRAGMA page_size", annulation);
     }
 
     // Les migrations du code, dans l'ordre : une base en mémoire, jamais ouverte, ne sert qu'à les lister.
@@ -168,16 +172,16 @@ public static class VerificationDUneCopie
             await reference.Database.MigrateAsync(annulation);
         }
 
-        return LaStructure(memoire);
+        return LaStructure(memoire, annulation);
     }
 
-    // Texte des tables, colonnes, clés étrangères, texte des index ; ni les tables internes de SQLite, ni le verrou des
-    // migrations. Les mêmes migrations, jouées dans le même ordre, écrivent le même texte, qu'une copie soit migrée en
-    // une fois ou en plusieurs.
-    private static List<string> LaStructure(SqliteConnection connexion)
+    // Texte des tables, colonnes, clés étrangères, texte des index ; ni les tables que tient SQLite, ni le verrou des
+    // migrations, retiré de la copie de travail. Les mêmes migrations, jouées dans le même ordre, écrivent le même texte,
+    // qu'une copie soit migrée en une fois ou en plusieurs.
+    private static List<string> LaStructure(SqliteConnection connexion, CancellationToken annulation)
     {
         var lignes = new List<string>();
-        foreach (var objet in LireLesObjets(connexion).Where(objet => !EstInterne(objet)))
+        foreach (var objet in LireLesObjets(connexion, annulation).Where(objet => !EstInterne(objet)))
         {
             lignes.Add($"objet|{objet.Type}|{objet.Nom}|{objet.Table}");
             if (objet.Type == "index")
@@ -188,9 +192,9 @@ public static class VerificationDUneCopie
             {
                 // Le texte de la table : une contrainte CHECK ou une collation ajoutée ne se voit pas dans ses colonnes.
                 lignes.Add($"table|{objet.Nom}|{objet.Sql}");
-                lignes.AddRange(LireLesLignes(connexion, "SELECT cid || '|' || name || '|' || type || '|' || \"notnull\" || '|' || quote(dflt_value) || '|' || pk || '|' || hidden FROM pragma_table_xinfo($nom) ORDER BY cid", objet.Nom)
+                lignes.AddRange(LireLesLignes(connexion, "SELECT cid || '|' || name || '|' || type || '|' || \"notnull\" || '|' || quote(dflt_value) || '|' || pk || '|' || hidden FROM pragma_table_xinfo($nom) ORDER BY cid", annulation, objet.Nom)
                     .Select(colonne => $"colonne|{objet.Nom}|{colonne}"));
-                lignes.AddRange(LireLesLignes(connexion, "SELECT id || '|' || seq || '|' || \"table\" || '|' || \"from\" || '|' || quote(\"to\") || '|' || on_update || '|' || on_delete || '|' || \"match\" FROM pragma_foreign_key_list($nom) ORDER BY id, seq", objet.Nom)
+                lignes.AddRange(LireLesLignes(connexion, "SELECT id || '|' || seq || '|' || \"table\" || '|' || \"from\" || '|' || quote(\"to\") || '|' || on_update || '|' || on_delete || '|' || \"match\" FROM pragma_foreign_key_list($nom) ORDER BY id, seq", annulation, objet.Nom)
                     .Select(cle => $"cle|{objet.Nom}|{cle}"));
             }
         }
@@ -199,13 +203,20 @@ public static class VerificationDUneCopie
         return lignes;
     }
 
+    // Seules s'écartent les tables que SQLite tient lui-même, et les index sans texte qu'il crée pour une contrainte UNIQUE
+    // ou PRIMARY KEY, déjà lue dans le texte de leur table. Un autre objet nommé « sqlite_… », que seul writable_schema
+    // peut écrire, se compare comme les autres.
     private static bool EstInterne(ObjetDuSchema objet) =>
-        objet.Nom.StartsWith("sqlite_", StringComparison.OrdinalIgnoreCase)
+        objet is { Type: "table", Nom: "sqlite_sequence" or "sqlite_stat1" or "sqlite_stat2" or "sqlite_stat3" or "sqlite_stat4" }
+        || (objet is { Type: "index", Sql.Length: 0 } && objet.Nom.StartsWith("sqlite_autoindex_", StringComparison.Ordinal))
         || objet.Nom == VerrouDesMigrations.Table
         || objet.Table == VerrouDesMigrations.Table;
 
-    private static List<ObjetDuSchema> LireLesObjets(SqliteConnection connexion)
+    // Chaque instruction regarde d'abord le jeton : sqlite3_interrupt n'arrête qu'une instruction en cours, et une
+    // annulation tombée entre deux instructions serait perdue.
+    private static List<ObjetDuSchema> LireLesObjets(SqliteConnection connexion, CancellationToken annulation)
     {
+        annulation.ThrowIfCancellationRequested();
         using var commande = connexion.CreateCommand();
         commande.CommandText = "SELECT type, name, tbl_name, ifnull(sql, ''), ifnull(rootpage, 0) FROM sqlite_master ORDER BY type, name";
         using var lecture = commande.ExecuteReader();
@@ -218,10 +229,12 @@ public static class VerificationDUneCopie
         return objets;
     }
 
-    private static bool LireLeControle(SqliteConnection connexion, string pragma) => LireLesLignes(connexion, pragma) is ["ok"];
+    private static bool LireLeControle(SqliteConnection connexion, string pragma, CancellationToken annulation) =>
+        LireLesLignes(connexion, pragma, annulation) is ["ok"];
 
-    private static List<string> LireLesLignes(SqliteConnection connexion, string requete, string? nom = null)
+    private static List<string> LireLesLignes(SqliteConnection connexion, string requete, CancellationToken annulation, string? nom = null)
     {
+        annulation.ThrowIfCancellationRequested();
         using var commande = connexion.CreateCommand();
         commande.CommandText = requete;
         if (nom is not null)
@@ -239,10 +252,12 @@ public static class VerificationDUneCopie
         return lignes;
     }
 
-    private static string Valeur(SqliteConnection connexion, string requete) => LireLesLignes(connexion, requete).Single();
+    private static string Valeur(SqliteConnection connexion, string requete, CancellationToken annulation) =>
+        LireLesLignes(connexion, requete, annulation).Single();
 
-    private static void Executer(SqliteConnection connexion, string instruction)
+    private static void Executer(SqliteConnection connexion, string instruction, CancellationToken annulation)
     {
+        annulation.ThrowIfCancellationRequested();
         using var commande = connexion.CreateCommand();
         commande.CommandText = instruction;
         commande.ExecuteNonQuery();

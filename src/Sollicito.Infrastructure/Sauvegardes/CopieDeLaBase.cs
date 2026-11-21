@@ -63,7 +63,7 @@ public static class CopieDeLaBase
 
     // sqlite3_interrupt se lance d'un autre fil, sans risque : SQLite l'a prévu pour cela, pourvu que la connexion ne se
     // ferme pas avant son retour. L'enregistrement se défait donc avant la connexion, qui se déclare avant lui.
-    private static CancellationTokenRegistration InterrompreSurAnnulation(SqliteConnection connexion, CancellationToken annulation) =>
+    internal static CancellationTokenRegistration InterrompreSurAnnulation(SqliteConnection connexion, CancellationToken annulation) =>
         annulation.Register(static poignee => raw.sqlite3_interrupt((sqlite3)poignee!), connexion.Handle);
 
     /// <summary>
