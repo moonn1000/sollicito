@@ -1,4 +1,5 @@
 import type { EntrepriseConnue, EvenementDeLHistorique, StatutDeCandidature, TypeDEtape } from "../api/clientDeLApi.ts";
+import { afficherLeJour } from "../relances/affichage.ts";
 
 /** Les statuts, en toutes lettres. */
 export const LIBELLES_DES_STATUTS: Record<StatutDeCandidature, string> = {
@@ -27,13 +28,19 @@ export function deStatut(statut: StatutDeCandidature): string {
 
 /**
  * Ce que dit un événement de l'historique, en une phrase : « Statut passé d'Envoyée à Entretien », « Correction :
- * retour de Refusée à Entretien », « Entretien », « Correction : Entretien » pour une étape corrigée (#25). La note
- * d'une étape s'affiche à part.
+ * retour de Refusée à Entretien », « Entretien », « Correction : Entretien » pour une étape corrigée (#25), « Relance
+ * faite, à Jeanne Martin : échéance du vendredi 3 avril 2026 » (#14). La note d'une étape s'affiche à part.
  */
 export function decrireLEvenement(evenement: EvenementDeLHistorique): string {
   if (evenement.sorte === "etape") {
     const type = LIBELLES_DES_TYPES_D_ETAPE[evenement.type] ?? evenement.type;
     return evenement.corrige === null ? type : `Correction : ${type}`;
+  }
+
+  if (evenement.sorte === "clotureDeRelance") {
+    const issue = evenement.etat === "Faite" ? "faite" : "abandonnée";
+    const destinataire = evenement.destinataire === null ? "sans destinataire" : `à ${evenement.destinataire.nom}`;
+    return `Relance ${issue}, ${destinataire} : échéance du ${afficherLeJour(evenement.echeance)}`;
   }
 
   const vers = LIBELLES_DES_STATUTS[evenement.nouveau];

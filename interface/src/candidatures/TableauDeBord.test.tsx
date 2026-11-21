@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import { candidatureFictive, clientSimule } from "../tests/clientSimule.ts";
+import { candidatureFictive, clientSimule, relanceSignaleeFictive } from "../tests/clientSimule.ts";
 import { TableauDeBord } from "./TableauDeBord.tsx";
 
 function lignes() {
@@ -94,4 +94,17 @@ test("le poste d'une candidature ouvre sa fiche, par un bouton qui nomme le post
   fireEvent.click(bouton);
   expect(ouvrirLaFiche).toHaveBeenCalledExactlyOnceWith(2);
   expect(within(lignes()[1]!).getAllByRole("cell")[3]!.textContent).toBe("Entretien");
+});
+
+test("le tableau de bord signale les relances avant les candidatures (#14)", async () => {
+  const client = clientSimule({
+    listerLesRelances: async () => ({ aujourdhui: "2026-11-18", echues: [relanceSignaleeFictive()], deLaSemaine: [] }),
+    listerLesCandidatures: async () => [candidatureFictive()],
+  });
+
+  render(<TableauDeBord client={client} nouvelleCandidature={() => {}} ouvrirLaFiche={() => {}} ouvrirLeBrouillon={async () => "ouvert"} />);
+
+  expect(await screen.findByRole("heading", { name: "Échues (1)" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Préparer le brouillon de la relance : Comptable, chez Lumière Verte SA" })).toBeDefined();
+  expect(await screen.findByRole("table")).toBeDefined();
 });

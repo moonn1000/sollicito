@@ -203,11 +203,11 @@ function texteDeLAvertissement(avertissement: Avertissement, actuelle: Entrepris
 }
 
 // L'instant du premier événement en vigueur de l'historique, quelle que soit sa sorte : un événement marqué comme
-// corrigé ne compte plus. Rien s'il n'y en a aucun.
+// corrigé ne compte plus ; une clôture de relance (#14), qui ne se corrige pas, compte toujours. Rien s'il n'y en a aucun.
 function premierEvenement(fiche: Fiche): string | undefined {
   let premier: string | undefined;
   for (const evenement of fiche.historique) {
-    if (evenement.estCorrige) {
+    if (evenement.sorte !== "clotureDeRelance" && evenement.estCorrige) {
       continue;
     }
 

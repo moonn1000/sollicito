@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vitest";
 import { JETON_FICTIF } from "../tests/canalSimule.ts";
-import { candidatureFictive, ficheFictive, sauvegardesFictives } from "../tests/clientSimule.ts";
+import { candidatureFictive, contactFictif, ficheFictive, relanceFictive, relanceSignaleeFictive, sauvegardesFictives } from "../tests/clientSimule.ts";
 import { creerClientDeLApi, EN_TETE_DU_JETON, ErreurDeLApi } from "./clientDeLApi.ts";
 
 const SAISIE = { entreprise: "Lumière Verte SA", poste: "Comptable", envoyeeLe: "2026-03-27T23:30" };
@@ -314,4 +314,97 @@ test("le retour au dossier par défaut rend l'état à jour, ou le motif d'un re
   expect(adresse).toBe("/api/sauvegardes/dossier-par-defaut");
   expect(options?.method).toBe("POST");
   expect(options?.body).toBeUndefined();
+});
+
+test("les contacts se lisent, s'ajoutent, se modifient et se suppriment par leurs seuls identifiants (#14)", async () => {
+  const envoyer = vi.fn<typeof fetch>(async (_adresse, options) => {
+    if (options?.method === "DELETE") {
+      return new Response(null, { status: 204 });
+    }
+
+    if (options?.method === "POST") {
+      return Response.json(contactFictif(), { status: 201 });
+    }
+
+    return Response.json(options?.method === "PUT" ? contactFictif() : [contactFictif()]);
+  });
+  const client = creerClientDeLApi(JETON_FICTIF, envoyer);
+
+  expect(await client.listerLesContacts(1)).toEqual([contactFictif()]);
+  expect(await client.ajouterUnContact(1, { nom: "Jeanne Martin", email: "jeanne.martin@exemple.invalid" })).toEqual({ issue: "enregistre", contact: contactFictif() });
+  expect(await client.modifierUnContact(4, { nom: "Jeanne Martin", email: "jeanne.martin@exemple.invalid" })).toEqual({ issue: "enregistre", contact: contactFictif() });
+  await client.supprimerUnContact(4);
+
+  expect(envoyer.mock.calls.map(([adresse, options]) => [adresse, options?.method ?? "GET"])).toEqual([
+    ["/api/entreprises/1/contacts", "GET"],
+    ["/api/entreprises/1/contacts", "POST"],
+    ["/api/contacts/4", "PUT"],
+    ["/api/contacts/4", "DELETE"],
+  ]);
+  expect(JSON.parse(String(envoyer.mock.calls[1]![1]?.body))).toEqual({ nom: "Jeanne Martin", email: "jeanne.martin@exemple.invalid" });
+  await expect(client.listerLesContacts(0)).rejects.toThrow(RangeError);
+});
+
+test("les refus d'un contact reviennent champ par champ ; une autre erreur est signalée", async () => {
+  const refuse = apiQuiRepond(Response.json({ status: 400, errors: { email: ["Indiquez l'adresse électronique."], autre: ["ignoré"] } }, { status: 400 }));
+  const introuvable = apiQuiRepond(Response.json({ status: 404, title: "Ce contact n'existe pas." }, { status: 404 }));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, refuse).ajouterUnContact(1, { nom: "Jeanne", email: "" })).toEqual({
+    issue: "refuse",
+    refus: { email: ["Indiquez l'adresse électronique."] },
+  });
+  await expect(creerClientDeLApi(JETON_FICTIF, introuvable).modifierUnContact(4, { nom: "Jeanne", email: "j@x.be" })).rejects.toEqual(new ErreurDeLApi(404));
+});
+
+test("une relance se planifie, se change et se clôt par les routes de sa candidature, et rend la fiche, les refus ou le motif", async () => {
+  const fiche = ficheFictive({ relances: [relanceFictive()] });
+  const envoyer = vi.fn<typeof fetch>(async () => Response.json(fiche));
+  const client = creerClientDeLApi(JETON_FICTIF, envoyer);
+
+  expect(await client.planifierUneRelance(1, { delai: 7, destinataire: 4 })).toEqual({ issue: "faite", fiche });
+  expect(await client.changerLaRelance(1, 7, { delai: 10, destinataire: null })).toEqual({ issue: "faite", fiche });
+  expect(await client.marquerLaRelanceFaite(1, 7)).toEqual({ faite: true, fiche });
+  expect(await client.abandonnerLaRelance(1, 7)).toEqual({ faite: true, fiche });
+
+  expect(envoyer.mock.calls.map(([adresse, options]) => [adresse, options?.method, options?.body ?? null])).toEqual([
+    ["/api/candidatures/1/relances", "POST", JSON.stringify({ delai: 7, destinataire: 4 })],
+    ["/api/candidatures/1/relances/7", "PUT", JSON.stringify({ delai: 10, destinataire: null })],
+    ["/api/candidatures/1/relances/7/faite", "POST", null],
+    ["/api/candidatures/1/relances/7/abandon", "POST", null],
+  ]);
+
+  const refusee = apiQuiRepond(Response.json({ status: 400, errors: { delai: ["Le délai d'une relance compte de 1 à 365 jours."] } }, { status: 400 }));
+  expect(await creerClientDeLApi(JETON_FICTIF, refusee).planifierUneRelance(1, { delai: 0, destinataire: null })).toEqual({
+    issue: "refusee",
+    refus: { delai: ["Le délai d'une relance compte de 1 à 365 jours."] },
+  });
+  const nonPermise = apiQuiRepond(
+    Response.json({ status: 409, title: "La relance n'est pas planifiée.", detail: "La candidature est close : elle ne reçoit plus de relance." }, { status: 409 }),
+  );
+  expect(await creerClientDeLApi(JETON_FICTIF, nonPermise).planifierUneRelance(1, { delai: 7, destinataire: null })).toEqual({
+    issue: "nonPermise",
+    motif: "La candidature est close : elle ne reçoit plus de relance.",
+  });
+});
+
+test("les relances du tableau de bord et le délai par défaut se lisent ; le délai se change en PUT", async () => {
+  const relances = { aujourdhui: "2026-11-18", echues: [relanceSignaleeFictive()], deLaSemaine: [] };
+  const reglage = { delaiParDefaut: 10, delaiLisible: true, fichierLisible: true };
+  const envoyer = vi.fn<typeof fetch>(async (adresse) => Response.json(adresse === "/api/relances" ? relances : reglage));
+  const client = creerClientDeLApi(JETON_FICTIF, envoyer);
+
+  expect(await client.listerLesRelances()).toEqual(relances);
+  expect(await client.lireLeReglageDesRelances()).toEqual(reglage);
+  expect(await client.changerLeDelaiParDefaut(10)).toEqual({ issue: "change", reglage });
+  expect(envoyer.mock.calls[2]![0]).toBe("/api/reglages/relances");
+  expect(envoyer.mock.calls[2]![1]?.method).toBe("PUT");
+  expect(JSON.parse(String(envoyer.mock.calls[2]![1]?.body))).toEqual({ delaiParDefaut: 10 });
+
+  const refuse = apiQuiRepond(Response.json({ status: 400, errors: { delaiParDefaut: ["Le délai d'une relance compte de 1 à 365 jours."] } }, { status: 400 }));
+  expect(await creerClientDeLApi(JETON_FICTIF, refuse).changerLeDelaiParDefaut(0)).toEqual({ issue: "refuse", refus: ["Le délai d'une relance compte de 1 à 365 jours."] });
+  const illisible = apiQuiRepond(Response.json({ status: 409, title: "Le délai par défaut n'a pas changé : les réglages n'ont pas pu être relus." }, { status: 409 }));
+  expect(await creerClientDeLApi(JETON_FICTIF, illisible).changerLeDelaiParDefaut(10)).toEqual({
+    issue: "impossible",
+    motif: "Le délai par défaut n'a pas changé : les réglages n'ont pas pu être relus.",
+  });
 });

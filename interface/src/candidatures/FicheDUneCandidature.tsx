@@ -2,12 +2,16 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import {
   estIntrouvable,
   type ClientDeLApi,
+  type ContactConnu,
   type EtapeLue,
   type EvenementDeLHistorique,
   type FicheDUneCandidature as Fiche,
   type ResultatDUneAction,
   type StatutDeCandidature,
 } from "../api/clientDeLApi.ts";
+import type { IssueDuBrouillon } from "../hote/canalDeLHote.ts";
+import { ContactsDeLEntreprise } from "../relances/ContactsDeLEntreprise.tsx";
+import { SuiviDesRelances } from "../relances/SuiviDesRelances.tsx";
 import { afficherLInstant, decrireLEvenement, heureSaisieDe, LIBELLES_DES_STATUTS, LIBELLES_DES_TYPES_D_ETAPE } from "./affichage.ts";
 import { FormulaireDUneEtape, type ReponseALEtape } from "./FormulaireDUneEtape.tsx";
 import { NoterUneEtape } from "./NoterUneEtape.tsx";
@@ -29,8 +33,8 @@ type Confirmation = "fermee" | "ouverte" | "annulee";
  * que le diagramme d'états permet, que l'API donne avec la fiche ; la correction du dernier changement ; une note
  * d'entretien ou d'échange ; l'historique, du plus ancien au plus récent. Elle mène à la modification de la
  * candidature, corrige une étape de l'historique, et supprime la candidature après une confirmation affichée dans
- * l'interface, jamais par une boîte du navigateur (#25). Les textes s'affichent comme du texte, jamais comme du HTML :
- * React les échappe.
+ * l'interface, jamais par une boîte du navigateur (#25). Elle planifie et suit la relance de la candidature, et tient les
+ * contacts de son entreprise (#14). Les textes s'affichent comme du texte, jamais comme du HTML : React les échappe.
  */
 export function FicheDUneCandidature({
   client,
@@ -40,6 +44,7 @@ export function FicheDUneCandidature({
   quandSupprimee,
   annonce,
   maintenant,
+  ouvrirLeBrouillon,
 }: {
   client: ClientDeLApi;
   candidature: number;
@@ -53,8 +58,12 @@ export function FicheDUneCandidature({
   annonce?: string;
   /** L'heure présente, qui remplit d'avance la date et l'heure d'une note. */
   maintenant?: () => Date;
+  /** Demande à la fenêtre hôte d'ouvrir le brouillon d'une relance ; absent hors de la fenêtre (#14). */
+  ouvrirLeBrouillon?: (relance: number) => Promise<IssueDuBrouillon>;
 }) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
+  // Les contacts de l'entreprise de la candidature (#14), relus quand elle change d'entreprise.
+  const [contacts, setContacts] = useState<{ entreprise: number; contacts: ContactConnu[] | "echec" }>();
   const [enCours, setEnCours] = useState(false);
   const [message, setMessage] = useState<Message>();
   const [annonceDeDepart, setAnnonceDeDepart] = useState(annonce);
@@ -300,6 +309,32 @@ export function FicheDUneCandidature({
 
   const fiche = chargement.etape === "prete" ? chargement.fiche : undefined;
   const correction = fiche?.correction ?? null;
+  const entreprise = fiche?.entreprise.id;
+
+  useEffect(() => {
+    if (entreprise === undefined) {
+      return undefined;
+    }
+
+    let actifs = true;
+    client.listerLesContacts(entreprise).then(
+      (lus) => {
+        if (actifs) {
+          setContacts({ entreprise, contacts: lus });
+        }
+      },
+      () => {
+        if (actifs) {
+          setContacts({ entreprise, contacts: "echec" });
+        }
+      },
+    );
+    return () => {
+      actifs = false;
+    };
+  }, [client, entreprise]);
+
+  const contactsDeLEntreprise = contacts !== undefined && contacts.entreprise === entreprise ? contacts.contacts : undefined;
 
   return (
     <section aria-labelledby="titre-de-la-fiche" className="fiche">
@@ -428,6 +463,26 @@ export function FicheDUneCandidature({
               </p>
             )}
           </section>
+          <SuiviDesRelances
+            client={client}
+            fiche={fiche}
+            contacts={Array.isArray(contactsDeLEntreprise) ? contactsDeLEntreprise : undefined}
+            ouvrirLeBrouillon={ouvrirLeBrouillon}
+            montrer={(recue) => {
+              setMessage(undefined);
+              setAnnonceDeDepart(undefined);
+              setConfirmation("fermee");
+              montrer(recue);
+            }}
+            relire={relire}
+          />
+          <ContactsDeLEntreprise
+            client={client}
+            entreprise={fiche.entreprise}
+            contacts={contactsDeLEntreprise}
+            remplacer={(nouveaux) => setContacts({ entreprise: fiche.entreprise.id, contacts: nouveaux })}
+            quandChanges={() => void relire()}
+          />
           <NoterUneEtape
             client={client}
             candidature={candidature}
@@ -518,10 +573,12 @@ function Historique({
   const avant = rangDeLEnvoi === -1 ? evenements : evenements.slice(0, rangDeLEnvoi);
   const apres = rangDeLEnvoi === -1 ? [] : evenements.slice(rangDeLEnvoi);
   const ligne = (evenement: EvenementDeLHistorique) => (
-    <li key={evenement.id} className={evenement.sorte === "etape" ? "etape" : undefined}>
+    <li key={evenement.id} className={evenement.sorte === "changementDeStatut" ? undefined : evenement.sorte === "etape" ? "etape" : "cloture"}>
       <time dateTime={evenement.survenuLe}>{afficherLInstant(evenement.survenuLe)}</time>
       <span>{decrireLEvenement(evenement)}</span>
-      {evenement.estCorrige && <span className="marque">{evenement.sorte === "etape" ? "corrigée" : "corrigé"}</span>}
+      {evenement.sorte !== "clotureDeRelance" && evenement.estCorrige && (
+        <span className="marque">{evenement.sorte === "etape" ? "corrigée" : "corrigé"}</span>
+      )}
       {evenement.sorte === "etape" && evenement.note !== null && <p className="note">{evenement.note}</p>}
       {evenement.sorte === "etape" && !evenement.estCorrige && etapeEnCorrection !== evenement.id && (
         <button
