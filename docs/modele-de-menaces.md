@@ -253,6 +253,22 @@ Ni le dossier de données, ni le dossier des sauvegardes, ni le nom d'une copie 
 - `interface/tests-fenetre/fenetre.test.ts`, dans la vraie fenêtre : la copie du lancement, le choix d'un dossier par le remplaçant du dialogue, le réglage écrit, puis la copie refaite à la fermeture ; aucun fichier du dossier de données, copies comprises, ne contient le jeton.
 - *À vérifier à la main* sur l'exe publié (ADR-0008, « À vérifier ») : le vrai dialogue de Windows, que le protocole CDP ne pilote pas, s'ouvre sur le dossier courant, et son annulation ne change rien.
 
+## Exe distribué
+
+L'exe d'un seul fichier se construit dans la CI, à chaque pull request et sur `main`, comme la publication le construira (#54, ADR-0009). À chaque construction, on contrôle ce qu'il emporte et ce qu'il garde de la machine qui l'a construit :
+
+- **Aucun état d'un autre run** : le workflow `exe.yml` n'a que la lecture du dépôt, ni secret ni cache. La restauration NuGet est verrouillée, l'interface s'installe depuis son fichier de verrouillage, et la publication ne réécrit aucun fichier suivi.
+- **Aucun chemin de la machine de construction** : `ContinuousIntegrationBuild` réécrit les chemins de symboles en `/_/`. Hors de la CI, ils portent le dossier de compilation, donc le nom du compte Windows du poste. `verifier-exe.ps1` lit le paquet de l'exe décompressé. Il y cherche le dossier du dépôt, le profil, le dossier temporaire et le nom du compte du runner, en UTF-8 comme en UTF-16.
+- **Rien de superflu à extraire** : le paquet n'embarque ni l'hôte natif de l'API (`Sollicito.Api.exe`), ni le module d'hébergement sous IIS (`aspnetcorev2_inprocess.dll`). Sous `%TEMP%\.net`, l'exe n'extrait plus que `e_sqlite3.dll` et deux copies de `WebView2Loader.dll` (voir « Limites »).
+- **Reproductible** : une seconde construction du même commit, dans un autre dossier, doit donner la même empreinte SHA-256.
+- **Un exe d'essai** : l'exe et son empreinte restent 7 jours en artefact du run. Ce n'est ni une version ni un exe attesté. Sur un dépôt public, tout compte GitHub connecté peut le télécharger.
+
+*Contrôles*, dans le job « Exe » de la CI (`.github/workflows/exe.yml`) :
+
+- `verifier-exe.ps1`, qu'un exe construit hors du mode CI fait échouer ;
+- `lancer-exe.ps1`, qui lance l'exe seul dans un dossier vide et exige sa base, son profil, son navigateur intégré et sa fenêtre, sans boîte de dialogue ;
+- le job « Reproductibilité ».
+
 ## Textes saisis
 
 Les textes que l'utilisateur saisit (une entreprise, un poste, la note d'une étape) s'affichent comme du texte, jamais comme du HTML : l'interface les écrit par React, qui les échappe, et n'emploie nulle part `dangerouslySetInnerHTML` (ADR-0001, D9, « Contenu non fiable »). Les sauts de ligne d'une note s'affichent par le style (`white-space: pre-wrap`), sans balise. Ces textes ne paraissent dans aucun journal (voir « Règle des journaux »). Un script qui passerait par eux lirait le jeton dans la page (voir « Limites ») : la politique de sécurité du contenu double l'échappement.
@@ -310,7 +326,7 @@ Aucune entrée ne contient le nom du faux compte, ni le dossier temporaire du te
 - **Brouillon de relance (#14)** : la page demande l'ouverture du lien `mailto` à l'hôte par un message, soumis au même contrôle de la source que le canal du jeton (ADR-0003), comme le choix du dossier des sauvegardes (#26) ; tout autre schéma externe reste annulé.
 - **Restauration (#28)** : une copie restaurée remplace toute la base ; elle doit se vérifier avant, et la base en cours se copier d'abord. La liste à restaurer montre toutes les copies de Sollicito du dossier, celles d'une autre installation comprises.
 - **Interface en développement** : le serveur de développement de Vite sert une autre origine. L'API refuse ses écritures, et l'interface ne reçoit le jeton que dans la fenêtre.
-- **Exe** : le dossier d'extraction `%TEMP%\.net` (voir « Limites »), et un exe construit par la CI, dont les symboles ne portent pas le chemin d'un poste de développement (prototype de #9).
+- **Exe** : le dossier d'extraction `%TEMP%\.net` (voir « Limites ») ; l'empreinte et l'attestation de provenance de chaque version publiée (#54, ADR-0009).
 
 ## Sources
 
