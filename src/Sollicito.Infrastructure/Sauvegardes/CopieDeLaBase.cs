@@ -36,8 +36,7 @@ public static class CopieDeLaBase
         commande.CommandText = CopierVers;
         commande.Parameters.AddWithValue("$destination", destination);
         commande.CommandTimeout = TrancheDAttenteEnSecondes;
-        // sqlite3_interrupt se lance d'un autre fil, sans risque : SQLite l'a prévu pour cela.
-        using var interruption = annulation.Register(static poignee => raw.sqlite3_interrupt((sqlite3)poignee!), connexion.Handle);
+        using var interruption = InterrompreSurAnnulation(connexion, annulation);
         var debut = Stopwatch.GetTimestamp();
         while (true)
         {
@@ -62,7 +61,15 @@ public static class CopieDeLaBase
     // SQLITE_BUSY et SQLITE_LOCKED, quel que soit leur code étendu : ceux que Microsoft.Data.Sqlite réessaie lui-même.
     private static bool EstOccupee(SqliteException erreur) => (erreur.SqliteErrorCode & 0xFF) is raw.SQLITE_BUSY or raw.SQLITE_LOCKED;
 
-    /// <summary>Vrai si le fichier se relit comme une base SQLite saine : <c>PRAGMA integrity_check</c> rend « ok ».</summary>
+    // sqlite3_interrupt se lance d'un autre fil, sans risque : SQLite l'a prévu pour cela, pourvu que la connexion ne se
+    // ferme pas avant son retour. L'enregistrement se défait donc avant la connexion, qui se déclare avant lui.
+    private static CancellationTokenRegistration InterrompreSurAnnulation(SqliteConnection connexion, CancellationToken annulation) =>
+        annulation.Register(static poignee => raw.sqlite3_interrupt((sqlite3)poignee!), connexion.Handle);
+
+    /// <summary>
+    /// Vrai si le fichier se relit comme une base SQLite saine : <c>PRAGMA integrity_check</c> rend « ok ». L'annulation
+    /// interrompt la relecture en cours, et lève <see cref="OperationCanceledException"/>.
+    /// </summary>
     public static async Task<bool> EstSaineAsync(string fichier, CancellationToken annulation)
     {
         try
@@ -71,6 +78,7 @@ public static class CopieDeLaBase
             await connexion.OpenAsync(annulation);
             await using var commande = connexion.CreateCommand();
             commande.CommandText = "PRAGMA integrity_check";
+            using var interruption = InterrompreSurAnnulation(connexion, annulation);
             await using var lecture = await commande.ExecuteReaderAsync(annulation);
             var lignes = new List<string>();
             while (await lecture.ReadAsync(annulation))
@@ -79,6 +87,10 @@ public static class CopieDeLaBase
             }
 
             return lignes is ["ok"];
+        }
+        catch (SqliteException erreur) when (annulation.IsCancellationRequested)
+        {
+            throw new OperationCanceledException("La vérification de la copie a été interrompue.", erreur, annulation);
         }
         catch (SqliteException)
         {

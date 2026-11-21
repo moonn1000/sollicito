@@ -20,7 +20,8 @@ public static class CopiesVerifiees
     /// <summary>
     /// Copie la base dans <paramref name="destination"/>, son nom final, une fois la copie vérifiée par
     /// <paramref name="verifier"/>, <see cref="CopieDeLaBase.EstSaineAsync"/> par défaut. Une copie qui ne se vérifie pas
-    /// lève <see cref="InvalidDataException"/>, sans toucher à la destination.
+    /// lève <see cref="InvalidDataException"/>, et une copie annulée <see cref="OperationCanceledException"/>, même
+    /// vérifiée : ni l'une ni l'autre ne touche à la destination.
     /// </summary>
     public static async Task EcrireAsync(
         string baseSource,
@@ -40,6 +41,8 @@ public static class CopiesVerifiees
                 throw new InvalidDataException("La copie ne se relit pas comme une base saine.");
             }
 
+            // Une copie annulée, même saine, ne remplace pas celle d'avant : celle d'une fermeture abandonnée la laisse.
+            annulation.ThrowIfCancellationRequested();
             await ReessayerAsync(() => File.Move(provisoire, destination, overwrite: true));
         }
         finally

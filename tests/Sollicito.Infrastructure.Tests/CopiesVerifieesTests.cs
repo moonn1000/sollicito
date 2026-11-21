@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 using Sollicito.Infrastructure.Sauvegardes;
 
@@ -112,6 +113,56 @@ public sealed class CopiesVerifieesTests : IDisposable
 
         Assert.Equal("copie d'hier", await File.ReadAllTextAsync(destination, TestContext.Current.CancellationToken));
         Assert.Equal(["copie.db", "source.db"], Directory.EnumerateFiles(_dossier).Select(Path.GetFileName).Where(nom => !nom!.StartsWith("source.db-", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Une_copie_annulee_pendant_sa_verification_ne_prend_pas_son_nom_meme_saine_et_ne_laisse_rien()
+    {
+        var destination = Path.Combine(_dossier, "copie.db");
+        await File.WriteAllTextAsync(destination, "copie d'hier", TestContext.Current.CancellationToken);
+        using var annulation = new CancellationTokenSource();
+
+        // L'annulation tombe pendant la vérification, qui répond pourtant que la copie est saine.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            CopiesVerifiees.EcrireAsync(Source, destination, annulation.Token, verifier: async (_, _) =>
+            {
+                await annulation.CancelAsync();
+                return true;
+            }));
+
+        Assert.Equal("copie d'hier", await File.ReadAllTextAsync(destination, TestContext.Current.CancellationToken));
+        Assert.Equal(["copie.db", "source.db"], Directory.EnumerateFiles(_dossier).Select(Path.GetFileName).Where(nom => !nom!.StartsWith("source.db-", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task Une_verification_annulee_en_cours_s_interrompt_au_lieu_d_aller_au_bout()
+    {
+        // Cent mille lignes sous trois index : integrity_check met plusieurs centaines de millisecondes à les relire
+        // (relevé le 2026-11-21 : 1,4 s pour deux cent mille lignes).
+        var lestee = Path.Combine(_dossier, "lestee.db");
+        using (var connexion = Ouvrir(lestee, SqliteOpenMode.ReadWriteCreate))
+        {
+            Executer(connexion, "CREATE TABLE Lest (A INTEGER, B TEXT, C TEXT)");
+            Executer(connexion, "CREATE INDEX IX_A ON Lest (A)");
+            Executer(connexion, "CREATE INDEX IX_B ON Lest (B)");
+            Executer(connexion, "CREATE INDEX IX_C ON Lest (C)");
+            Executer(connexion, "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100000) INSERT INTO Lest SELECT i, hex(randomblob(8)), hex(randomblob(8)) FROM n");
+        }
+
+        // Une relecture complète d'abord, pour mesurer sa durée sur ce poste.
+        var montre = Stopwatch.StartNew();
+        Assert.True(await CopieDeLaBase.EstSaineAsync(lestee, TestContext.Current.CancellationToken));
+        var complete = montre.Elapsed;
+
+        using var annulation = new CancellationTokenSource();
+        montre.Restart();
+        // Les appels de SQLite sont synchrones : la vérification tourne sur un autre fil, et l'annulation tombe pendant.
+        var verification = Task.Run(() => CopieDeLaBase.EstSaineAsync(lestee, annulation.Token), TestContext.Current.CancellationToken);
+        annulation.CancelAfter(complete / 4);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => verification);
+        // Interrompue, elle rend la main bien avant la fin d'une relecture complète, et non une fois celle-ci finie.
+        Assert.True(montre.Elapsed < complete * 0.75, $"Relecture annulée rendue en {montre.Elapsed.TotalMilliseconds:F0} ms ; relecture complète en {complete.TotalMilliseconds:F0} ms.");
     }
 
     private static SqliteConnection Ouvrir(string fichier, SqliteOpenMode mode)
