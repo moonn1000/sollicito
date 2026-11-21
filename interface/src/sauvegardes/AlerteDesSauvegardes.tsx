@@ -5,8 +5,11 @@ import { ANNONCE_DE_LA_COPIE, texteDeLAlerte } from "./affichage.ts";
 /** Le délai entre deux lectures de l'état, tant que la vérification du lancement n'est pas faite. */
 export const DELAI_DE_RELECTURE_EN_MS = 1_000;
 
-/** Le nombre de lectures au plus, avant de renoncer : une minute. */
+/** Le nombre de ces lectures rapprochées au plus : une minute. Au-delà, l'état se relit à l'intervalle ordinaire. */
 export const RELECTURES_AU_PLUS = 60;
+
+/** Le délai entre deux lectures de l'état, une fois la vérification faite, tant que le tableau de bord est affiché. */
+export const INTERVALLE_DE_RELECTURE_EN_MS = 30_000;
 
 /** Ce que l'alerte dit d'un « Réessayer » que l'API n'a pas mené au bout. */
 export const ECHEC_DE_L_ESSAI = "Le nouvel essai n'a pas abouti. Réessayez ; si rien ne change, fermez Sollicito, puis relancez-le.";
@@ -14,7 +17,8 @@ export const ECHEC_DE_L_ESSAI = "Le nouvel essai n'a pas abouti. Réessayez ; si
 /**
  * L'alerte des sauvegardes, au tableau de bord (#26) : quand les copies ne se font plus, elle dit depuis quand, et quoi
  * faire ; « Réessayer » refait la copie du jour, « Ouvrir les réglages » mène à la section des sauvegardes. Elle lit
- * l'état que l'API tient en mémoire, sans toucher au dossier. Rien ne s'affiche quand tout va bien.
+ * l'état que l'API tient en mémoire, sans toucher au dossier, et le relit tant que le tableau de bord est affiché : elle
+ * vient quand une copie échoue, et part dès que l'une réussit. Rien ne s'affiche quand tout va bien.
  */
 export function AlerteDesSauvegardes({
   client,
@@ -28,26 +32,36 @@ export function AlerteDesSauvegardes({
   const [annonce, setAnnonce] = useState<string>();
   const [enCours, setEnCours] = useState(false);
   const occupe = useRef(false);
+  // Change à chaque « Réessayer » réussi : une lecture partie avant sa réponse rapporterait l'état d'avant lui.
+  const essaisReussis = useRef(0);
 
   useEffect(() => {
     let affichee = true;
     let minuterie: ReturnType<typeof setTimeout> | undefined;
-    // Au lancement, la vérification des copies se fait en arrière-plan : tant qu'elle n'est pas faite, l'état se relit,
-    // pour qu'un dossier débranché se dise sur ce premier écran.
-    const lire = (essai: number) => {
+    // Au lancement, la vérification des copies se fait en arrière-plan : tant qu'elle n'est pas faite, l'état se relit
+    // chaque seconde, pour qu'un dossier débranché se dise sur ce premier écran ; ensuite, à l'intervalle ordinaire.
+    // L'état lu remplace l'ancien sans rien effacer entre-temps : l'écran ne clignote pas.
+    const lire = (lectures: number) => {
+      const essai = essaisReussis.current;
+      const relire = (rapprochee: boolean) => {
+        if (affichee) {
+          minuterie = setTimeout(() => lire(lectures + 1), rapprochee ? DELAI_DE_RELECTURE_EN_MS : INTERVALLE_DE_RELECTURE_EN_MS);
+        }
+      };
       client.lireLesSauvegardes().then(
         (lu) => {
           if (!affichee) {
             return;
           }
 
-          setEtat(lu);
-          if (!lu.verifie && essai < RELECTURES_AU_PLUS) {
-            minuterie = setTimeout(() => lire(essai + 1), DELAI_DE_RELECTURE_EN_MS);
+          if (essai === essaisReussis.current) {
+            setEtat(lu);
           }
+
+          relire(!lu.verifie && lectures < RELECTURES_AU_PLUS);
         },
-        // Sans l'état, pas d'alerte : la section des réglages dira l'erreur.
-        () => {},
+        // Sans l'état, l'écran garde ce qu'il montrait : la section des réglages dira l'erreur.
+        () => relire(false),
       );
     };
     lire(1);
@@ -66,6 +80,7 @@ export function AlerteDesSauvegardes({
     setEnCours(true);
     try {
       const apres = await client.sauvegarderMaintenant();
+      essaisReussis.current += 1;
       setEtat(apres);
       setAnnonce(texteDeLAlerte(apres) === undefined ? ANNONCE_DE_LA_COPIE : undefined);
     } catch {

@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { ErreurDeLApi } from "../api/clientDeLApi.ts";
 import { TableauDeBord } from "../candidatures/TableauDeBord.tsx";
 import { clientSimule, sauvegardesFictives } from "../tests/clientSimule.ts";
+import { INTERVALLE_DE_RELECTURE_EN_MS } from "./AlerteDesSauvegardes.tsx";
 
 function tableauDeBord(client: ReturnType<typeof clientSimule>, ouvrirLesReglages = vi.fn()) {
   render(<TableauDeBord client={client} nouvelleCandidature={vi.fn()} ouvrirLaFiche={vi.fn()} ouvrirLesReglages={ouvrirLesReglages} />);
@@ -93,6 +94,76 @@ test("au lancement, tant que la vérification n'est pas faite, l'état se relit 
 
     expect((await screen.findByRole("alert")).textContent).toContain("le dossier des sauvegardes est introuvable");
     expect(client.lireLesSauvegardes).toHaveBeenCalledTimes(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("tant que le tableau de bord est affiché, l'état se relit : l'alerte vient, reste sans clignoter, puis part dès qu'une copie réussit", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const enPanne = sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-19T08:00:00Z" } });
+    const client = clientSimule({
+      lireLesSauvegardes: vi
+        .fn()
+        .mockResolvedValueOnce(sauvegardesFictives())
+        .mockResolvedValueOnce(enPanne)
+        .mockResolvedValueOnce(enPanne)
+        .mockResolvedValue(sauvegardesFictives()),
+    });
+    tableauDeBord(client);
+
+    await screen.findByText("Aucune candidature enregistrée pour l'instant.");
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    // La copie de l'heure échoue pendant que l'écran reste affiché : l'alerte vient à la relecture suivante.
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS);
+    const alerte = await screen.findByRole("alert");
+    expect(alerte.textContent).toContain("le dossier des sauvegardes est introuvable");
+
+    // Relu, toujours en panne : la même alerte, restée en place.
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS);
+    expect(client.lireLesSauvegardes).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole("alert")).toBe(alerte);
+
+    // Le dossier revient, la copie suivante réussit : l'alerte part, sans que personne n'y touche.
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS);
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(client.lireLesSauvegardes).toHaveBeenCalledTimes(4);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("une relecture partie avant un « Réessayer » réussi ne ramène pas l'alerte", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const enPanne = sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-19T08:00:00Z" } });
+    let rendreLaRelecture: (etat: typeof enPanne) => void = () => {};
+    const client = clientSimule({
+      lireLesSauvegardes: vi
+        .fn()
+        .mockResolvedValueOnce(enPanne)
+        .mockReturnValueOnce(new Promise((rendre) => (rendreLaRelecture = rendre)))
+        .mockResolvedValue(sauvegardesFictives()),
+      sauvegarderMaintenant: vi.fn().mockResolvedValue(sauvegardesFictives()),
+    });
+    tableauDeBord(client);
+
+    await screen.findByRole("alert");
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS);
+    expect(client.lireLesSauvegardes).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Réessayer" }));
+    expect(await screen.findByText("Copie du jour faite.")).toBeDefined();
+    expect(screen.queryByRole("alert")).toBeNull();
+
+    // La relecture partie avant l'essai répond après lui, avec l'état d'avant : il ne compte plus.
+    await act(async () => {
+      rendreLaRelecture(enPanne);
+      await Promise.resolve();
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
   } finally {
     vi.useRealTimers();
   }
