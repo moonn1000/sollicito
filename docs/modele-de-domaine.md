@@ -1,10 +1,10 @@
 # Modèle de domaine de la V1
 
-- **Mis à jour le** : 2026-11-20, avec #26 (sauvegarder la base automatiquement)
-- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D5 ; [ADR-0005](adr/0005-modele-de-domaine.md) (entreprises reconnues, offres dédoublonnées, dates et heures) ; [ADR-0007](adr/0007-historique-en-vigueur-et-nom-corrige.md) (étapes corrigées et historique en vigueur, nom affiché corrigé, entreprises proposées) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) (réglages de l'application, hors de la base)
+- **Mis à jour le** : 2026-11-21, avec #14 (relancer une candidature)
+- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D5 ; [ADR-0005](adr/0005-modele-de-domaine.md) (entreprises reconnues, offres dédoublonnées, dates et heures) ; [ADR-0007](adr/0007-historique-en-vigueur-et-nom-corrige.md) (étapes corrigées et historique en vigueur, nom affiché corrigé, entreprises proposées) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) (réglages de l'application, hors de la base) ; [ADR-0011](adr/0011-relances-et-brouillon.md) (contact minimal, relances, brouillon et délai par défaut)
 - **Périmètre** : les huit entités de la D5. Six entrent en base en V1 : Entreprise, Contact, Offre, Candidature, Événement de candidature et Relance. Profil et Document sont modélisés ici et entrent en base en V2 ([spec de la V1](https://github.com/moonn1000/sollicito/issues/5), « Entités en base »).
 
-Ce modèle remplace l'esquisse de la D5 (ADR-0005). Le code du domaine le suit depuis #11 (`src/Sollicito.Domain`) : une pull request qui s'en écarte met ce document à jour. #11 y a ajouté les règles de la saisie (voir « Saisie d'une candidature ») ; #12, celles d'une étape (voir « Noter une étape ») ; #25, celles de la modification et de la suppression (voir « Modifier ou supprimer une candidature »).
+Ce modèle remplace l'esquisse de la D5 (ADR-0005). Le code du domaine le suit depuis #11 (`src/Sollicito.Domain`) : une pull request qui s'en écarte met ce document à jour. #11 y a ajouté les règles de la saisie (voir « Saisie d'une candidature ») ; #12, celles d'une étape (voir « Noter une étape ») ; #25, celles de la modification et de la suppression (voir « Modifier ou supprimer une candidature ») ; #14, celles des relances et du contact (voir « Relances » et « Contact »).
 
 ## Les entités
 
@@ -131,7 +131,7 @@ La candidature est la racine de son agrégat : ses événements et ses relances 
 | Étape | un type et une note facultative ; pour une correction, l'étape qu'elle corrige (`Corrige`, #25) ; elle ne change pas le statut (#41, absorbée par #12) | l'utilisateur, passée ou à venir |
 | Clôture de relance | la relance faite ou abandonnée | l'horloge, au moment où on la marque |
 
-- Les trois sortes vivent dans une seule table, avec une colonne qui dit la sorte : c'est l'héritage par défaut d'EF Core, une table par hiérarchie[^ef-heritage]. La V1 garde ainsi six entités en base. #12 crée la table avec les deux premières sortes ; la clôture de relance la rejoint avec les relances (#14).
+- Les trois sortes vivent dans une seule table, avec une colonne qui dit la sorte : c'est l'héritage par défaut d'EF Core, une table par hiérarchie[^ef-heritage]. La V1 garde ainsi six entités en base. #12 crée la table avec les deux premières sortes ; la clôture de relance l'a rejointe avec les relances (#14). Elle ne se corrige pas : elle reste toujours en vigueur.
 - L'envoi n'est pas un événement : la candidature le date elle-même (`EnvoyeeLe`), et son historique en vigueur commence là. Aucun événement en vigueur ne précède l'envoi : une étape, ou sa correction, n'est pas datée avant lui (#12, #25), et une date d'envoi corrigée ne passe pas après le premier événement en vigueur (#25).
 - **En vigueur** : un événement qu'aucune correction ne désigne. Un changement corrigé, ou une étape corrigée, reste dans l'historique, marqué comme corrigé, mais n'est plus en vigueur.
 - **L'envoi dans l'historique** : la fiche range l'envoi à son instant, au premier rang à égalité. Seuls des événements corrigés peuvent donc le précéder, quand une date d'envoi corrigée est passée après eux (#25).
@@ -214,12 +214,15 @@ stateDiagram-v2
     Abandonnee --> [*]
 ```
 
-- **Planifier** : sur une candidature en cours seulement, et une relance à faire au plus par candidature.
-- **Échéance** : la date locale de l'envoi, plus un délai en jours (voir « Dates et heures »). Le délai par défaut est un réglage de l'application, hors des entités du domaine : #14 fixe sa valeur et le range avec les autres réglages (voir « Réglages et sauvegardes, hors du domaine »). On peut le changer pour une relance. L'échéance est enregistrée telle quelle : corriger ensuite la date d'envoi (#25) ne la déplace pas.
-- **Échue** : une relance à faire dont l'échéance tombe aujourd'hui ou avant, en date locale. **De la semaine** : une relance à faire dont l'échéance tombe dans les sept jours qui suivent aujourd'hui.
-- **Destinataire** : l'utilisateur le choisit parmi les contacts de l'entreprise de la candidature. Si l'entreprise n'en a qu'un, il est proposé d'office ; si elle n'en a aucun, la relance reste sans destinataire, et son brouillon s'ouvre sans (#14). Rattacher la candidature à une autre entreprise (#25) retire le destinataire de sa relance à faire ; les relances closes gardent le leur.
-- **Faite ou abandonnée** : c'est définitif, et une clôture de relance entre dans l'historique de la candidature.
-- **Clore la candidature** abandonne sa relance à faire.
+- **Planifier** : sur une candidature en cours seulement, et une relance à faire au plus par candidature. La base elle-même n'en admet qu'une à faire par candidature (un index unique, filtré sur l'état).
+- **Échéance** : la date locale de l'envoi, plus un délai en jours (voir « Dates et heures »), de 1 à 365. Le délai par défaut, 7 jours d'usine, est un réglage de l'application, hors des entités du domaine (voir « Réglages et sauvegardes, hors du domaine ») ; sans délai, la relance le prend. On peut le changer pour une relance. Une échéance déjà passée est admise : une candidature saisie après coup a sa relance aussitôt échue. L'échéance est enregistrée telle quelle : corriger ensuite la date d'envoi (#25) ne la déplace pas, et changer le délai par défaut non plus.
+- **La relance suivante** part aussi de la date d'envoi. L'écran lui propose le délai de la dernière relance close plus le délai par défaut (7, puis 14, puis 21 jours…), sans dépasser 365.
+- **Changer la relance à faire** : son délai et son destinataire, aux mêmes règles. Une relance close ne change plus.
+- **Échue** : une relance à faire dont l'échéance tombe aujourd'hui ou avant, en date locale. **De la semaine** : une relance à faire dont l'échéance tombe dans les sept jours qui suivent aujourd'hui. Le tableau de bord signale les unes et les autres.
+- **Destinataire** : l'utilisateur le choisit parmi les contacts de l'entreprise de la candidature. Si l'entreprise n'en a qu'un, il est proposé d'office ; si elle n'en a aucun, la relance reste sans destinataire, et son brouillon s'ouvre sans (#14). Rattacher la candidature à une autre entreprise (#25) retire le destinataire de sa relance à faire ; les relances closes gardent le leur. Supprimer un contact le retire de toutes ses relances, closes comprises.
+- **Faite ou abandonnée** : c'est définitif, et une clôture de relance, datée par l'horloge, entre dans l'historique de la candidature, avec l'échéance et le destinataire de la relance. Comme tout événement en vigueur, elle borne la date d'envoi corrigée (voir « Modifier ou supprimer une candidature »).
+- **Clore la candidature** abandonne sa relance à faire, avec sa clôture. Corriger ensuite le dernier changement rouvre la candidature, pas sa relance.
+- **Le brouillon** d'une relance à faire s'ouvre dans la messagerie de l'utilisateur, par la fenêtre hôte, à partir de la base : l'utilisateur l'envoie lui-même (ADR-0011).
 
 ## Contact
 
@@ -227,9 +230,19 @@ Le contact de la V1 est minimal :
 
 | Attribut | Règle |
 | --- | --- |
-| `Nom` | requis |
-| `Email` | requis : une seule adresse, de la forme `nom@domaine`, de 254 caractères au plus, sans liste ni séparateur (`,`, `;`), sans paramètre (`?`), sans espace ni caractère de contrôle. Le lien `mailto` que construit l'hôte de la fenêtre ne peut ainsi viser qu'elle (ADR-0003) ; #14 détaille la validation. |
+| `Nom` | requis : un texte d'une ligne, aux règles du poste (voir « Saisie d'une candidature ») |
+| `Email` | requis : une seule adresse, de la forme `nom@domaine`, de 254 caractères au plus, sans liste ni séparateur (`,`, `;`), sans paramètre (`?`), sans espace ni caractère de contrôle. Le lien `mailto` que construit l'hôte de la fenêtre ne peut ainsi viser qu'elle (ADR-0003, ADR-0011). Le détail suit. |
 | `Entreprise` | requise |
+
+L'adresse suit la règle des navigateurs pour un champ `type=email`, en plus stricte (ADR-0011) :
+
+- ses blancs du début et de la fin sont retirés ; il reste au plus 254 caractères, en ASCII seulement, avec une seule `@` ;
+- sa partie locale, de 1 à 64 caractères, ne prend que des lettres, des chiffres et ``. _ + - ' ! # $ & * / = ^ ` { | } ~``, sans point au début, à la fin, ni deux à la suite ;
+- son domaine a au moins deux parties séparées par des points, chacune de 1 à 63 lettres, chiffres ou tirets, sans tiret au bord.
+
+Ni `?`, ni `%`, qui sert à l'encodage du lien. Un domaine accentué se saisit sous sa forme `xn--`. Le message de refus ne reprend jamais l'adresse.
+
+On ajoute, corrige et supprime les contacts d'une entreprise depuis la fiche d'une candidature. Un contact corrigé s'affiche ainsi dans ses relances, closes comprises. Un contact supprimé, après une confirmation dans la page, quitte toutes ses relances : elles restent, sans destinataire. Une même adresse peut servir à deux contacts : la V1 ne contrôle pas les doublons.
 
 La fonction et le téléphone du contact (#30) attendent la V2.
 
@@ -380,7 +393,7 @@ La fiche d'une candidature (#12) mène à sa modification et à sa suppression (
   - La saisie d'une candidature (#11), elle, garde le nom de la première saisie, sans avertissement.
   - La fiche et l'annonce de la modification montrent le nom de l'entreprise rattachée.
 
-**Supprimer** retire la candidature, après une confirmation affichée dans l'interface, jamais par une boîte du navigateur. La suppression est définitive : elle emporte tous les événements de la candidature, corrections comprises, et, quand elles entreront en base (#14), ses relances. Elle laisse son entreprise en base, et son offre (#38) ; une entreprise qu'aucune candidature ne porte plus n'est plus proposée. Une candidature close se supprime comme une autre.
+**Supprimer** retire la candidature, après une confirmation affichée dans l'interface, jamais par une boîte du navigateur. La suppression est définitive : elle emporte tous les événements de la candidature, corrections comprises, et ses relances, avec leurs clôtures (#14). Elle laisse son entreprise en base, et son offre (#38) ; une entreprise qu'aucune candidature ne porte plus n'est plus proposée. Une candidature close se supprime comme une autre.
 
 **Une étape mal datée** qui borne la date d'envoi se corrige (voir « Corriger une étape ») : corrigée, elle ne la borne plus.
 
@@ -388,7 +401,7 @@ La fiche d'une candidature (#12) mène à sa modification et à sa suppression (
 
 Ni les réglages ni les sauvegardes ne sont des entités du domaine : rien d'eux n'entre dans la base (ADR-0008).
 
-- **Les réglages de l'application** vivent dans `reglages.json`, dans le dossier de données, à côté de la base, et non dedans : une copie ne les emporte pas, une restauration (#28) ne les changera pas, et ils se lisent avant que la base ne soit migrée. Le premier est le dossier des sauvegardes (#26). #14 y ajoute le délai par défaut des relances, et #43 le choix du fournisseur d'IA.
+- **Les réglages de l'application** vivent dans `reglages.json`, dans le dossier de données, à côté de la base, et non dedans : une copie ne les emporte pas, une restauration (#28) ne les changera pas, et ils se lisent avant que la base ne soit migrée. Le premier est le dossier des sauvegardes (#26), le deuxième le délai par défaut des relances (#14), de 7 jours d'usine ; #43 y ajoutera le choix du fournisseur d'IA. Chaque réglage se lit et s'écrit à part : un délai mal écrit vaut 7 jours sans toucher au dossier des sauvegardes. Un fichier illisible en entier ne se réécrit qu'au choix d'un dossier des sauvegardes (ADR-0008, ADR-0011).
 - **Une sauvegarde** est une copie de toute la base, à sa date : une par jour d'utilisation, les sept dernières gardées, plus une avant chaque mise à jour de la base. Elle copie la base telle quelle, sans rien changer à ses données.
 
 ## Ce que les stories en reprennent

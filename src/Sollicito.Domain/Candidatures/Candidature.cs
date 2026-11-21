@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Sollicito.Domain.Relances;
 using Sollicito.Domain.Textes;
 
 namespace Sollicito.Domain.Candidatures;
@@ -17,6 +18,11 @@ namespace Sollicito.Domain.Candidatures;
 /// l'historique en vigueur commence à l'envoi, la date d'envoi ne passe jamais après son premier événement en vigueur.
 /// Une étape se corrige aussi, par ajout : sa correction la désigne, et la remplace comme version en vigueur.
 /// </para>
+/// <para>
+/// Ses relances (#14) font aussi partie de son agrégat : elle en planifie une à la fois, sur une candidature en cours,
+/// et chaque relance faite ou abandonnée entre dans l'historique. Clore la candidature abandonne sa relance à faire ; la
+/// rattacher à une autre entreprise en retire le destinataire.
+/// </para>
 /// </summary>
 public sealed class Candidature
 {
@@ -26,9 +32,23 @@ public sealed class Candidature
     /// <summary>Le motif du refus d'une correction quand aucun changement n'est à corriger.</summary>
     public const string RienACorriger = "Aucun changement de statut n'est à corriger : la candidature est à son statut de départ.";
 
+    /// <summary>Le motif du refus d'une relance sur une candidature close.</summary>
+    public const string RelanceSurCandidatureClose = "La candidature est close : elle ne reçoit plus de relance.";
+
+    /// <summary>Le motif du refus d'une seconde relance à faire.</summary>
+    public const string RelanceDejaAFaire =
+        "La candidature a déjà une relance à faire : changez-la, marquez-la faite ou abandonnez-la d'abord.";
+
+    /// <summary>Le motif du refus d'une action sur une relance qui n'est plus à faire, ou qui n'est pas de cette candidature.</summary>
+    public const string RelancePasAFaire =
+        "Cette relance n'est plus à faire : elle a déjà été marquée faite ou abandonnée, ou la fiche a changé entre-temps.";
+
     // Dans l'ordre d'enregistrement : celui de la base pour les événements relus (Entity Framework Core les y range,
     // par identifiant), puis ceux ajoutés depuis.
     private readonly List<EvenementDeCandidature> _evenements = [];
+
+    // Dans l'ordre de leur planification, comme les événements.
+    private readonly List<Relance> _relances = [];
 
     // Pour Entity Framework Core, qui lit une candidature enregistrée.
     private Candidature(int entrepriseId, string poste, DateTime envoyeeLe, StatutDeCandidature statut)
@@ -68,6 +88,15 @@ public sealed class Candidature
 
     /// <summary>Les statuts où la candidature peut passer depuis son statut présent.</summary>
     public IReadOnlyList<StatutDeCandidature> PassagesPermis => PassagesDeStatut.Depuis(Statut);
+
+    /// <summary>Vrai pour une candidature close : Acceptée, Refusée, Retirée ou Sans réponse.</summary>
+    public bool EstClose => PassagesDeStatut.EstClos(Statut);
+
+    /// <summary>Ses relances, dans l'ordre de leur planification.</summary>
+    public IReadOnlyList<Relance> Relances => _relances;
+
+    /// <summary>Sa relance à faire, s'il y en a une : jamais plus d'une à la fois.</summary>
+    public Relance? RelanceAFaire => _relances.FirstOrDefault(relance => relance.EstAFaire);
 
     /// <summary>
     /// Le changement que corrigerait <see cref="EssayerDeCorrigerLeDernierChangement"/> : le dernier enregistré qui
@@ -138,7 +167,9 @@ public sealed class Candidature
 
     /// <summary>
     /// Fait passer la candidature à un nouveau statut, si le diagramme d'états le permet : le changement entre dans
-    /// l'historique, daté par l'horloge. Sinon, rien ne change, et <paramref name="refus"/> dit pourquoi.
+    /// l'historique, daté par l'horloge. Un statut qui clôt la candidature abandonne sa relance à faire, et la clôture
+    /// de cette relance suit le changement dans l'historique. Sinon, rien ne change, et <paramref name="refus"/> dit
+    /// pourquoi.
     /// </summary>
     /// <param name="nouveau">Le statut voulu.</param>
     /// <param name="maintenant">L'instant présent, en UTC.</param>
@@ -152,7 +183,90 @@ public sealed class Candidature
 
         _evenements.Add(ChangementDeStatut.Passage(Statut, nouveau, maintenant));
         Statut = nouveau;
+        if (EstClose && RelanceAFaire is { } relance)
+        {
+            Clore(relance, EtatDeRelance.Abandonnee, maintenant);
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// Planifie une relance (#14) : son échéance est la date locale de l'envoi plus <paramref name="delai"/> jours, et
+    /// son destinataire un contact de l'entreprise de la candidature, ou personne. Une échéance déjà passée est admise.
+    /// Refusé si la candidature est close, ou si elle a déjà une relance à faire : rien ne change, et
+    /// <paramref name="refus"/> dit pourquoi.
+    /// </summary>
+    /// <param name="delai">Le délai en jours, admis par <see cref="DelaiDeRelance.EstAdmis"/>.</param>
+    /// <param name="destinataireId">Le contact destinataire, dont l'appelant a vérifié l'entreprise ; rien pour personne.</param>
+    /// <param name="fuseau">Le fuseau du poste, où se lit la date de l'envoi.</param>
+    /// <param name="refus">Le motif du refus, lisible.</param>
+    public bool EssayerDePlanifierUneRelance(int delai, int? destinataireId, TimeZoneInfo fuseau, [NotNullWhen(false)] out string? refus)
+    {
+        if (EstClose)
+        {
+            refus = RelanceSurCandidatureClose;
+            return false;
+        }
+
+        if (RelanceAFaire is not null)
+        {
+            refus = RelanceDejaAFaire;
+            return false;
+        }
+
+        _relances.Add(Relance.Planifiee(DelaiDeRelance.Echeance(EnvoyeeLe, fuseau, delai), destinataireId));
+        refus = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Change le délai et le destinataire de la relance à faire <paramref name="relanceId"/>. Refusé si ce n'est pas la
+    /// relance à faire de la candidature : rien ne change.
+    /// </summary>
+    /// <param name="relanceId">L'identifiant de la relance que l'écran montrait.</param>
+    /// <param name="delai">Le nouveau délai en jours, compté depuis la date locale de l'envoi.</param>
+    /// <param name="destinataireId">Le nouveau destinataire, dont l'appelant a vérifié l'entreprise ; rien pour personne.</param>
+    /// <param name="fuseau">Le fuseau du poste.</param>
+    /// <param name="refus">Le motif du refus, lisible.</param>
+    public bool EssayerDeChangerLaRelance(int relanceId, int delai, int? destinataireId, TimeZoneInfo fuseau, [NotNullWhen(false)] out string? refus)
+    {
+        if (RelanceAFaire is not { } relance || relance.Id != relanceId)
+        {
+            refus = RelancePasAFaire;
+            return false;
+        }
+
+        relance.Changer(DelaiDeRelance.Echeance(EnvoyeeLe, fuseau, delai), destinataireId);
+        refus = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Marque faite ou abandonnée la relance à faire <paramref name="relanceId"/>, pour de bon : sa clôture entre dans
+    /// l'historique, datée par l'horloge. Refusé si ce n'est pas la relance à faire de la candidature : rien ne change.
+    /// </summary>
+    /// <param name="relanceId">L'identifiant de la relance que l'écran montrait.</param>
+    /// <param name="issue">Faite, ou abandonnée.</param>
+    /// <param name="maintenant">L'instant présent, en UTC.</param>
+    /// <param name="refus">Le motif du refus, lisible.</param>
+    public bool EssayerDeCloreLaRelance(int relanceId, EtatDeRelance issue, DateTime maintenant, [NotNullWhen(false)] out string? refus)
+    {
+        if (RelanceAFaire is not { } relance || relance.Id != relanceId)
+        {
+            refus = RelancePasAFaire;
+            return false;
+        }
+
+        Clore(relance, issue, maintenant);
+        refus = null;
+        return true;
+    }
+
+    private void Clore(Relance relance, EtatDeRelance issue, DateTime maintenant)
+    {
+        relance.Clore(issue);
+        _evenements.Add(ClotureDeRelance.De(relance, maintenant));
     }
 
     /// <summary>
@@ -233,12 +347,19 @@ public sealed class Candidature
 
     /// <summary>
     /// Rattache la candidature à une entreprise déjà enregistrée : celle que reconnaît le nom saisi, par sa clé (#25).
-    /// L'entreprise quittée n'est ni renommée ni supprimée. Ni le statut ni l'historique ne changent.
+    /// L'entreprise quittée n'est ni renommée ni supprimée. Ni le statut ni l'historique ne changent. Une autre
+    /// entreprise retire le destinataire de la relance à faire, qui n'est plus l'un de ses contacts (#14) ; les
+    /// relances closes gardent le leur.
     /// </summary>
     /// <param name="entrepriseId">L'identifiant de l'entreprise, déjà enregistrée.</param>
     public void RattacherA(int entrepriseId)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(entrepriseId);
+        if (entrepriseId != EntrepriseId)
+        {
+            RelanceAFaire?.RetirerLeDestinataire();
+        }
+
         EntrepriseId = entrepriseId;
     }
 

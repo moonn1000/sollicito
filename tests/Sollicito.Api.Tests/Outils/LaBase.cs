@@ -26,4 +26,25 @@ public static class LaBase
         await using var portee = api.Services.CreateAsyncScope();
         return await portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().EvenementsDeCandidature.CountAsync(TestContext.Current.CancellationToken);
     }
+
+    /// <summary>Le nombre de relances de toutes les candidatures (#14).</summary>
+    public static async Task<int> CompterLesRelancesAsync(this ApiLancee api)
+    {
+        await using var portee = api.Services.CreateAsyncScope();
+        return await portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().Relances.CountAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>Le nombre de contacts de toutes les entreprises (#14).</summary>
+    public static async Task<int> CompterLesContactsAsync(this ApiLancee api)
+    {
+        await using var portee = api.Services.CreateAsyncScope();
+        return await portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().Contacts.CountAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>Exécute une instruction SQL sur la base, sans passer par les règles du domaine.</summary>
+    public static async Task ExecuterAsync(this ApiLancee api, string sql)
+    {
+        await using var portee = api.Services.CreateAsyncScope();
+        await portee.ServiceProvider.GetRequiredService<BaseDeSollicito>().Database.ExecuteSqlRawAsync(sql, TestContext.Current.CancellationToken);
+    }
 }

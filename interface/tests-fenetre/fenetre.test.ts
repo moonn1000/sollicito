@@ -396,6 +396,70 @@ test("la base se copie au lancement, puis dans le dossier choisi par le dialogue
   copieChoisie = { chemin: join(choisi, copie!), ecriteLe: (await stat(join(choisi, copie!))).mtimeMs };
 });
 
+test("une relance se planifie depuis la fiche, et son brouillon passe par l'hôte, qui bâtit le lien mailto à partir de la base (#14)", async () => {
+  const { page, dossierDeDonnees } = fenetre;
+  const brouillons = join(dossierDeDonnees, "brouillons-ouverts.txt");
+  const poste = "Brasseuse & <b>cheffe</b>";
+  await page.getByRole("button", { name: "Nouvelle candidature" }).click();
+  await page.getByLabel("Entreprise").fill("Brasserie Lune Rousse");
+  await page.getByLabel("Poste").fill(poste);
+  await page.getByLabel("Date et heure d'envoi").fill("2026-03-27T23:30");
+  await page.getByRole("button", { name: "Enregistrer la candidature" }).click();
+  await page.getByRole("button", { name: `${poste}, chez Brasserie Lune Rousse : ouvrir la fiche` }).click();
+  await page.getByRole("heading", { level: 2, name: "Fiche de la candidature" }).waitFor();
+
+  // Un contact de l'entreprise, puis la relance, adressée d'office à ce seul contact.
+  await page.getByRole("button", { name: "Ajouter un contact" }).click();
+  await page.getByLabel("Nom").fill("Jeanne Martin");
+  await page.getByLabel("Adresse électronique").fill("jeanne.martin@exemple.invalid");
+  await page.getByRole("button", { name: "Ajouter le contact" }).click();
+  await page.getByText("Contact ajouté : Jeanne Martin.").waitFor();
+  await page.getByRole("button", { name: "Planifier une relance" }).click();
+  await page.getByText("Échéance : vendredi 3 avril 2026.").waitFor();
+  await page.getByRole("button", { name: "Planifier la relance" }).click();
+  await page.getByText("Relance planifiée.").waitFor();
+
+  // La page ne donne que l'identifiant de la relance ; la version de test note le lien que l'hôte aurait lancé.
+  await page.getByRole("button", { name: "Préparer le brouillon de la relance du vendredi 3 avril 2026" }).click();
+  await page.getByText("Le brouillon s'est ouvert dans votre messagerie : relisez-le, puis envoyez-le vous-même.", { exact: false }).waitFor();
+  const corps =
+    "Bonjour Jeanne Martin,\r\n\r\nJe me permets de revenir vers vous au sujet de ma candidature au poste de " +
+    `${poste}, envoyée le 27 mars 2026. Ce poste m'intéresse toujours, et je reste à votre disposition pour en parler.\r\n\r\n` +
+    "Bien cordialement,";
+  expect(await lignes(brouillons)).toEqual([
+    `mailto:jeanne.martin@exemple.invalid?subject=${encoderStrictement(`Candidature au poste de ${poste}`)}&body=${encoderStrictement(corps)}`,
+  ]);
+
+  // Un message d'une autre forme, ou pour une relance inconnue, n'ouvre rien.
+  const envoyerALHote = (messages: unknown[]) =>
+    page.evaluate((aEnvoyer) => {
+      const canal = (window as unknown as { chrome: { webview: { postMessage(message: unknown): void } } }).chrome.webview;
+      for (const message of aEnvoyer) {
+        canal.postMessage(message);
+      }
+    }, messages);
+  await envoyerALHote([{ type: "ouvrirLeBrouillon", relance: "1" }, { type: "ouvrirLeBrouillon" }, { type: "ouvrirLeBrouillon", relance: 999 }]);
+  await attendre(1_500);
+  expect(await lignes(brouillons)).toHaveLength(1);
+
+  // Un champ de plus dans le message n'entre pas dans le brouillon : l'hôte le bâtit à partir de la base. La relance de
+  // ce test est la première de la base du dossier de données, neuf.
+  await envoyerALHote([{ type: "ouvrirLeBrouillon", relance: 1, destinataire: "pirate@exemple.invalid", corps: "autre" }]);
+  for (let essai = 1; (await lignes(brouillons)).length < 2; essai++) {
+    expect(essai).toBeLessThan(80);
+    await attendre(250);
+  }
+  const ouverts = await lignes(brouillons);
+  expect(ouverts).toHaveLength(2);
+  expect(ouverts[1]).toBe(ouverts[0]);
+
+  await page.getByRole("button", { name: "Marquer faite" }).click();
+  await page.getByText("Relance marquée faite : elle entre dans l'historique.").waitFor();
+  expect(await page.locator("ol.historique > li").last().textContent()).toMatch(/Relance faite, à Jeanne Martin : échéance du vendredi 3 avril 2026$/u);
+  // Le poste s'affiche comme du texte : aucune balise ne s'est créée.
+  expect(await page.locator("main b, main img").count()).toBe(0);
+});
+
 test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fichier", async () => {
   const { origineDeLApi, dossierDeDonnees } = fenetre;
 
@@ -433,6 +497,12 @@ async function profilRelache(dossierDeDonnees: string): Promise<string> {
 // Les lignes d'un fichier que note la version de test ; aucune si elle n'a rien noté.
 async function lignes(fichier: string): Promise<string[]> {
   return existsSync(fichier) ? (await readFile(fichier, "utf8")).split(/\r?\n/).filter(Boolean) : [];
+}
+
+// L'encodage de la RFC 3986 que suit le lien mailto de l'hôte : tout sauf les caractères non réservés ; encodeURIComponent
+// laisse en plus « ! ' ( ) * ».
+function encoderStrictement(texte: string): string {
+  return encodeURIComponent(texte).replace(/[!'()*]/gu, (signe) => `%${signe.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
 // Une navigation annulée par la fenêtre reste en suspens pour Playwright, qui attendrait sa fin avant un clic : la

@@ -77,6 +77,64 @@ export function demanderLeChoixDuDossier(canal: CanalDeLHote): Promise<IssueDuCh
   });
 }
 
+/**
+ * L'issue de l'ouverture d'un brouillon de relance (#14), telle que l'hôte la rend : ouvert dans la messagerie, refusé
+ * (relance inconnue ou close), ou impossible (aucune messagerie sur le poste). « sansReponse » vient de la page : l'hôte
+ * n'a pas répondu à temps.
+ */
+export type IssueDuBrouillon = "ouvert" | "refuse" | "impossible" | "sansReponse";
+
+const ISSUES_DU_BROUILLON: readonly IssueDuBrouillon[] = ["ouvert", "refuse", "impossible"];
+
+/** Délai au-delà duquel la page cesse d'attendre l'issue d'un brouillon. */
+export const DELAI_DU_BROUILLON_EN_MS = 15_000;
+
+/**
+ * Demande à l'hôte d'ouvrir le brouillon d'une relance dans la messagerie de l'utilisateur, puis rend l'issue (#14,
+ * ADR-0011). Le message ne porte que l'identifiant de la relance : l'hôte lit l'adresse et le texte en base, construit
+ * lui-même le lien `mailto` et le lance ; la page n'ouvre jamais rien. La réponse ne porte que l'issue. Une réponse d'une
+ * autre forme, ou pour une autre relance, est ignorée.
+ */
+export function demanderLeBrouillon(
+  canal: CanalDeLHote,
+  relance: number,
+  delaiEnMs = DELAI_DU_BROUILLON_EN_MS,
+): Promise<IssueDuBrouillon> {
+  if (!Number.isSafeInteger(relance) || relance <= 0) {
+    return Promise.reject(new RangeError("Un identifiant est un entier positif."));
+  }
+
+  return new Promise((resoudre) => {
+    let minuterie: ReturnType<typeof setTimeout> | undefined;
+    const ecouter = (evenement: MessageEvent) => {
+      const issue = lireLIssueDuBrouillon(evenement.data, relance);
+      if (issue !== undefined) {
+        clearTimeout(minuterie);
+        canal.removeEventListener("message", ecouter);
+        resoudre(issue);
+      }
+    };
+
+    minuterie = setTimeout(() => {
+      canal.removeEventListener("message", ecouter);
+      resoudre("sansReponse");
+    }, delaiEnMs);
+    canal.addEventListener("message", ecouter);
+    canal.postMessage({ type: "ouvrirLeBrouillon", relance });
+  });
+}
+
+function lireLIssueDuBrouillon(message: unknown, relanceAttendue: number): IssueDuBrouillon | undefined {
+  if (typeof message !== "object" || message === null) {
+    return undefined;
+  }
+
+  const { type, relance, issue } = message as { type?: unknown; relance?: unknown; issue?: unknown };
+  return type === "brouillonDeRelance" && relance === relanceAttendue && ISSUES_DU_BROUILLON.includes(issue as IssueDuBrouillon)
+    ? (issue as IssueDuBrouillon)
+    : undefined;
+}
+
 function lireLIssueDuChoix(message: unknown): IssueDuChoixDuDossier | undefined {
   if (typeof message !== "object" || message === null) {
     return undefined;

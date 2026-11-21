@@ -530,3 +530,65 @@ button {
   color: var(--refus);
   font-weight: 600;
 }
+
+/* Les relances (#14) : leur liste au tableau de bord, la relance et les contacts de la fiche, le brouillon. */
+
+.relances {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--texte-discret);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+
+.relances h3,
+.relances h4 {
+  margin: 0;
+}
+
+.relances h3 {
+  font-size: 1.15rem;
+}
+
+.relances h4 {
+  font-size: 1rem;
+}
+
+.liste-de-relances ul,
+.contacts {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.liste-de-relances li,
+.contacts li {
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--accent);
+}
+
+.liste-de-relances p,
+.contacts p {
+  margin: 0 0 0.35rem;
+}
+
+.nom-du-contact {
+  font-weight: 600;
+}
+
+.brouillon {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.brouillon p {
+  margin: 0;
+}
+
+.historique li.cloture {
+  border-left-color: var(--accent);
+}

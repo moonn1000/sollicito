@@ -212,7 +212,7 @@ public sealed partial class SauvegardesDeLaBase
 
             try
             {
-                await _reglages.EcrireAsync(new ReglagesDeLApplication(dossier));
+                await _reglages.EcrireLeDossierAsync(dossier);
             }
             catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException)
             {

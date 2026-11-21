@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
 import { ErreurDeLApi, type FicheDUneCandidature as Fiche } from "../api/clientDeLApi.ts";
-import { changementFictif, clientSimule, etapeFictive, ficheFictive } from "../tests/clientSimule.ts";
+import { changementFictif, clientSimule, clotureFictive, contactFictif, etapeFictive, ficheFictive, relanceFictive } from "../tests/clientSimule.ts";
 import { FicheDUneCandidature } from "./FicheDUneCandidature.tsx";
 
 // Le 18/11/2026 à 14:30, heure de Bruxelles (le fuseau des tests).
@@ -593,4 +593,42 @@ test("pendant une autre action de la fiche, aucune étape ne s'ouvre à la corre
   await waitFor(() => expect(corriger.hasAttribute("disabled")).toBe(true));
   repondre();
   await waitFor(() => expect(screen.getByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }).hasAttribute("disabled")).toBe(false));
+});
+
+test("la clôture d'une relance entre dans l'historique, avec son issue, son destinataire et son échéance (#14)", async () => {
+  afficher(
+    clientSimule({
+      lireLaFiche: async () =>
+        ficheFictive({
+          relances: [relanceFictive({ etat: "Faite", destinataire: contactFictif() }), relanceFictive({ id: 8, etat: "Abandonnee", echeance: "2026-04-10" })],
+          historique: [
+            clotureFictive(),
+            clotureFictive({ id: 4, relance: 8, etat: "Abandonnee", echeance: "2026-04-10", destinataire: null, survenuLe: "2026-04-10T08:00:00Z" }),
+          ],
+        }),
+    }),
+  );
+
+  await screen.findByRole("heading", { name: "Historique" });
+  const lignes = within(document.querySelector<HTMLElement>("ol.historique")!).getAllByRole("listitem").map((ligne) => ligne.textContent);
+  expect(lignes).toEqual([
+    "27/03/2026 23:30Candidature envoyée",
+    "03/04/2026 10:00Relance faite, à Jeanne Martin : échéance du vendredi 3 avril 2026",
+    "10/04/2026 10:00Relance abandonnée, sans destinataire : échéance du vendredi 10 avril 2026",
+  ]);
+  // Une clôture ne se corrige pas.
+  expect(screen.queryByRole("button", { name: /Corriger l'étape/u })).toBeNull();
+});
+
+test("la fiche suit la relance et les contacts de l'entreprise de la candidature (#14)", async () => {
+  const client = clientSimule({ listerLesContacts: vi.fn(async () => [contactFictif()]) });
+  afficher(client);
+
+  expect(await screen.findByRole("heading", { name: "Relance" })).toBeDefined();
+  expect(await screen.findByRole("heading", { name: "Contacts de Lumière Verte SA" })).toBeDefined();
+  expect(await screen.findByText("Jeanne Martin")).toBeDefined();
+  expect(client.listerLesContacts).toHaveBeenCalledWith(1);
+  fireEvent.click(screen.getByRole("button", { name: "Planifier une relance" }));
+  // Le seul contact de l'entreprise est proposé d'office.
+  expect((screen.getByLabelText("Destinataire") as HTMLSelectElement).value).toBe("4");
 });

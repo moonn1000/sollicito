@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import type { ClientDeLApi } from "../api/clientDeLApi.ts";
 import type { IssueDuChoixDuDossier } from "../hote/canalDeLHote.ts";
+import { SectionDesRelances } from "../relances/SectionDesRelances.tsx";
 import { SectionDesSauvegardes } from "../sauvegardes/SectionDesSauvegardes.tsx";
 
 /**
- * L'écran des réglages (#26) : sa première section, « Sauvegardes ». Le délai des relances (#14) et le fournisseur d'IA
- * (#43) y ajouteront la leur. Les réglages vivent hors de la base, dans le dossier de données (ADR-0008).
+ * L'écran des réglages (#26) : la section « Sauvegardes », puis celle des relances et de leur délai par défaut (#14). Le
+ * fournisseur d'IA (#43) y ajoutera la sienne. Les réglages vivent hors de la base, dans le dossier de données
+ * (ADR-0008).
  */
 export function EcranDesReglages({
   client,
@@ -33,6 +35,7 @@ export function EcranDesReglages({
         Réglages
       </h2>
       <SectionDesSauvegardes client={client} choisirLeDossier={choisirLeDossierDesSauvegardes} />
+      <SectionDesRelances client={client} />
     </section>
   );
 }

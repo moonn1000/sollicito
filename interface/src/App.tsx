@@ -5,7 +5,7 @@ import { ModificationDUneCandidature } from "./candidatures/ModificationDUneCand
 import { SaisieDUneCandidature } from "./candidatures/SaisieDUneCandidature.tsx";
 import { TableauDeBord } from "./candidatures/TableauDeBord.tsx";
 import { HorsDeLaFenetre } from "./connexion.ts";
-import type { IssueDuChoixDuDossier } from "./hote/canalDeLHote.ts";
+import type { IssueDuBrouillon, IssueDuChoixDuDossier } from "./hote/canalDeLHote.ts";
 import { MiseEnPage, type Ecran } from "./miseEnPage/MiseEnPage.tsx";
 import { EcranDesReglages } from "./reglages/EcranDesReglages.tsx";
 
@@ -29,10 +29,13 @@ const MESSAGES: Record<Connexion["etat"], string> = {
 export function App({
   connecter,
   choisirLeDossierDesSauvegardes,
+  ouvrirLeBrouillon,
 }: {
   connecter: () => Promise<ClientDeLApi>;
   /** Ouvre le dialogue de dossier de la fenêtre hôte ; absent hors de la fenêtre. */
   choisirLeDossierDesSauvegardes?: () => Promise<IssueDuChoixDuDossier>;
+  /** Demande à la fenêtre hôte d'ouvrir le brouillon d'une relance dans la messagerie ; absent hors de la fenêtre (#14). */
+  ouvrirLeBrouillon?: (relance: number) => Promise<IssueDuBrouillon>;
 }) {
   const [connexion, setConnexion] = useState<Connexion>({ etat: "connexion" });
   const [ecran, setEcran] = useState<Ecran>({ nom: "tableau" });
@@ -99,6 +102,7 @@ export function App({
             nouvelleCandidature={() => naviguer({ nom: "saisie" })}
             ouvrirLaFiche={(candidature) => naviguer({ nom: "fiche", candidature })}
             ouvrirLesReglages={() => naviguer({ nom: "reglages" })}
+            ouvrirLeBrouillon={ouvrirLeBrouillon}
             prendreLeFocus={navigue}
           />
         );
@@ -122,6 +126,7 @@ export function App({
             revenir={() => naviguer({ nom: "tableau" })}
             modifier={() => naviguer({ nom: "modification", candidature: ecran.candidature })}
             quandSupprimee={quandSupprimee}
+            ouvrirLeBrouillon={ouvrirLeBrouillon}
           />
         );
       case "modification":
