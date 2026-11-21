@@ -120,6 +120,8 @@ public static class ApiLocale
         {
             json.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
             json.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+            // Un nombre s'écrit en nombre, comme le délai d'une relance (#14) : les réglages du web liraient aussi "7".
+            json.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
         });
         // Un corps illisible lève une exception dans tous les environnements, et ErreursInattendues y répond.
         builder.Services.Configure<RouteHandlerOptions>(routes => routes.ThrowOnBadRequest = true);
