@@ -16,4 +16,9 @@
     <EmbeddedResource Include="Outils\Interface\**\*" />
     <None Include="Outils\Interface\**\*" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <!-- La copie de référence de la restauration (#28), figée : RestaurationTests la restaure. -->
+  <ItemGroup>
+    <None Include="Reference\copie-de-reference-28.db" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

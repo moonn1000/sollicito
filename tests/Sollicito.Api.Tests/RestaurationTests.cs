@@ -129,6 +129,26 @@ public sealed class RestaurationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task La_copie_de_reference_faite_par_la_version_du_28_se_restaure_toujours()
+    {
+        // Figée : faite le 21/11/2026 par la version de #28 (dernière migration 20261121140747_RelancesEtContacts, EF Core
+        // 10.0.15, SQLite 3.53.3), par « Sauvegarder maintenant », sur des données fictives, et jamais refaite. Si elle ne
+        // se restaure plus, une mise à jour d'EF Core ou de SQLite a sans doute changé le texte du schéma que la
+        // vérification compare : toutes les copies faites avant elle seraient refusées comme étrangères (ADR-0012).
+        var reference = Path.Combine(AppContext.BaseDirectory, "Reference", "copie-de-reference-28.db");
+        await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest());
+        await api.AttendreLaPremiereVerificationAsync();
+        var nom = NomsDesCopies.DuJour(api.Sauvegardes().Installation, new DateOnly(2026, 11, 10));
+        File.Copy(reference, Path.Combine(ParDefaut, nom));
+        await api.SauvegarderMaintenantAsync();
+
+        Assert.Equal(IssueDeLaRestauration.Restauree, await api.RestaurerAsync(api.Copie(nom)));
+
+        Assert.Equal(["Chauffeur de référence", "Comptable de référence"], (await api.ListerAsync()).Select(candidature => candidature!["poste"]!.GetValue<string>()).Order(StringComparer.Ordinal));
+        Assert.True(EstSaine(DossierDeLaBase.Fichier));
+    }
+
+    [Fact]
     public async Task Une_base_abimee_se_remplace_et_ses_fichiers_se_gardent_tels_quels_hors_de_la_liste()
     {
         await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest());
