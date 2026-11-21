@@ -1,12 +1,12 @@
 # Modèle de menaces
 
-- **Mis à jour le** : 2026-11-20, avec la modification et la suppression d'une candidature (#25)
-- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D9 et D10 ; [ADR-0003](adr/0003-hote-interface-webview2.md), « Règles d'accès » et « Durcissement de la fenêtre » ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md)
-- **Périmètre** : l'API locale, ses journaux et sa base, la fenêtre hôte, et les textes saisis. Les offres et la sortie de l'IA, les clés d'IA, les sauvegardes et l'exe ajouteront leur section avec les stories qui les construisent.
+- **Mis à jour le** : 2026-11-20, avec les sauvegardes de la base (#26)
+- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D9 et D10 ; [ADR-0003](adr/0003-hote-interface-webview2.md), « Règles d'accès » et « Durcissement de la fenêtre » ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md)
+- **Périmètre** : l'API locale, ses journaux et sa base, ses sauvegardes et ses réglages, la fenêtre hôte, et les textes saisis. Les offres et la sortie de l'IA, les clés d'IA et l'exe ajouteront leur section avec les stories qui les construisent.
 
 ## Ce qui est protégé
 
-- **Les données de l'utilisateur** : ses candidatures, les entreprises et leurs contacts, ses relances, ses offres. Elles retracent sa recherche d'emploi, ses refus, parfois ses prétentions salariales. L'API locale les sert à l'interface : qui l'appelle à la place de l'interface peut les lire ou les modifier.
+- **Les données de l'utilisateur** : ses candidatures, les entreprises et leurs contacts, ses relances, ses offres. Elles retracent sa recherche d'emploi, ses refus, parfois ses prétentions salariales. L'API locale les sert à l'interface : qui l'appelle à la place de l'interface peut les lire ou les modifier. Chaque sauvegarde en est une copie complète, non chiffrée (voir « Sauvegardes »).
 - **Le jeton de lancement** : il ouvre l'API, il est donc protégé comme les données.
 - **La fenêtre** : elle n'affiche que l'interface, qui détient le jeton. Une page d'une autre origine qui s'y afficherait pourrait le recevoir, ou tromper l'utilisateur sous l'apparence de Sollicito.
 
@@ -122,6 +122,7 @@ La fenêtre (`src/Sollicito.Fenetre`) n'affiche que l'interface locale (ADR-0001
 | Le poste | un schéma externe (`mailto:`, `ms-settings:`…), un téléchargement | leur annulation |
 | La caméra, le micro, la position, les notifications | une demande de permission | son refus |
 | Le jeton | une autre page qui le demanderait | le contrôle de la source du message |
+| Une copie de la base | un dossier de sauvegarde choisi par un script, par exemple un partage réseau | aucune route ne reçoit de chemin ; seul le dialogue de l'hôte en donne un (voir « Sauvegardes ») |
 
 ### Navigations et requêtes
 
@@ -179,9 +180,11 @@ Chaque réponse, refus compris, porte (`src/Sollicito.Api/Securite/EnTetesDeSecu
 
 Le profil du navigateur intégré vit dans `%LOCALAPPDATA%\Sollicito\WebView2`, fixé à la création de l'environnement ; par défaut, WebView2 l'écrirait à côté de l'exe. Si le dossier `%LOCALAPPDATA%` de l'utilisateur est introuvable, le lancement s'arrête plutôt que d'écrire dans le dossier courant.
 
-La base SQLite vit dans le même dossier (`sollicito.db`), que la fenêtre donne à l'API qu'elle construit ; l'API lancée seule y range aussi la sienne, développement compris. Au lancement, avant que Kestrel n'écoute, les migrations versionnées la créent ou la mettent à jour. Les connexions ne sont pas regroupées : une fois la base refermée, plus rien ne tient son fichier ouvert. Les tests créent chacun leur base dans un dossier temporaire, jamais dans le dossier de données de l'utilisateur.
+La base SQLite vit dans le même dossier (`sollicito.db`), que la fenêtre donne à l'API qu'elle construit ; l'API lancée seule y range aussi la sienne, développement compris. Au lancement, avant que Kestrel n'écoute, les migrations versionnées la créent, en mode WAL, ou la mettent à jour, sur une copie qui ne remplace la base qu'une fois migrée (voir « Sauvegardes »). Une base créée avant #26 en mode `delete` y passe au lancement suivant : le retrait du verrou des migrations de #79 l'ouvrait avant les migrations, qui ne la créaient donc plus elles-mêmes en WAL.
 
-Un lancement finit toujours, par la fenêtre ou par le message « Sollicito n'a pas pu démarrer son API locale. » :
+- **Les fichiers du journal** : en mode WAL, `sollicito.db-wal` et `sollicito.db-shm` vivent à côté de la base tant qu'une connexion est ouverte. Le premier porte les écritures récentes, pas encore reportées dans la base : ce sont des données de l'utilisateur, avec la même protection que la base, celle du dossier de données. La dernière connexion qui se ferme les reporte dans la base, puis les efface. Les copies n'en ont pas besoin : `VACUUM INTO` y lit ce qui est validé, et chaque copie est un fichier autonome, sans journal à côté d'elle. Les connexions ne sont pas regroupées : une fois la base refermée, plus rien ne tient son fichier ouvert. Les tests créent chacun leur base dans un dossier temporaire, jamais dans le dossier de données de l'utilisateur ; leurs sauvegardes et leurs réglages aussi, puisqu'ils vivent dans le dossier de la base.
+
+Un lancement finit toujours, par la fenêtre ou par le message « Sollicito n'a pas pu démarrer son API locale. », ou par celui d'une mise à jour de la base ratée, qui dit que la base n'a pas changé (voir « Sauvegardes ») :
 
 - **Un seul lancement à la fois** sur un dossier de données : l'API y ouvre le fichier `sollicito.verrou` sans partage, pour toute sa vie. Windows le referme et l'efface quand le processus s'arrête, même tué : ce verrou ne reste jamais pris. Un second lancement sur le même dossier est refusé aussitôt, au lieu de migrer la même base.
 - **Le verrou des migrations d'EF Core** est une ligne de la table `__EFMigrationsLock`, insérée et validée avant les migrations, retirée après. Un processus arrêté entre les deux la laisse, et EF Core l'attend sans fin à chaque lancement suivant, même sans migration à appliquer (relevé le 19/11 : toujours en attente après 40 s). Sous le verrou du dossier, aucun autre lancement ne migre la base : une ligne présente est donc abandonnée, et l'API la retire avant les migrations.
@@ -199,7 +202,56 @@ Un lancement finit toujours, par la fenêtre ou par le message « Sollicito n'a 
 
 ### Version de test
 
-Le test Playwright pilote la vraie fenêtre par le protocole CDP, ouvert dans la seule version de test (configuration `Test`, `src/Sollicito.Fenetre/VersionDeTest.cs`), sur un port de `127.0.0.1` choisi par le test. Elle reprend les réglages de la version publiée, et ne s'en écarte que sur ces points : le port CDP ; un dossier de données donné par le test, sans lequel elle refuse de se lancer ; les liens externes notés dans un fichier au lieu d'être ouverts, et les navigations annulées notées dans un autre ; le dossier de téléchargement placé dans ce dossier, quand la version publiée garde le dossier Téléchargements de l'utilisateur ; une caméra et un micro simulés ; ses messages d'erreur écrits sur la sortie d'erreur, sans boîte de dialogue. Le code de ces écarts n'est pas compilé dans la version publiée, et `dotnet publish -c Test` échoue.
+Le test Playwright pilote la vraie fenêtre par le protocole CDP, ouvert dans la seule version de test (configuration `Test`, `src/Sollicito.Fenetre/VersionDeTest.cs`), sur un port de `127.0.0.1` choisi par le test. Elle reprend les réglages de la version publiée, et ne s'en écarte que sur ces points : le port CDP ; un dossier de données donné par le test, sans lequel elle refuse de se lancer ; les liens externes notés dans un fichier au lieu d'être ouverts, et les navigations annulées notées dans un autre ; le dossier de téléchargement placé dans ce dossier, quand la version publiée garde le dossier Téléchargements de l'utilisateur ; une caméra et un micro simulés ; ses messages d'erreur écrits sur la sortie d'erreur, sans boîte de dialogue ; le dialogue de dossier des sauvegardes remplacé par le dossier que le test écrit dans un fichier de ce dossier (`dossier-a-choisir.txt`), sans fichier, un choix annulé (#26). Le code de ces écarts n'est pas compilé dans la version publiée, et `dotnet publish -c Test` échoue.
+
+## Sauvegardes
+
+Sollicito copie la base une fois par jour d'utilisation, et garde les sept dernières copies, plus une avant chaque mise à jour de la base (#26, ADR-0008). Chaque copie emporte toute la base : candidatures, entreprises, historique, notes. Elle n'emporte ni le jeton, qui ne vit qu'en mémoire, ni les réglages, rangés à part, ni plus tard les clés d'IA, chiffrées hors de la base (D10).
+
+### Qui peut lire une copie
+
+Les copies ne sont pas chiffrées (D10 ; l'étude du chiffrement est #51). La section « Sauvegardes » des réglages le dit, toujours visible, et le dialogue de dossier le rappelle. Qui accède à leur dossier les lit :
+
+| Dossier des copies | Qui peut les lire |
+| --- | --- |
+| le dossier par défaut, `%LOCALAPPDATA%\Sollicito\Sauvegardes` | le compte de l'utilisateur, les administrateurs du poste et le système, par les permissions du profil, comme la base elle-même |
+| une clé USB ou un disque externe | toute personne qui l'a en main ; formaté en FAT32 ou exFAT, le support n'a aucune permission |
+| un partage réseau (NAS) | les comptes que le partage admet ; les copies passent sur le réseau par SMB |
+| un dossier synchronisé (OneDrive…) | le service de synchronisation, qui envoie les copies hors de la machine |
+
+Le dossier par défaut ne protège pas d'une panne du disque de la base : l'écran le dit, et invite à choisir un autre support.
+
+### Le dossier, choisi par le seul dialogue de l'hôte
+
+- Aucune route de l'API ne reçoit un chemin. Le dossier ne vient que du dialogue de dossier de Windows, ouvert par la fenêtre hôte quand la page le demande par un message. Ce message passe le même contrôle que le canal du jeton : sa source est l'origine de l'interface, et il a la forme attendue (`{"type":"choisirLeDossierDesSauvegardes"}`). Il ne porte aucun chemin, et la réponse de l'hôte non plus : elle ne dit que l'issue, choisi, annulé ou refusé.
+- Un script injecté dans la page, qui aurait lu le jeton, peut ouvrir le dialogue, où l'utilisateur seul choisit ; refaire la copie du jour ; ou ramener les copies au dossier par défaut, par une route sans chemin. Il ne peut pas les envoyer vers un dossier de son choix, ni vers un partage réseau qui recevrait aussi l'empreinte NTLM du compte.
+- Le dossier choisi ne devient celui des sauvegardes qu'après une copie qui y réussit. Il n'est jamais recréé s'il manque : une autre clé a pu prendre la même lettre. Aucune copie ne part alors ailleurs ; l'alerte du tableau de bord le dit.
+- La rotation n'efface que les copies du jour de l'installation, reconnues à leur nom (`sollicito-<installation>-<AAAA-MM-JJ>.db`) : jamais un autre fichier du dossier, ni les copies d'un autre poste qui le partage, ni celles d'avant une mise à jour.
+- Le réglage du dossier vit dans `reglages.json`, dans le dossier de données, hors de la base. Un fichier illisible rend le dossier par défaut, et l'alerte le dit. `sauvegardes.json`, à côté, ne garde que l'instant de la dernière copie réussie, sans chemin.
+
+### Une copie juste, et une mise à jour qui ne touche la base qu'une fois réussie
+
+- Chaque copie s'écrit par `VACUUM INTO`, instantané cohérent de la base, journal WAL compris, sous un nom provisoire ; elle se relit par `PRAGMA integrity_check`, puis prend son nom. La rotation n'efface rien avant une copie vérifiée. `VACUUM INTO` reconstruit tables et index : ce contrôle vise une écriture abîmée sur le support.
+- Avant une mise à jour, la copie d'avant se fait dans le dossier par défaut. Les migrations s'appliquent ensuite à une seconde copie, qui remplace la base par l'API de sauvegarde de SQLite, en une transaction. Une migration ratée laisse la base telle qu'avant, et le lancement s'arrête sur un message sans chemin.
+- Un arrêt ne laisse pas de copie en plus. La copie de travail d'une mise à jour interrompue, aussi complète que la base, et son journal se retirent au lancement suivant, sous le verrou du dossier et avant toute mise à jour, comme les fichiers provisoires des réglages ; la base et ses journaux n'y répondent jamais. Une copie de fermeture abandonnée s'interrompt et retire son fichier provisoire, à moitié écrit, avant la sortie du processus ; un fichier resté malgré tout, tenu par un autre programme par exemple, se retire au lancement suivant. Entre-temps, ces fichiers ont la protection du dossier qui les contient, comme les copies.
+
+### Ce que les journaux en disent
+
+Ni le dossier de données, ni le dossier des sauvegardes, ni le nom d'une copie : seulement ce qui s'est passé (copie faite, manquée, dossier choisi ou refusé, réglage illisible, mise à jour faite ou ratée), et le type d'une erreur. Le service des copies attrape toute exception, hors annulation : l'hôte écrirait sinon l'exception en entier, chemin compris.
+
+*Tests* :
+
+- `tests/Sollicito.Infrastructure.Tests/CopiesVerifieesTests.cs` : une copie saine se relit saine ; une copie abîmée, un fichier qui n'est pas une base, un index qui ne suit plus sa table ne se relisent pas sains ; une copie qui ne se vérifie pas ne prend pas son nom, et ne laisse rien ; une copie annulée pendant sa vérification non plus, même saine, ni pendant les reprises de son renommage ; une vérification annulée s'interrompt au lieu d'aller au bout. `RestesDUnArretTests.cs` : une copie de travail et ses journaux comptent pour un reste, et un reste qu'un autre programme tient demeure, sans compter parmi les restes retirés.
+- `tests/Sollicito.Application.Tests/NomsDesCopiesTests.cs`, `PlanDesCopiesTests.cs` et `ReglagesDeLApplicationTests.cs` : les noms reconnus, la copie à faire (aucune, d'hier, du jour, minuit passé), la rotation (sept gardées, fichiers étrangers et copies d'un autre poste laissés), la lecture du réglage (absent, illisible, valide).
+- `tests/Sollicito.Api.Tests/CopiesDuJourTests.cs` : la copie du lancement, saine ; une ligne validée restée dans le WAL est copiée, une écriture en cours ne l'est pas ; la copie refaite à la fermeture ; un second lancement du jour ne copie pas avant sa fermeture ; la minuterie fait la copie du nouveau jour une heure après 23:30 ; la rotation ; une copie manquée n'efface rien et ne laisse rien de provisoire ; une copie de fermeture manquée laisse la copie d'avant ; abandonnée au bout du délai, en pleine écriture ou bloquée sur une base verrouillée, elle s'arrête sans laisser de fichier provisoire, ne reprend pas une fois la base rendue, et la copie d'avant reste ; un fichier provisoire resté d'une fermeture se retire au lancement suivant, même quand la copie du jour est faite, et celui d'une autre installation reste ; une fermeture ne fait qu'une copie, finie avant la fin de l'arrêt, même quand l'hôte appelle deux fois l'arrêt des services ; la base se crée en WAL, et une base restée en mode `delete` y passe sans rien perdre.
+- `DossierDesSauvegardesTests.cs` : le dossier choisi reçoit aussitôt une copie et devient celui des sauvegardes, le réglage se garde hors de la base, et ni la base ni la copie ne portent son chemin ; un dossier absent est refusé ; un dossier qui manque n'est ni recréé ni remplacé, et son retour lève l'alerte ; relancé alors qu'il manque, Sollicito dit encore depuis quand aucune copie n'a réussi ; le retour au dossier par défaut, réussi ou refusé (409) ; un réglage illisible ; deux installations qui partagent un dossier ; aucune route ne déclare de corps ni de paramètre, et un corps porteur d'un chemin ne change rien.
+- `ProtectionsDesSauvegardesTests.cs` : sur les trois routes, une requête sans jeton (401), sous un autre `Host` (400), ou une écriture d'une autre origine, sans origine ou d'origine `null` (403) est refusée, et ne copie rien ; les trois routes figurent dans la documentation OpenAPI.
+- `MiseAJourDeLaBaseTests.cs` : une base peuplée à la migration de #12 se copie, puis se met à jour sans rien perdre, dates comprises, en mode WAL ; une migration qui échoue laisse la base identique, octet pour octet, garde la copie d'avant, et arrête le lancement sur son message ; un nouvel essai remplace la copie d'avant ; une copie d'avant impossible n'essaie aucune migration ; sans migration en attente, aucune copie d'avant ; la copie de travail d'une mise à jour interrompue, ses journaux et les fichiers provisoires des réglages se retirent au lancement, sans toucher à la base ni aux fichiers qui ne sont pas à Sollicito.
+- `JournauxDesSauvegardesTests.cs` : voir « Règle des journaux ».
+- `tests/Sollicito.Fenetre.Tests/ReglesDeLaFenetreTests.cs` : seul un message de l'interface, de la forme attendue, ouvre le dialogue ; la réponse ne porte que l'issue. `MessagesDuLancementTests.cs` : le message d'une mise à jour ratée, sans chemin.
+- `interface/src/sauvegardes/SectionDesSauvegardes.test.tsx` et `AlerteDesSauvegardes.test.tsx` : avertissements, liste, choix réussi, annulé ou refusé, retour au dossier par défaut, sauvegarder maintenant, alerte et « Réessayer » ; tant que le tableau de bord est affiché, l'alerte suit l'état : elle vient, reste sans clignoter, et part dès qu'une copie réussit, et une relecture partie avant un « Réessayer » réussi ne la ramène pas ; l'annonce d'un essai part quand l'alerte change, sans revenir, et un essai manqué le dit sous l'alerte affichée quand il répond, sans message laissé seul si elle est partie entre-temps ; le tableau de bord quitté, même pendant une lecture, l'état ne se relit plus ; la section ne parle ni de restaurer ni de candidature supprimée. `interface/src/hote/canalDeLHote.test.ts` : le message du choix ne porte aucun chemin, et une réponse d'une autre forme est ignorée.
+- `interface/tests-fenetre/fenetre.test.ts`, dans la vraie fenêtre : la copie du lancement, le choix d'un dossier par le remplaçant du dialogue, le réglage écrit, puis la copie refaite à la fermeture ; aucun fichier du dossier de données, copies comprises, ne contient le jeton.
+- *À vérifier à la main* sur l'exe publié (ADR-0008, « À vérifier ») : le vrai dialogue de Windows, que le protocole CDP ne pilote pas, s'ouvre sur le dossier courant, et son annulation ne change rien.
 
 ## Textes saisis
 
@@ -221,11 +273,22 @@ Ce que l'API en applique dès maintenant (`src/Sollicito.Api/Journaux/ReglesDesJ
   - `Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware` écrit le chemin de chaque fichier de l'interface servi ou cherché, dès le niveau Information.
   - `Microsoft.EntityFrameworkCore.Database.Connection`, `Microsoft.EntityFrameworkCore.Database.Command` et `Microsoft.EntityFrameworkCore.Migrations` écrivent le chemin du fichier de la base, sous le profil Windows, donc le nom du compte : à l'ouverture et à la fermeture de chaque connexion, à la fermeture de chaque lecture, au début des migrations (niveau Debug). Les requêtes SQL qu'écrirait la deuxième ne portent pas les valeurs : la journalisation des données sensibles reste coupée.
 - **Des refus sans valeurs.** L'API note chaque refus par son motif seul, sans la valeur reçue ni l'adresse de la requête.
-- **Aucun chemin du poste.** Les messages d'état de l'hôte sont coupés (`SuppressStatusMessages`) : « Content root path » écrirait un chemin du profil Windows, donc le nom du compte. « Now listening on », qui vient du serveur web, reste écrit. Un échec de la préparation de la base ne note que le type de l'erreur, dont le message citerait le chemin du fichier.
+- **Aucun chemin du poste.** Les messages d'état de l'hôte sont coupés (`SuppressStatusMessages`) : « Content root path » écrirait un chemin du profil Windows, donc le nom du compte. « Now listening on », qui vient du serveur web, reste écrit. Un échec de la préparation de la base ne note que le type de l'erreur, dont le message citerait le chemin du fichier ; l'erreur relancée ne garde pas l'erreur d'origine, que l'hôte écrirait en entier avec « Hosting failed to start » (#80, point 1). Les copies de la base et le dossier des sauvegardes n'entrent dans aucun journal (voir « Sauvegardes »).
 
 Pour les stories suivantes : une route ne porte qu'un identifiant, jamais une donnée. Une nouvelle route, ou un nouveau composant d'ASP.NET Core, peut amener une catégorie qui recopie la requête : elle rejoint alors les catégories muettes, et le test des journaux essaie la nouvelle route. Un message d'exception ne reprend pas le contenu qui l'a provoquée. La journalisation des données sensibles d'Entity Framework Core reste coupée.
 
 *Tests* : `tests/Sollicito.Api.Tests/ReglesDesJournauxTests.cs`. Les journaux ne vont qu'à la console. L'API est lancée avec chaque catégorie au niveau Trace, y compris par un joker qui vise les catégories muettes et par un réglage propre au fournisseur de test, qui garde tout ce qu'un journal pourrait écrire : message, valeurs, exception, portées. Elle reçoit le jeton dans son en-tête, dans la chaîne de requête, dans le chemin, dans un cookie et dans `Authorization`, et une donnée fictive dans la chaîne de requête, le chemin, un en-tête, un cookie, le corps, `Host` et `Origin`, sur des requêtes acceptées comme refusées, fichiers de l'interface compris. Elle reçoit aussi trois requêtes mal formées qui portent l'un et l'autre : ligne de requête, ligne d'en-tête, `Host`. Les routes des candidatures reçoivent la donnée dans l'entreprise et le poste d'une candidature enregistrée, puis relue par les deux listes, et dans des enregistrements refusés : par la validation, par la lecture du corps (JSON mal formé, champ inconnu, type inattendu), par le type du corps et par le contrôle de l'origine. Les routes de la fiche la reçoivent dans la note d'une étape admise, puis relue par la fiche, et dans un statut, une étape et des corps refusés ; elles répondent aussi à un passage et à une correction refusés (409), et à une candidature inconnue (404). Les trois routes de #25 la reçoivent dans l'entreprise et le poste d'une modification admise, qui crée une entreprise, et dans la note d'une correction d'étape admise, puis sur tous leurs chemins d'erreur : refus de la validation, date d'envoi après le premier événement, nom d'entreprise à corriger sans accord (409), étape déjà corrigée (409), corps illisibles (JSON mal formé, champ inconnu, statut, type inattendu), type du corps, origine absente, candidature inconnue (404) ; la suppression, admise (204), puis répétée (404). Leurs identifiants viennent des réponses. Aucune entrée ne contient ni le jeton ni la donnée. Le test échoue dès qu'on rend la parole à l'une des sept catégories muettes. Aucune entrée ne contient non plus la racine du contenu, qu'écrirait « Content root path », ni le dossier de la base. Un second test fait échouer une route par une exception dont le message cite la donnée : seul son type paraît dans les journaux ; un troisième fait de même pour la modification et la correction d'une étape, dont le corps porte la donnée, et pour la suppression.
+
+`tests/Sollicito.Api.Tests/JournauxDesSauvegardesTests.cs` garde les sauvegardes (#26), journaux au niveau Trace, dans des dossiers dont le nom imite un compte Windows (`Users\Compte.Fictif-Dupont\…`) :
+
+- une base d'avant #25, qui fait la copie d'avant une mise à jour et la migration sur une copie ;
+- des copies réussies, puis manquées : dossier choisi, puis absent et refusé, puis retiré et rebranché, une copie qui ne peut pas prendre son nom ;
+- le retour au dossier par défaut, réussi, puis impossible ;
+- un réglage illisible ;
+- une migration ratée, et une copie d'avant impossible, dont l'hôte écrit l'échec du lancement avec toute la chaîne de l'exception ;
+- la sonde de #80, point 1 : un fichier à la place du dossier de données.
+
+Aucune entrée ne contient le nom du faux compte, ni le dossier temporaire du test, ni la donnée d'une candidature copiée, ni l'identifiant d'installation qui nomme les copies. Des témoins prouvent que chaque chemin a été parcouru. Sans le correctif de #80, point 1, le dernier cas fait échouer le test : l'hôte y écrit `Cannot create '…'`, chemin compris.
 
 ## Limites
 
@@ -239,10 +302,13 @@ Pour les stories suivantes : une route ne porte qu'un identifiant, jamais une do
 - **WebRTC**, à confirmer : ni la politique de sécurité du contenu, qui n'a pas de directive pour lui dans Chromium, ni probablement le filtre des requêtes ne voient les échanges d'une `RTCPeerConnection` avec un serveur STUN ou TURN. Un script injecté qui aurait passé la politique pourrait s'en servir pour faire sortir le jeton, sans clic. Parade à évaluer : retirer `RTCPeerConnection` par un script posé à la création du document (revue de #13).
 - **Le runtime WebView2 a ses propres échanges** avec Microsoft (données de diagnostic, mises à jour ; ADR-0003, « À vérifier ») : ils ne viennent pas de la page, et ni le filtre des requêtes ni la politique de sécurité du contenu ne les voient.
 - **Une connexion WebSocket**, que la V1 n'a pas, ne pourrait pas porter l'en-tête du jeton : le navigateur ne permet pas d'en ajouter un à l'ouverture d'un WebSocket. Il lui faudrait sa propre règle, avec le contrôle d'`Origin` que demande la D9.
+- **Les copies ne sont pas chiffrées** : sur une clé USB perdue, ou dans un dossier synchronisé, elles emportent toute la base (voir « Sauvegardes »). Le chiffrement est l'objet de #51.
+- **Le fichier des réglages** se lit et s'écrit sous le compte de l'utilisateur : un programme du même compte peut y désigner un autre dossier de sauvegarde. Il pourrait aussi lire la base elle-même (premier point).
 
 ## À reprendre
 
-- **Brouillon de relance (#14)** : la page demande l'ouverture du lien `mailto` à l'hôte par un message, soumis au même contrôle de la source que le canal du jeton (ADR-0003) ; tout autre schéma externe reste annulé.
+- **Brouillon de relance (#14)** : la page demande l'ouverture du lien `mailto` à l'hôte par un message, soumis au même contrôle de la source que le canal du jeton (ADR-0003), comme le choix du dossier des sauvegardes (#26) ; tout autre schéma externe reste annulé.
+- **Restauration (#28)** : une copie restaurée remplace toute la base ; elle doit se vérifier avant, et la base en cours se copier d'abord. La liste à restaurer montre toutes les copies de Sollicito du dossier, celles d'une autre installation comprises.
 - **Interface en développement** : le serveur de développement de Vite sert une autre origine. L'API refuse ses écritures, et l'interface ne reçoit le jeton que dans la fenêtre.
 - **Exe** : le dossier d'extraction `%TEMP%\.net` (voir « Limites »), et un exe construit par la CI, dont les symboles ne portent pas le chemin d'un poste de développement (prototype de #9).
 

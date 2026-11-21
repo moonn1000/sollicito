@@ -255,7 +255,8 @@ public sealed class CandidaturesTests
         }
         finally
         {
-            Directory.Delete(dossier, recursive: true);
+            // Avec réessai : un antivirus peut tenir un instant la base ou une copie tout juste écrite (#26).
+            await AppelsDesSauvegardes.SupprimerAsync(dossier);
         }
     }
 

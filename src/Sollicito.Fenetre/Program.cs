@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Sollicito.Api;
+using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Securite;
 
 namespace Sollicito.Fenetre;
@@ -42,8 +43,9 @@ internal static class Program
         }
         catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            // Le message ne reprend pas l'exception : elle peut citer un chemin du poste.
-            Signalement.Afficher("Sollicito n'a pas pu démarrer son API locale.");
+            // Le message ne reprend pas l'exception, qui peut citer un chemin du poste ; seule une mise à jour de la base
+            // ratée a le sien, écrit pour l'utilisateur et sans chemin (#26).
+            Signalement.Afficher(MessagesDuLancement.Pour(erreur));
             return 1;
         }
 
@@ -51,7 +53,8 @@ internal static class Program
         {
             var origine = new Uri(api.Services.GetRequiredService<AdresseDEcoute>().Origine);
             var jeton = api.Services.GetRequiredService<JetonDeLancement>();
-            using var fenetre = new FenetreHote(origine, jeton, lancement);
+            var sauvegardes = api.Services.GetRequiredService<SauvegardesDeLaBase>();
+            using var fenetre = new FenetreHote(origine, jeton, lancement, sauvegardes);
             System.Windows.Forms.Application.Run(fenetre);
             return fenetre.CodeDeSortie;
         }

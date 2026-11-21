@@ -108,4 +108,45 @@ public sealed class ReglesDeLaFenetreTests
         Assert.Equal("jeton", message.RootElement.GetProperty("type").GetString());
         Assert.Equal("valeur-fictive", message.RootElement.GetProperty("jeton").GetString());
     }
+
+    [Theory]
+    [InlineData("http://127.0.0.1:52344/", """{"type":"choisirLeDossierDesSauvegardes"}""")]
+    [InlineData("http://127.0.0.1:52344/index.html", """{"type":"choisirLeDossierDesSauvegardes","dossier":"\\\\serveur\\partage"}""")]
+    public void L_interface_demande_le_choix_du_dossier_des_sauvegardes(string source, string message)
+    {
+        Assert.True(ReglesDeLaFenetre.DemandeLeChoixDuDossier(source, message, Origine));
+        // Ce message ne reçoit pas le jeton, ni le précédent n'ouvre de dialogue.
+        Assert.False(ReglesDeLaFenetre.DemandeLeJeton(source, message, Origine));
+        Assert.False(ReglesDeLaFenetre.DemandeLeChoixDuDossier(source, """{"type":"prete"}""", Origine));
+    }
+
+    [Theory]
+    [InlineData("http://localhost:52344/", """{"type":"choisirLeDossierDesSauvegardes"}""")]
+    [InlineData("https://exemple.invalid/", """{"type":"choisirLeDossierDesSauvegardes"}""")]
+    [InlineData("about:blank", """{"type":"choisirLeDossierDesSauvegardes"}""")]
+    [InlineData(null, """{"type":"choisirLeDossierDesSauvegardes"}""")]
+    [InlineData("http://127.0.0.1:52344/", """{"type":"choisirLeDossier"}""")]
+    [InlineData("http://127.0.0.1:52344/", """{"Type":"choisirLeDossierDesSauvegardes"}""")]
+    [InlineData("http://127.0.0.1:52344/", """{"type":["choisirLeDossierDesSauvegardes"]}""")]
+    [InlineData("http://127.0.0.1:52344/", "\"choisirLeDossierDesSauvegardes\"")]
+    [InlineData("http://127.0.0.1:52344/", "{pas du json")]
+    [InlineData("http://127.0.0.1:52344/", "")]
+    [InlineData("http://127.0.0.1:52344/", null)]
+    public void Aucun_autre_message_n_ouvre_le_dialogue_de_dossier(string? source, string? message)
+    {
+        Assert.False(ReglesDeLaFenetre.DemandeLeChoixDuDossier(source, message, Origine));
+    }
+
+    [Theory]
+    [InlineData(nameof(IssueDuChoixDuDossier.Choisi), "choisi")]
+    [InlineData(nameof(IssueDuChoixDuDossier.Annule), "annule")]
+    [InlineData(nameof(IssueDuChoixDuDossier.Refuse), "refuse")]
+    public void La_reponse_au_choix_du_dossier_porte_son_issue_sans_chemin(string issue, string attendue)
+    {
+        using var message = JsonDocument.Parse(ReglesDeLaFenetre.MessageDuChoixDuDossier(Enum.Parse<IssueDuChoixDuDossier>(issue)));
+
+        Assert.Equal(["type", "issue"], message.RootElement.EnumerateObject().Select(propriete => propriete.Name));
+        Assert.Equal("dossierDesSauvegardes", message.RootElement.GetProperty("type").GetString());
+        Assert.Equal(attendue, message.RootElement.GetProperty("issue").GetString());
+    }
 }

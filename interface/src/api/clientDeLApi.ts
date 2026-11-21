@@ -144,6 +144,44 @@ export type ResultatDeLaCorrectionDEtape =
   | { issue: "refusee"; refus: RefusDeLEtape }
   | { issue: "perimee"; motif: string };
 
+/** La sorte d'une copie de la base (#26) : celle d'un jour d'utilisation, ou celle d'avant une mise à jour. */
+export type SorteDeCopie = "DuJour" | "AvantMiseAJour";
+
+/** Une copie gardée de la base. */
+export interface CopieGardee {
+  /** Son nom de fichier, sans le dossier. */
+  nom: string;
+  sorte: SorteDeCopie;
+  /** L'instant où elle a été écrite, en UTC. */
+  faiteLe: string;
+}
+
+/** Ce qui empêche les copies : un dossier qui manque, ou une copie qui ne peut pas s'y écrire. */
+export type MotifDEchec = "DossierIntrouvable" | "CopieImpossible";
+
+/** L'état des sauvegardes, tel que l'API le tient en mémoire (#26). */
+export interface EtatDesSauvegardes {
+  /** Le dossier des copies du jour. */
+  dossier: string;
+  /** Vrai si c'est le dossier par défaut, sur le disque de la base. */
+  parDefaut: boolean;
+  /** Le dossier par défaut, où vont aussi les copies d'avant une mise à jour. */
+  dossierParDefaut: string;
+  /** L'instant de la dernière copie du jour, en UTC ; rien s'il n'y en a aucune. */
+  derniereCopie: string | null;
+  /** Les copies gardées : celles du jour, puis celles d'avant une mise à jour. */
+  copies: CopieGardee[];
+  /** Vrai si le réglage du dossier n'a pas pu être relu : le dossier par défaut sert alors. */
+  reglageIllisible: boolean;
+  /** Les copies manquées depuis la dernière réussie, et depuis quand ; rien si tout va bien. */
+  echec: { motif: MotifDEchec; depuis: string } | null;
+  /** Faux tant que la vérification du lancement n'est pas faite. */
+  verifie: boolean;
+}
+
+/** Ce que rend le retour au dossier par défaut : l'état à jour, ou le motif du refus (l'ancien dossier reste). */
+export type ResultatDuRetourAuDossierParDefaut = { issue: "fait"; etat: EtatDesSauvegardes } | { issue: "refuse"; motif: string };
+
 const CHAMPS: readonly ChampDeLaSaisie[] = ["entreprise", "poste", "envoyeeLe"];
 
 const CHAMPS_DE_L_ETAPE: readonly ChampDeLEtape[] = ["type", "survenuLe", "note"];
@@ -191,6 +229,12 @@ export interface ClientDeLApi {
   modifierUneCandidature(candidature: number, saisie: SaisieDUneCandidature, corrigerLeNom?: boolean): Promise<ResultatDeLaModification>;
   /** Supprime une candidature et tout son historique, définitivement ; une `ErreurDeLApi` 404 si elle n'existe pas. */
   supprimerUneCandidature(candidature: number): Promise<void>;
+  /** L'état des sauvegardes, lu en mémoire par l'API, sans toucher au dossier (#26). */
+  lireLesSauvegardes(): Promise<EtatDesSauvegardes>;
+  /** Refait aussitôt la copie du jour ; l'état rendu dit si elle a réussi. */
+  sauvegarderMaintenant(): Promise<EtatDesSauvegardes>;
+  /** Revient au dossier par défaut, après une copie qui doit y réussir ; sinon l'ancien dossier reste. */
+  revenirAuDossierParDefaut(): Promise<ResultatDuRetourAuDossierParDefaut>;
 }
 
 /**
@@ -331,6 +375,30 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
       if (reponse.status !== 204) {
         throw new ErreurDeLApi(reponse.status);
       }
+    },
+    lireLesSauvegardes: async () => (await lire("/api/sauvegardes")) as EtatDesSauvegardes,
+    sauvegarderMaintenant: async () => {
+      const reponse = await ecrire("/api/sauvegardes");
+      if (reponse.status !== 200) {
+        throw new ErreurDeLApi(reponse.status);
+      }
+
+      return (await reponse.json()) as EtatDesSauvegardes;
+    },
+    revenirAuDossierParDefaut: async () => {
+      const reponse = await ecrire("/api/sauvegardes/dossier-par-defaut");
+      if (reponse.status === 200) {
+        return { issue: "fait", etat: (await reponse.json()) as EtatDesSauvegardes };
+      }
+
+      if (reponse.status === 409) {
+        const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+        if (motif !== undefined) {
+          return { issue: "refuse", motif };
+        }
+      }
+
+      throw new ErreurDeLApi(reponse.status);
     },
   };
 }

@@ -1,7 +1,7 @@
 # Modèle de domaine de la V1
 
-- **Mis à jour le** : 2026-11-20, avec #25 (modifier ou supprimer une candidature)
-- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D5 ; [ADR-0005](adr/0005-modele-de-domaine.md) (entreprises reconnues, offres dédoublonnées, dates et heures) ; [ADR-0007](adr/0007-historique-en-vigueur-et-nom-corrige.md) (étapes corrigées et historique en vigueur, nom affiché corrigé, entreprises proposées)
+- **Mis à jour le** : 2026-11-20, avec #26 (sauvegarder la base automatiquement)
+- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D5 ; [ADR-0005](adr/0005-modele-de-domaine.md) (entreprises reconnues, offres dédoublonnées, dates et heures) ; [ADR-0007](adr/0007-historique-en-vigueur-et-nom-corrige.md) (étapes corrigées et historique en vigueur, nom affiché corrigé, entreprises proposées) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) (réglages de l'application, hors de la base)
 - **Périmètre** : les huit entités de la D5. Six entrent en base en V1 : Entreprise, Contact, Offre, Candidature, Événement de candidature et Relance. Profil et Document sont modélisés ici et entrent en base en V2 ([spec de la V1](https://github.com/moonn1000/sollicito/issues/5), « Entités en base »).
 
 Ce modèle remplace l'esquisse de la D5 (ADR-0005). Le code du domaine le suit depuis #11 (`src/Sollicito.Domain`) : une pull request qui s'en écarte met ce document à jour. #11 y a ajouté les règles de la saisie (voir « Saisie d'une candidature ») ; #12, celles d'une étape (voir « Noter une étape ») ; #25, celles de la modification et de la suppression (voir « Modifier ou supprimer une candidature »).
@@ -215,7 +215,7 @@ stateDiagram-v2
 ```
 
 - **Planifier** : sur une candidature en cours seulement, et une relance à faire au plus par candidature.
-- **Échéance** : la date locale de l'envoi, plus un délai en jours (voir « Dates et heures »). Le délai par défaut est un réglage de l'application, hors des entités du domaine : #14 fixe sa valeur et le range avec les autres réglages. On peut le changer pour une relance. L'échéance est enregistrée telle quelle : corriger ensuite la date d'envoi (#25) ne la déplace pas.
+- **Échéance** : la date locale de l'envoi, plus un délai en jours (voir « Dates et heures »). Le délai par défaut est un réglage de l'application, hors des entités du domaine : #14 fixe sa valeur et le range avec les autres réglages (voir « Réglages et sauvegardes, hors du domaine »). On peut le changer pour une relance. L'échéance est enregistrée telle quelle : corriger ensuite la date d'envoi (#25) ne la déplace pas.
 - **Échue** : une relance à faire dont l'échéance tombe aujourd'hui ou avant, en date locale. **De la semaine** : une relance à faire dont l'échéance tombe dans les sept jours qui suivent aujourd'hui.
 - **Destinataire** : l'utilisateur le choisit parmi les contacts de l'entreprise de la candidature. Si l'entreprise n'en a qu'un, il est proposé d'office ; si elle n'en a aucun, la relance reste sans destinataire, et son brouillon s'ouvre sans (#14). Rattacher la candidature à une autre entreprise (#25) retire le destinataire de sa relance à faire ; les relances closes gardent le leur.
 - **Faite ou abandonnée** : c'est définitif, et une clôture de relance entre dans l'historique de la candidature.
@@ -384,13 +384,20 @@ La fiche d'une candidature (#12) mène à sa modification et à sa suppression (
 
 **Une étape mal datée** qui borne la date d'envoi se corrige (voir « Corriger une étape ») : corrigée, elle ne la borne plus.
 
+## Réglages et sauvegardes, hors du domaine
+
+Ni les réglages ni les sauvegardes ne sont des entités du domaine : rien d'eux n'entre dans la base (ADR-0008).
+
+- **Les réglages de l'application** vivent dans `reglages.json`, dans le dossier de données, à côté de la base, et non dedans : une copie ne les emporte pas, une restauration (#28) ne les changera pas, et ils se lisent avant que la base ne soit migrée. Le premier est le dossier des sauvegardes (#26). #14 y ajoute le délai par défaut des relances, et #43 le choix du fournisseur d'IA.
+- **Une sauvegarde** est une copie de toute la base, à sa date : une par jour d'utilisation, les sept dernières gardées, plus une avant chaque mise à jour de la base. Elle copie la base telle quelle, sans rien changer à ses données.
+
 ## Ce que les stories en reprennent
 
 | Story | Ce qu'elle reprend du modèle |
 | --- | --- |
 | #11 | l'entreprise et sa clé ; la candidature : poste, date d'envoi jamais future, départ à Envoyée ; les instants en UTC et leur convertisseur ; la conversion des heures saisies |
 | #12 | les passages permis, la correction du dernier changement, deux des trois sortes d'événement (changement de statut, étape) et l'ordre de l'historique ; les règles d'une étape |
-| #14 | le contact minimal ; les règles des relances : candidature en cours, une seule à faire, échéance sur la date, délai par défaut en réglage, relance échue ou de la semaine, choix du destinataire, clôture dans l'historique (la troisième sorte d'événement), abandon quand la candidature se clôt ; et ce que #25 lui confie, faute de relances en base : une date d'envoi corrigée ne déplace pas l'échéance, un changement d'entreprise retire le destinataire de la relance à faire, et la suppression de la candidature emporte ses relances |
+| #14 | le contact minimal ; les règles des relances : candidature en cours, une seule à faire, échéance sur la date, délai par défaut en réglage, rangé dans `reglages.json` (#26), relance échue ou de la semaine, choix du destinataire, clôture dans l'historique (la troisième sorte d'événement), abandon quand la candidature se clôt ; et ce que #25 lui confie, faute de relances en base : une date d'envoi corrigée ne déplace pas l'échéance, un changement d'entreprise retire le destinataire de la relance à faire, et la suppression de la candidature emporte ses relances |
 | #25 | les champs modifiables : poste, entreprise (reconnue de nouveau) et date d'envoi, mais pas le statut ; une date d'envoi corrigée qui ne passe pas après le premier événement en vigueur, et qui, renvoyée inchangée, garde l'instant enregistré ; le nom affiché corrigé ; les entreprises proposées, celles qu'une candidature porte encore ; la correction d'une étape et sa version en vigueur ; la suppression d'une candidature emporte ses événements, et laisse son entreprise en base |
 | #36 | la règle 2, sur le texte collé ; la règle 3 ; le texte gardé tel quel |
 | #38 | une offre, au plus une candidature ; « Postuler » reprend l'entreprise et le poste ; l'offre sans entreprise ; et ce que #25 lui confie, faute d'offres en base : supprimer la candidature laisse son offre, qui peut en recevoir une nouvelle |
