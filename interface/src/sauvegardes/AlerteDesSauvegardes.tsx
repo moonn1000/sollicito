@@ -29,7 +29,8 @@ export function AlerteDesSauvegardes({
   ouvrirLesReglages?: () => void;
 }) {
   const [etat, setEtat] = useState<EtatDesSauvegardes>();
-  const [annonce, setAnnonce] = useState<string>();
+  // L'annonce d'un « Réessayer », avec l'alerte à l'écran quand il a répondu : elle ne vaut que sous cette alerte.
+  const [annonce, setAnnonce] = useState<{ texte: string; sous: string | undefined }>();
   const [enCours, setEnCours] = useState(false);
   const occupe = useRef(false);
   // Change à chaque « Réessayer » réussi : une lecture partie avant sa réponse rapporterait l'état d'avant lui.
@@ -82,9 +83,9 @@ export function AlerteDesSauvegardes({
       const apres = await client.sauvegarderMaintenant();
       essaisReussis.current += 1;
       setEtat(apres);
-      setAnnonce(texteDeLAlerte(apres) === undefined ? ANNONCE_DE_LA_COPIE : undefined);
+      setAnnonce(texteDeLAlerte(apres) === undefined ? { texte: ANNONCE_DE_LA_COPIE, sous: undefined } : undefined);
     } catch {
-      setAnnonce(ECHEC_DE_L_ESSAI);
+      setAnnonce({ texte: ECHEC_DE_L_ESSAI, sous: alerte });
     } finally {
       occupe.current = false;
       setEnCours(false);
@@ -92,10 +93,17 @@ export function AlerteDesSauvegardes({
   };
 
   const alerte = etat === undefined ? undefined : texteDeLAlerte(etat);
+  // Une relecture qui change l'alerte (venue, partie ou autre) emporte l'annonce d'un essai d'avant : elle ne dirait plus
+  // ce qui est à l'écran, et ne doit pas revenir avec une alerte qui repart.
+  if (annonce !== undefined && annonce.sous !== alerte) {
+    setAnnonce(undefined);
+  }
+
+  const annonceEnCours = annonce !== undefined && annonce.sous === alerte ? annonce.texte : undefined;
   if (alerte === undefined) {
-    return annonce === undefined ? null : (
+    return annonceEnCours === undefined ? null : (
       <p className="annonce" role="status">
-        {annonce}
+        {annonceEnCours}
       </p>
     );
   }
@@ -103,7 +111,7 @@ export function AlerteDesSauvegardes({
   return (
     <div className="alerte-des-sauvegardes" role="alert">
       <p>{alerte}</p>
-      {annonce === ECHEC_DE_L_ESSAI && <p>{ECHEC_DE_L_ESSAI}</p>}
+      {annonceEnCours === ECHEC_DE_L_ESSAI && <p>{ECHEC_DE_L_ESSAI}</p>}
       <div className="actions">
         {etat?.echec !== null && (
           <button type="button" disabled={enCours} onClick={reessayer}>

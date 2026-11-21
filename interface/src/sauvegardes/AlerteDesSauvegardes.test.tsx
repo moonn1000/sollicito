@@ -3,7 +3,7 @@ import { expect, test, vi } from "vitest";
 import { ErreurDeLApi } from "../api/clientDeLApi.ts";
 import { TableauDeBord } from "../candidatures/TableauDeBord.tsx";
 import { clientSimule, sauvegardesFictives } from "../tests/clientSimule.ts";
-import { INTERVALLE_DE_RELECTURE_EN_MS } from "./AlerteDesSauvegardes.tsx";
+import { ECHEC_DE_L_ESSAI, INTERVALLE_DE_RELECTURE_EN_MS } from "./AlerteDesSauvegardes.tsx";
 
 function tableauDeBord(client: ReturnType<typeof clientSimule>, ouvrirLesReglages = vi.fn()) {
   render(<TableauDeBord client={client} nouvelleCandidature={vi.fn()} ouvrirLaFiche={vi.fn()} ouvrirLesReglages={ouvrirLesReglages} />);
@@ -164,6 +164,80 @@ test("une relecture partie avant un « Réessayer » réussi ne ramène pas l'al
       await Promise.resolve();
     });
     expect(screen.queryByRole("alert")).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("quand l'alerte part d'elle-même, le message d'un essai manqué part avec elle", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const client = clientSimule({
+      lireLesSauvegardes: vi
+        .fn()
+        .mockResolvedValueOnce(sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-19T08:00:00Z" } }))
+        .mockResolvedValue(sauvegardesFictives()),
+      sauvegarderMaintenant: () => Promise.reject(new ErreurDeLApi(500)),
+    });
+    tableauDeBord(client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Réessayer" }));
+    expect(await screen.findByText(ECHEC_DE_L_ESSAI)).toBeDefined();
+
+    // La copie de l'heure réussit : l'alerte part, et rien ne reste de l'essai manqué.
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS);
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(screen.queryByText(ECHEC_DE_L_ESSAI)).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("l'annonce d'une copie réussie ne revient pas après une panne puis un retour", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const enPanne = sauvegardesFictives({ echec: { motif: "DossierIntrouvable", depuis: "2026-11-19T08:00:00Z" } });
+    const client = clientSimule({
+      lireLesSauvegardes: vi
+        .fn()
+        .mockResolvedValueOnce(enPanne)
+        .mockResolvedValueOnce(enPanne)
+        .mockResolvedValue(sauvegardesFictives()),
+      sauvegarderMaintenant: vi.fn().mockResolvedValue(sauvegardesFictives()),
+    });
+    tableauDeBord(client);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Réessayer" }));
+    expect(await screen.findByText("Copie du jour faite.")).toBeDefined();
+
+    // Une panne plus tard : l'alerte revient, sans l'annonce d'avant.
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS);
+    expect(await screen.findByRole("alert")).toBeDefined();
+    expect(screen.queryByText("Copie du jour faite.")).toBeNull();
+
+    // Le retour : l'alerte part, et l'annonce ne revient pas, personne n'ayant rien demandé.
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS);
+    await vi.waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+    expect(screen.queryByText("Copie du jour faite.")).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("le tableau de bord quitté, l'état ne se relit plus", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const client = clientSimule();
+    const { unmount } = render(
+      <TableauDeBord client={client} nouvelleCandidature={vi.fn()} ouvrirLaFiche={vi.fn()} ouvrirLesReglages={vi.fn()} />,
+    );
+    await screen.findByText("Aucune candidature enregistrée pour l'instant.");
+    expect(client.lireLesSauvegardes).toHaveBeenCalledOnce();
+
+    unmount();
+    await vi.advanceTimersByTimeAsync(INTERVALLE_DE_RELECTURE_EN_MS * 3);
+    expect(client.lireLesSauvegardes).toHaveBeenCalledOnce();
   } finally {
     vi.useRealTimers();
   }
