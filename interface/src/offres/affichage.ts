@@ -79,9 +79,9 @@ export const AUCUN_FILTRE: FiltresDesOffres = { texte: "", source: "toutes", per
 /** La longueur la plus grande du texte cherché. */
 export const RECHERCHE_AU_PLUS = 200;
 
-/** Vrai si un filtre au moins restreint la liste. */
+/** Vrai si un filtre au moins est posé, texte de blancs compris : « Effacer les filtres » le remet à zéro. */
 export function filtreActif(filtres: FiltresDesOffres): boolean {
-  return simplifier(filtres.texte).length > 0 || filtres.source !== "toutes" || filtres.periode !== "toutes";
+  return filtres.texte.length > 0 || filtres.source !== "toutes" || filtres.periode !== "toutes";
 }
 
 /**

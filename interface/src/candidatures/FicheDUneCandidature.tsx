@@ -382,7 +382,7 @@ export function FicheDUneCandidature({
           </dl>
           <div className="actions-de-la-fiche">
             {fiche.offre !== null && ouvrirLOffre !== undefined && (
-              <button type="button" className="secondaire" onClick={() => ouvrirLOffre(fiche.offre as number)}>
+              <button type="button" className="secondaire" disabled={enCours} onClick={() => ouvrirLOffre(fiche.offre as number)}>
                 Voir l'offre
               </button>
             )}

@@ -175,6 +175,10 @@ test("le filtre par source propose les sources, et « Effacer les filtres » ren
   fireEvent.click(screen.getByRole("button", { name: "Effacer les filtres" }));
 
   await waitFor(() => expect(postes()).toEqual(["Développeur .NET (H/F)", "Comptable", "Brasseuse"]));
+  // Un texte de blancs ne restreint rien, mais le champ n'est pas vide : le bouton le remet à zéro.
+  chercher("   ");
+  expect(postes()).toEqual(["Développeur .NET (H/F)", "Comptable", "Brasseuse"]);
+  fireEvent.click(screen.getByRole("button", { name: "Effacer les filtres" }));
   expect(screen.getByLabelText<HTMLInputElement>("Rechercher").value).toBe("");
   expect(screen.getByLabelText<HTMLSelectElement>("Source").value).toBe("toutes");
   expect(screen.getByRole("status").textContent).toBe("3 offres");
