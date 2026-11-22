@@ -17,7 +17,7 @@ Chaque décision d'architecture qui compte est consignée ici, avec son contexte
 | [0011](0011-relances-et-brouillon.md) | Relances, contact minimal, brouillon ouvert par l'hôte et délai par défaut | Acceptée | 2026-11-21 |
 | [0012](0012-restauration-d-une-sauvegarde.md) | Restauration d'une sauvegarde, confirmée par l'hôte, vérifiée sur une copie, base copiée d'abord | Acceptée | 2026-11-21 |
 | [0013](0013-offres-collees.md) | Offres collées : texte gardé, empreinte, doublon possible avec accord, entreprises proposées | Acceptée ; « Postuler » et la liste des offres précisés par 0014 | 2026-11-22 |
-| [0014](0014-postuler-a-une-offre.md) | Postuler à une offre : le lien porté par la candidature, l'entreprise d'abord sur l'offre, la liste filtrée dans la page | Acceptée | 2026-11-22 |
+| [0014](0014-postuler-a-une-offre.md) | Postuler à une offre : le lien porté par la candidature, l'entreprise d'abord sur l'offre, la liste filtrée dans la page | Acceptée ; précise 0001 (D5), 0004 (« Ce qui attend la V2 » : la liste des offres se filtre dès la V1, la recherche des candidatures reste en V2), 0005, 0007 et 0013 | 2026-11-22 |
 
 ## Format
 

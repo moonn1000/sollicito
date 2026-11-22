@@ -2,7 +2,7 @@
 
 - **Statut** : acceptée
 - **Date** : 2026-11-22
-- **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D5 (une offre fait l'objet d'au plus une candidature : le lien en base) ; [ADR-0005](0005-modele-de-domaine.md) et [ADR-0013](0013-offres-collees.md) (« Postuler » : l'entreprise et le poste de l'offre, l'offre sans entreprise, le doublon possible déjà postulé) ; [ADR-0007](0007-historique-en-vigueur-et-nom-corrige.md) (le nom corrigé d'une entreprise, qui s'affiche aussi dans ses offres)
+- **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D5 (une offre fait l'objet d'au plus une candidature : le lien en base) ; [ADR-0004](0004-v1-resserree-paliers.md), « Ce qui attend la V2 » (la liste des offres se filtre dès la V1 ; la recherche et les filtres des candidatures restent en V2) ; [ADR-0005](0005-modele-de-domaine.md) et [ADR-0013](0013-offres-collees.md) (« Postuler » : l'entreprise et le poste de l'offre, l'offre sans entreprise, le doublon possible déjà postulé) ; [ADR-0007](0007-historique-en-vigueur-et-nom-corrige.md) (le nom corrigé d'une entreprise, qui s'affiche aussi dans ses offres)
 
 ## Contexte
 
@@ -34,7 +34,7 @@ La story #38 fait d'une offre une candidature, et liste les offres. Le [modèle 
 
 ### L'offre sans entreprise
 
-Elle reçoit d'abord son entreprise par sa correction (#36, ADR-0013) : reconnue par sa clé ou créée, règle 3 refaite avec son accord. Sa fiche le dit à la place de « Postuler », et mène à la correction. L'offre et sa candidature désignent ainsi toujours la même entreprise, et « Postuler » n'a qu'un champ.
+Elle reçoit d'abord son entreprise par sa correction (#36, ADR-0013) : reconnue par sa clé ou créée, règle 3 refaite avec son accord. Sa fiche le dit à la place de « Postuler », et mène à la correction. L'offre et sa candidature désignent ainsi la même entreprise, et « Postuler » n'a qu'un champ.
 
 ### Le doublon possible déjà postulé
 
