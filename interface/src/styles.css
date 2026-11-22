@@ -610,3 +610,50 @@ button {
 .historique li.cloture {
   border-left-color: var(--accent);
 }
+
+/* Les offres collées (#36) : le texte, gardé tel quel, ses sauts de ligne rendus par le style, et les signaux du
+   dédoublonnage (le même texte déjà enregistré, un doublon possible). */
+
+.texte-de-l-offre {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--bordure);
+  border-radius: 0.4rem;
+  background: var(--surface);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.signal-de-l-offre {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+
+.signal-de-l-offre h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.signal-de-l-offre ul,
+.doublons-possibles ul {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.signal-de-l-offre li,
+.doublons-possibles li {
+  margin: 0.35rem 0;
+  overflow-wrap: anywhere;
+}
+
+.lien-externe {
+  color: var(--accent);
+  overflow-wrap: anywhere;
+}
+
+.lien-refuse {
+  overflow-wrap: anywhere;
+}

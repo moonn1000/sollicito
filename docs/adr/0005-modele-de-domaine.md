@@ -1,6 +1,6 @@
 # ADR-0005 : modèle de domaine, dédoublonnage et dates
 
-- **Statut** : acceptée ; la correction par ajout de « Corriger un statut » étendue aux étapes, le nom affiché de « Reconnaître une entreprise », et les entreprises que l'écran de saisie propose (« Alternatives écartées », « Conséquences »), précisés par l'[ADR-0007](0007-historique-en-vigueur-et-nom-corrige.md) (étapes corrigées et historique en vigueur, nom d'entreprise corrigé et entreprises proposées)
+- **Statut** : acceptée ; la correction par ajout de « Corriger un statut » étendue aux étapes, le nom affiché de « Reconnaître une entreprise », et les entreprises que l'écran de saisie propose (« Alternatives écartées », « Conséquences »), précisés par l'[ADR-0007](0007-historique-en-vigueur-et-nom-corrige.md) (étapes corrigées et historique en vigueur, nom d'entreprise corrigé et entreprises proposées) ; « Dédoublonner les offres » précisé par l'[ADR-0013](0013-offres-collees.md) (l'empreinte pas à pas, l'accord devant un doublon possible, le poste normalisé)
 - **Date** : 2026-11-18
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D5 : la reconnaissance d'une entreprise, et les deux cas de dédoublonnage des offres que la D5 renvoyait au premier sprint
 - **Remplace en partie** : [ADR-0001](0001-cadrage-architecture-v1.md), D5, son esquisse du modèle, que remplace le [modèle de domaine](../modele-de-domaine.md)

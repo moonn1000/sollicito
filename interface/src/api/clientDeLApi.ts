@@ -305,6 +305,69 @@ const CHAMPS_DU_CONTACT: readonly ChampDuContact[] = ["nom", "email"];
 const CHAMPS_DE_LA_RELANCE: readonly ChampDeLaRelance[] = ["delai", "destinataire"];
 
 /** Une réponse de l'API en erreur : jeton refusé, origine refusée, route inconnue… */
+/** La source d'une offre : le connecteur qui l'a fait entrer (#36 ; l'import CSV de #40 ajoutera la sienne). */
+export type SourceDOffre = "TexteColle";
+
+/** Une offre signalée comme doublon possible d'une autre (règle 3) : de quoi la reconnaître, et l'ouvrir. */
+export interface OffreSignalee {
+  id: number;
+  poste: string;
+  entreprise: EntrepriseConnue;
+  lieu: string | null;
+  /** L'instant de son import, en UTC. */
+  ajouteeLe: string;
+}
+
+/** La fiche d'une offre (#36), telle que l'API la rend : ses doublons possibles sont relus à chaque lecture. */
+export interface FicheDUneOffre {
+  id: number;
+  source: SourceDOffre;
+  /** Son entreprise, ou rien pour une offre anonyme. */
+  entreprise: EntrepriseConnue | null;
+  poste: string;
+  lieu: string | null;
+  /** Le jour de sa publication, sans heure ni fuseau : `2026-11-18`. */
+  publieeLe: string | null;
+  /** L'adresse de l'annonce, telle que saisie. */
+  adresse: string | null;
+  /** Le texte collé, tel quel. */
+  texte: string | null;
+  /** L'instant de l'import, en UTC. */
+  ajouteeLe: string;
+  doublonsPossibles: OffreSignalee[];
+}
+
+/** Une offre collée telle que l'écran l'envoie, champ par champ, sans rien convertir. */
+export interface SaisieDUneOffre {
+  texte: string;
+  entreprise: string;
+  poste: string;
+  lieu: string;
+  /** La date telle qu'un champ `type=date` l'écrit : `2026-11-18`, ou vide. */
+  publieeLe: string;
+  adresse: string;
+}
+
+/** Un champ de l'offre. */
+export type ChampDeLOffre = keyof SaisieDUneOffre;
+
+/** Les messages de refus de l'API, champ par champ. */
+export type RefusDeLOffre = Partial<Record<ChampDeLOffre, string[]>>;
+
+/** La correction d'une offre : ses champs, jamais son texte (ADR-0013). */
+export type CorrectionDUneOffre = Omit<SaisieDUneOffre, "texte">;
+
+/**
+ * Ce que rend l'enregistrement ou la correction d'une offre : sa fiche ; les refus de ses champs ; l'offre déjà
+ * enregistrée que le même texte retrouve (règle 2) ; ou les offres de même entreprise et de même poste, doublons
+ * possibles, que l'utilisateur garde ou non (règle 3).
+ */
+export type ResultatDeLOffre =
+  | { issue: "enregistree"; fiche: FicheDUneOffre }
+  | { issue: "refusee"; refus: RefusDeLOffre }
+  | { issue: "dejaEnregistree"; offre: { id: number; ajouteeLe: string } }
+  | { issue: "doublonPossible"; doublons: OffreSignalee[] };
+
 export class ErreurDeLApi extends Error {
   readonly statut: number;
 
@@ -325,7 +388,10 @@ export interface ClientDeLApi {
   lireEtat(): Promise<EtatDeLApplication>;
   /** Les candidatures, les plus récentes d'abord. */
   listerLesCandidatures(): Promise<Candidature[]>;
-  /** Les entreprises qu'une candidature porte encore, que les écrans de saisie et de modification proposent. */
+  /**
+   * Les entreprises qu'une candidature ou une offre désigne encore, que les écrans de saisie et de modification
+   * proposent, des candidatures comme des offres (ADR-0013).
+   */
   listerLesEntreprises(): Promise<EntrepriseConnue[]>;
   /** Enregistre une candidature, ou rend les refus de ses champs. */
   enregistrerUneCandidature(saisie: SaisieDUneCandidature): Promise<ResultatDeLEnregistrement>;
@@ -375,6 +441,15 @@ export interface ClientDeLApi {
   lireLeReglageDesRelances(): Promise<ReglageDuDelai>;
   /** Change le délai par défaut des relances, ou rend le refus du champ, ou le motif d'un refus. */
   changerLeDelaiParDefaut(jours: number): Promise<ResultatDuReglage>;
+  /**
+   * Colle une offre (#36) : sa fiche, ou les refus de ses champs, ou l'offre déjà enregistrée du même texte, ou ses
+   * doublons possibles. Avec `garderLesDeux`, un doublon possible s'enregistre quand même.
+   */
+  collerUneOffre(saisie: SaisieDUneOffre, garderLesDeux?: boolean): Promise<ResultatDeLOffre>;
+  /** La fiche d'une offre ; une `ErreurDeLApi` 404 si elle n'existe pas. */
+  lireUneOffre(offre: number): Promise<FicheDUneOffre>;
+  /** Corrige les champs d'une offre, jamais son texte ; une `ErreurDeLApi` 404 si elle n'existe pas. */
+  corrigerUneOffre(offre: number, correction: CorrectionDUneOffre, garderLesDeux?: boolean): Promise<ResultatDeLOffre>;
 }
 
 /**
@@ -582,7 +657,94 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
 
       throw new ErreurDeLApi(reponse.status);
     },
+    collerUneOffre: async (saisie, garderLesDeux = false) =>
+      enregistrerLOffre(await ecrire("/api/offres", garderLesDeux ? { ...saisie, garderLesDeux: true } : saisie), 201),
+    lireUneOffre: async (offre) => (await lire(adresseDeLOffre(offre))) as FicheDUneOffre,
+    corrigerUneOffre: async (offre, correction, garderLesDeux = false) =>
+      enregistrerLOffre(
+        await ecrire(adresseDeLOffre(offre), garderLesDeux ? { ...correction, garderLesDeux: true } : correction, "PUT"),
+        200,
+      ),
   };
+}
+
+/** Le refus d'un texte d'offre trop long, celui de l'API (ADR-0013). */
+export const TEXTE_TROP_LONG = "Le texte de l'offre ne doit pas dépasser 50 000 caractères.";
+
+const CHAMPS_DE_L_OFFRE: readonly ChampDeLOffre[] =["texte", "entreprise", "poste", "lieu", "publieeLe", "adresse"];
+
+// La fiche (201 à l'enregistrement, 200 à la correction), les refus des champs (400), ou l'offre déjà enregistrée et les
+// doublons possibles (409), que l'API lit en base.
+async function enregistrerLOffre(reponse: Response, attendu: 200 | 201): Promise<ResultatDeLOffre> {
+  if (reponse.status === attendu) {
+    return { issue: "enregistree", fiche: (await reponse.json()) as FicheDUneOffre };
+  }
+
+  if (reponse.status === 400) {
+    const refus = lireLesRefus(await reponse.json().catch(() => undefined), CHAMPS_DE_L_OFFRE);
+    if (refus !== undefined && Object.keys(refus).length > 0) {
+      return { issue: "refusee", refus };
+    }
+  }
+
+  // Un corps de plus de 1 Mio est refusé avant d'être lu (413) : son texte dépasse de loin la borne du champ.
+  if (reponse.status === 413) {
+    return { issue: "refusee", refus: { texte: [TEXTE_TROP_LONG] } };
+  }
+
+  if (reponse.status === 409) {
+    const conflit = lireLeConflitDeLOffre(await reponse.json().catch(() => undefined));
+    if (conflit !== undefined) {
+      return conflit;
+    }
+  }
+
+  throw new ErreurDeLApi(reponse.status);
+}
+
+// L'offre déjà enregistrée (règle 2) ou les doublons possibles (règle 3) ; rien si le problème ne les porte pas.
+function lireLeConflitDeLOffre(probleme: unknown): ResultatDeLOffre | undefined {
+  if (typeof probleme !== "object" || probleme === null) {
+    return undefined;
+  }
+
+  const { motif, offre, doublons } = probleme as { motif?: unknown; offre?: unknown; doublons?: unknown };
+  if (motif === "dejaEnregistree" && typeof offre === "object" && offre !== null) {
+    const { id, ajouteeLe } = offre as { id?: unknown; ajouteeLe?: unknown };
+    return Number.isSafeInteger(id) && typeof ajouteeLe === "string" ? { issue: "dejaEnregistree", offre: { id: id as number, ajouteeLe } } : undefined;
+  }
+
+  if (motif === "doublonPossible" && Array.isArray(doublons) && doublons.length > 0) {
+    const lus = doublons.map(lireUneOffreSignalee);
+    return lus.every((lue): lue is OffreSignalee => lue !== undefined) ? { issue: "doublonPossible", doublons: lus } : undefined;
+  }
+
+  return undefined;
+}
+
+function lireUneOffreSignalee(valeur: unknown): OffreSignalee | undefined {
+  if (typeof valeur !== "object" || valeur === null) {
+    return undefined;
+  }
+
+  const { id, poste, entreprise, lieu, ajouteeLe } = valeur as Record<string, unknown>;
+  if (!Number.isSafeInteger(id) || typeof poste !== "string" || typeof ajouteeLe !== "string" || (lieu !== null && typeof lieu !== "string")) {
+    return undefined;
+  }
+
+  if (typeof entreprise !== "object" || entreprise === null) {
+    return undefined;
+  }
+
+  const { id: idDeLEntreprise, nom } = entreprise as { id?: unknown; nom?: unknown };
+  return Number.isSafeInteger(idDeLEntreprise) && typeof nom === "string"
+    ? { id: id as number, poste, entreprise: { id: idDeLEntreprise as number, nom }, lieu: lieu as string | null, ajouteeLe }
+    : undefined;
+}
+
+// L'adresse de la fiche d'une offre : seul un identifiant de la base y entre, jamais un texte saisi.
+function adresseDeLOffre(offre: number): string {
+  return `/api/offres/${identifiant(offre)}`;
 }
 
 // Le contact enregistré (201 à l'ajout, 200 à la modification), ou les refus de ses champs (400).

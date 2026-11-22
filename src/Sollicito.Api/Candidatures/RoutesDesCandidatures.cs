@@ -122,7 +122,7 @@ internal static class RoutesDesCandidatures
 
         routes.MapGet("/api/entreprises", ListerLesEntreprisesAsync)
             .WithName("ListerLesEntreprises")
-            .WithSummary("Les entreprises qu'une candidature porte encore, que les écrans de saisie et de modification proposent")
+            .WithSummary("Les entreprises qu'une candidature ou une offre désigne encore, que les écrans de saisie et de modification proposent")
             .WithTags("Entreprises");
     }
 

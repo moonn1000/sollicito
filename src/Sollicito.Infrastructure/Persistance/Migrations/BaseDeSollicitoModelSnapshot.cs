@@ -125,6 +125,62 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                     b.ToTable("Entreprises", (string)null);
                 });
 
+            modelBuilder.Entity("Sollicito.Domain.Offres.Offre", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Adresse")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AjouteeLe")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Empreinte")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("EntrepriseId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Lieu")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Poste")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PosteNormalise")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly?>("PublieeLe")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Texte")
+                        .HasMaxLength(50000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntrepriseId", "PosteNormalise");
+
+                    b.HasIndex("Source", "Empreinte")
+                        .IsUnique();
+
+                    b.ToTable("Offres", (string)null);
+                });
+
             modelBuilder.Entity("Sollicito.Domain.Relances.Relance", b =>
                 {
                     b.Property<int>("Id")
@@ -242,6 +298,14 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                         .HasForeignKey("EntrepriseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Sollicito.Domain.Offres.Offre", b =>
+                {
+                    b.HasOne("Sollicito.Domain.Entreprises.Entreprise", null)
+                        .WithMany()
+                        .HasForeignKey("EntrepriseId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Sollicito.Domain.Relances.Relance", b =>

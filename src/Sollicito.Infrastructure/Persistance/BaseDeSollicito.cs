@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Sollicito.Domain.Candidatures;
 using Sollicito.Domain.Contacts;
 using Sollicito.Domain.Entreprises;
+using Sollicito.Domain.Offres;
 using Sollicito.Domain.Relances;
 using Sollicito.Domain.Textes;
 
@@ -31,6 +32,9 @@ public sealed class BaseDeSollicito(DbContextOptions<BaseDeSollicito> options) :
 
     /// <summary>Les relances des candidatures (#14).</summary>
     public DbSet<Relance> Relances => Set<Relance>();
+
+    /// <summary>Les offres importées : collées (#36), puis en CSV (#40).</summary>
+    public DbSet<Offre> Offres => Set<Offre>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -105,6 +109,25 @@ public sealed class BaseDeSollicito(DbContextOptions<BaseDeSollicito> options) :
                 .HasDatabaseName("IX_Relances_UneAFaireParCandidature");
             // Le tableau de bord lit les relances à faire par leur échéance.
             relance.HasIndex(r => new { r.Etat, r.Echeance });
+        });
+
+        modelBuilder.Entity<Offre>(offre =>
+        {
+            offre.ToTable("Offres");
+            offre.HasKey(o => o.Id);
+            offre.Property(o => o.Source).HasConversion<string>().HasMaxLength(20);
+            offre.Property(o => o.Empreinte).HasMaxLength(EmpreinteDUneOffre.Longueur);
+            offre.Property(o => o.Poste).HasMaxLength(TexteDUneLigne.LongueurMaximale);
+            offre.Property(o => o.PosteNormalise);
+            offre.Property(o => o.Lieu).HasMaxLength(TexteDUneLigne.LongueurMaximale);
+            offre.Property(o => o.Adresse).HasMaxLength(AdresseDUneAnnonce.LongueurMaximale);
+            offre.Property(o => o.Texte).HasMaxLength(TexteDUneOffre.LongueurMaximale);
+            // Une offre peut taire son entreprise ; une entreprise qu'une offre désigne ne se supprime pas.
+            offre.HasOne<Entreprise>().WithMany().HasForeignKey(o => o.EntrepriseId).IsRequired(false).OnDelete(DeleteBehavior.Restrict);
+            // Règle 2 : la base refuse une seconde offre de même source et de même empreinte.
+            offre.HasIndex(o => new { o.Source, o.Empreinte }).IsUnique();
+            // Règle 3 : les doublons possibles se cherchent par entreprise et poste normalisé.
+            offre.HasIndex(o => new { o.EntrepriseId, o.PosteNormalise });
         });
 
         modelBuilder.Entity<EvenementDeCandidature>(evenement =>

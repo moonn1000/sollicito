@@ -78,9 +78,9 @@ export function heureSaisieDe(date: Date): string {
 export const PROPOSITIONS_AU_PLUS = 5;
 
 /**
- * Parmi les entreprises connues, celles qu'une candidature porte encore, celles dont le nom contient le texte saisi,
- * sans tenir compte des accents ni des majuscules : « lumiere » propose « Lumière Verte SA ». Ce n'est qu'une aide à
- * la saisie : l'API reconnaît seule l'entreprise, par la clé de son nom.
+ * Parmi les entreprises connues, celles qu'une candidature ou une offre désigne encore (#36), celles dont le nom
+ * contient le texte saisi, sans tenir compte des accents ni des majuscules : « lumiere » propose « Lumière Verte SA ».
+ * Ce n'est qu'une aide à la saisie : l'API reconnaît seule l'entreprise, par la clé de son nom.
  */
 export function proposerDesEntreprises(connues: readonly EntrepriseConnue[], saisie: string): EntrepriseConnue[] {
   const cherche = simplifier(saisie);

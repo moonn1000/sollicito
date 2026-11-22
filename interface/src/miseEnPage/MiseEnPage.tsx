@@ -1,20 +1,25 @@
 import type { ReactNode } from "react";
 
 /**
- * Les écrans de l'interface. La navigation propose le tableau de bord, la saisie et les réglages (#26) ; la fiche d'une
- * candidature s'ouvre depuis le tableau de bord, et sa modification depuis la fiche (#25) : toutes deux désignent leur
- * candidature par son identifiant.
+ * Les écrans de l'interface. La navigation propose le tableau de bord, la saisie d'une candidature, celle d'une offre
+ * (#36) et les réglages (#26) ; la fiche d'une candidature s'ouvre depuis le tableau de bord, et sa modification depuis
+ * la fiche (#25) : toutes deux désignent leur candidature par son identifiant. La fiche d'une offre s'ouvre après son
+ * enregistrement, ou depuis un signal de doublon, et sa correction depuis la fiche : la liste des offres attend #38.
  */
 export type Ecran =
   | { nom: "tableau" }
   | { nom: "saisie" }
+  | { nom: "saisieDUneOffre" }
   | { nom: "reglages" }
   | { nom: "fiche"; candidature: number }
-  | { nom: "modification"; candidature: number };
+  | { nom: "modification"; candidature: number }
+  | { nom: "offre"; offre: number }
+  | { nom: "modificationDUneOffre"; offre: number };
 
-const ENTREES: readonly { ecran: "tableau" | "saisie" | "reglages"; libelle: string }[] = [
+const ENTREES: readonly { ecran: "tableau" | "saisie" | "saisieDUneOffre" | "reglages"; libelle: string }[] = [
   { ecran: "tableau", libelle: "Tableau de bord" },
   { ecran: "saisie", libelle: "Nouvelle candidature" },
+  { ecran: "saisieDUneOffre", libelle: "Nouvelle offre" },
   { ecran: "reglages", libelle: "Réglages" },
 ];
 
