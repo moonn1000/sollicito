@@ -467,5 +467,9 @@ test("les refus d'une offre reviennent champ par champ, et ses deux conflits se 
   expect(await creerClientDeLApi(JETON_FICTIF, doublon).collerUneOffre(OFFRE)).toEqual({ issue: "doublonPossible", doublons: [offreSignaleeFictive()] });
   await expect(creerClientDeLApi(JETON_FICTIF, malForme).collerUneOffre(OFFRE)).rejects.toEqual(new ErreurDeLApi(409));
   await expect(creerClientDeLApi(JETON_FICTIF, inconnu).collerUneOffre(OFFRE)).rejects.toEqual(new ErreurDeLApi(409));
-  await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(new Response(null, { status: 413 }))).collerUneOffre(OFFRE)).rejects.toEqual(new ErreurDeLApi(413));
+  // Un corps trop gros (413) dit que le texte est trop long : réessayer ne servirait à rien.
+  expect(await creerClientDeLApi(JETON_FICTIF, apiQuiRepond(new Response(null, { status: 413 }))).collerUneOffre(OFFRE)).toEqual({
+    issue: "refusee",
+    refus: { texte: ["Le texte de l'offre ne doit pas dépasser 50 000 caractères."] },
+  });
 });

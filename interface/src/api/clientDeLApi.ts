@@ -668,7 +668,10 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
   };
 }
 
-const CHAMPS_DE_L_OFFRE: readonly ChampDeLOffre[] = ["texte", "entreprise", "poste", "lieu", "publieeLe", "adresse"];
+/** Le refus d'un texte d'offre trop long, celui de l'API (ADR-0013). */
+export const TEXTE_TROP_LONG = "Le texte de l'offre ne doit pas dépasser 50 000 caractères.";
+
+const CHAMPS_DE_L_OFFRE: readonly ChampDeLOffre[] =["texte", "entreprise", "poste", "lieu", "publieeLe", "adresse"];
 
 // La fiche (201 à l'enregistrement, 200 à la correction), les refus des champs (400), ou l'offre déjà enregistrée et les
 // doublons possibles (409), que l'API lit en base.
@@ -682,6 +685,11 @@ async function enregistrerLOffre(reponse: Response, attendu: 200 | 201): Promise
     if (refus !== undefined && Object.keys(refus).length > 0) {
       return { issue: "refusee", refus };
     }
+  }
+
+  // Un corps de plus de 1 Mio est refusé avant d'être lu (413) : son texte dépasse de loin la borne du champ.
+  if (reponse.status === 413) {
+    return { issue: "refusee", refus: { texte: [TEXTE_TROP_LONG] } };
   }
 
   if (reponse.status === 409) {
