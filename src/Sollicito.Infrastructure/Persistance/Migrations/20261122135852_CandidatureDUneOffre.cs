@@ -17,6 +17,11 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
     /// sinon la clé en reconstruisant la table des candidatures, en plusieurs transactions. Aucune table n'est reconstruite,
     /// aucune ligne réécrite : la migration est une seule transaction (<c>MigrationsEnUneTransactionTests</c>).
     /// </para>
+    /// <para>
+    /// L'instruction tient sur une ligne : SQLite recopie la définition de la colonne dans le texte de la table, que la
+    /// restauration (#28, ADR-0012) compare à celui de l'exe. Écrite sur plusieurs lignes, elle y mettrait les fins de ligne
+    /// du fichier source, CRLF ou LF selon la machine qui construit l'exe.
+    /// </para>
     /// </summary>
     public partial class CandidatureDUneOffre : Migration
     {
@@ -24,11 +29,7 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql(
-                """
-                ALTER TABLE "Candidatures" ADD "OffreId" INTEGER NULL
-                    CONSTRAINT "FK_Candidatures_Offres_OffreId"
-                    REFERENCES "Offres" ("Id") ON DELETE SET NULL;
-                """);
+                "ALTER TABLE \"Candidatures\" ADD \"OffreId\" INTEGER NULL CONSTRAINT \"FK_Candidatures_Offres_OffreId\" REFERENCES \"Offres\" (\"Id\") ON DELETE SET NULL;");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Candidatures_OffreId",

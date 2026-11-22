@@ -52,8 +52,11 @@ public sealed class MigrationsEnUneTransactionTests
 
         var script = conception.GetService<IMigrator>().GenerateScript("20261122092245_Offres", "20261122135852_CandidatureDUneOffre");
 
-        Assert.Contains("ALTER TABLE \"Candidatures\" ADD \"OffreId\" INTEGER NULL", script, StringComparison.Ordinal);
-        Assert.Contains("REFERENCES \"Offres\" (\"Id\") ON DELETE SET NULL;", script, StringComparison.Ordinal);
+        // L'instruction tient sur une ligne : le texte de la table, que compare la restauration (#28), ne garde ainsi aucune
+        // fin de ligne du fichier source, CRLF ou LF selon la machine qui construit.
+        const string Instruction =
+            "ALTER TABLE \"Candidatures\" ADD \"OffreId\" INTEGER NULL CONSTRAINT \"FK_Candidatures_Offres_OffreId\" REFERENCES \"Offres\" (\"Id\") ON DELETE SET NULL;";
+        Assert.Contains(Instruction, script, StringComparison.Ordinal);
         Assert.Contains("CREATE UNIQUE INDEX \"IX_Candidatures_OffreId\" ON \"Candidatures\" (\"OffreId\");", script, StringComparison.Ordinal);
         Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("CREATE TABLE", script, StringComparison.OrdinalIgnoreCase);
