@@ -358,6 +358,37 @@ public sealed class OffresTests
         Assert.Single(await api.ListerLesEntreprisesAsync());
     }
 
+    [Fact]
+    public async Task Un_refus_ne_cree_aucune_entreprise_lue_en_base_meme_une_que_rien_ne_designe()
+    {
+        // Suites de #36 (#98, point 11) : les entreprises proposées taisent une entreprise que rien ne désigne ; seule la
+        // base dit qu'aucune ne s'est créée.
+        await using var api = await LancerAsync();
+        var offre = Id(await api.CollerAvecSuccesAsync("Offre fictive.", "Comptable", entreprise: "Lumière Verte SA"));
+        await api.CollerAvecSuccesAsync("Offre fictive du même poste.", "Chauffeur", entreprise: "Lumière Verte SA");
+
+        HttpStatusCode[] statuts =
+        [
+            // Un champ refusé, à l'enregistrement comme à la correction.
+            await StatutAsync(api.CollerAsync("Autre offre fictive.", "Comptable", entreprise: "Atelier d'Ondine", publieeLe: "2099-01-01")),
+            await StatutAsync(api.CorrigerLOffreAsync(offre, "Comptable", entreprise: "Atelier d'Ondine", publieeLe: "2099-01-01")),
+            // Le même texte recollé (règle 2), avec une autre entreprise.
+            await StatutAsync(api.CollerAsync("Offre fictive.", "Comptable", entreprise: "Brasserie Lune Rousse")),
+            // Un doublon possible (règle 3), à l'enregistrement comme à la correction.
+            await StatutAsync(api.CollerAsync("Troisième offre fictive.", "Chauffeur", entreprise: "LUMIERE VERTE S.A.")),
+            await StatutAsync(api.CorrigerLOffreAsync(offre, "Chauffeur", entreprise: "Lumière Verte SA")),
+        ];
+
+        Assert.Equal([HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.Conflict, HttpStatusCode.Conflict, HttpStatusCode.Conflict], statuts);
+        Assert.Equal(["Lumière Verte SA"], await api.EntreprisesEnBaseAsync());
+    }
+
+    private static async Task<HttpStatusCode> StatutAsync(Task<HttpResponseMessage> envoi)
+    {
+        using var reponse = await envoi;
+        return reponse.StatusCode;
+    }
+
     private static Task<ApiLancee> LancerAsync() => ApiLancee.LancerAsync(new HorlogeDeTest().Utiliser);
 
     // Aucune offre de plus que celle-ci (ou aucune) : les identifiants suivants ne mènent à rien.
