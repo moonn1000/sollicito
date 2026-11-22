@@ -16,10 +16,19 @@ namespace Sollicito.Infrastructure.Tests;
 /// </summary>
 public sealed class VerificationDUneCopieTests : IDisposable
 {
-    // La migration de #12, deux avant la dernière du code.
+    // La migration de #12 : plusieurs migrations du code la suivent.
     private const string MigrationDe12 = "20261120135647_HistoriqueDesCandidatures";
 
     private readonly string _dossier = Directory.CreateTempSubdirectory("sollicito-tests-").FullName;
+
+    // Le nombre de migrations du code venues après celle-ci, lu dans les migrations : il suit chaque story qui en ajoute.
+    private static int MigrationsApres(string migration)
+    {
+        // Une base en mémoire, jamais ouverte : seule la liste des migrations du code se lit.
+        using var conception = new BaseDeSollicito(new DbContextOptionsBuilder<BaseDeSollicito>().UseSqlite("Data Source=:memory:").Options);
+        var migrations = conception.Database.GetMigrations().ToList();
+        return migrations.Count - 1 - migrations.IndexOf(migration);
+    }
 
     private string Base => Path.Combine(_dossier, "sollicito.db");
 
@@ -63,7 +72,8 @@ public sealed class VerificationDUneCopieTests : IDisposable
         var verdict = await VerifierAsync();
 
         Assert.Equal(SorteDeVerdict.Saine, verdict.Sorte);
-        Assert.Equal(2, verdict.MigrationsAppliquees);
+        // Toutes les migrations du code venues après celle de #12 : deux à #28, une de plus à chaque story qui en ajoute (#36).
+        Assert.Equal(MigrationsApres(MigrationDe12), verdict.MigrationsAppliquees);
         Assert.Equal(Lire(Base, "SELECT MigrationId FROM __EFMigrationsHistory ORDER BY 1"), Lire(Copie, "SELECT MigrationId FROM __EFMigrationsHistory ORDER BY 1"));
         Assert.Equal(["Comptable fictive"], Lire(Copie, "SELECT Poste FROM Candidatures"));
     }
