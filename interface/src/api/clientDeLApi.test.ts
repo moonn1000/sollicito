@@ -1,10 +1,12 @@
 import { expect, test, vi } from "vitest";
 import { JETON_FICTIF } from "../tests/canalSimule.ts";
 import {
+  candidatureDeLOffreFictive,
   candidatureFictive,
   contactFictif,
   ficheFictive,
   offreFictive,
+  offreListeeFictive,
   offreSignaleeFictive,
   relanceFictive,
   relanceSignaleeFictive,
@@ -254,12 +256,13 @@ test("une correction d'étape part en POST, en JSON, vers l'étape qu'elle corri
   await expect(creerClientDeLApi(JETON_FICTIF, envoyer).corrigerUneEtape(7, 0, saisie)).rejects.toThrow(RangeError);
 });
 
-test("sans accord, un nom à corriger revient avec l'entreprise et le nombre de candidatures ; l'accord part dans le corps", async () => {
+test("sans accord, un nom à corriger revient avec l'entreprise et le nombre de candidatures et d'offres ; l'accord part dans le corps", async () => {
   const probleme = {
     title: "La candidature n'est pas modifiée : ce nom corrigerait celui d'une entreprise enregistrée.",
     status: 409,
     entreprise: { id: 4, nom: "Lumière Verte SA" },
     candidatures: 3,
+    offres: 2,
   };
   const refus = apiQuiRepond(Response.json(probleme, { status: 409 }));
 
@@ -267,7 +270,11 @@ test("sans accord, un nom à corriger revient avec l'entreprise et le nombre de 
     issue: "nomACorriger",
     entreprise: { id: 4, nom: "Lumière Verte SA" },
     candidatures: 3,
+    offres: 2,
   });
+  // Sans le nombre d'offres, la réponse ne se lit pas : c'est une erreur.
+  const sansOffres = apiQuiRepond(Response.json({ ...probleme, offres: undefined }, { status: 409 }));
+  await expect(creerClientDeLApi(JETON_FICTIF, sansOffres).modifierUneCandidature(7, SAISIE)).rejects.toEqual(new ErreurDeLApi(409));
   expect(JSON.parse(String(refus.mock.calls[0]![1]?.body))).toEqual(SAISIE);
 
   const envoyer = apiQuiRepond(Response.json(ficheFictive()));
@@ -472,4 +479,52 @@ test("les refus d'une offre reviennent champ par champ, et ses deux conflits se 
     issue: "refusee",
     refus: { texte: ["Le texte de l'offre ne doit pas dépasser 50 000 caractères."] },
   });
+});
+
+test("un doublon possible déjà postulé garde sa candidature ; une candidature mal formée rend le conflit illisible (#38)", async () => {
+  const postulee = offreSignaleeFictive({ candidature: candidatureDeLOffreFictive() });
+  const doublon = apiQuiRepond(Response.json({ status: 409, motif: "doublonPossible", doublons: [postulee] }, { status: 409 }));
+  const malForme = apiQuiRepond(Response.json({ status: 409, motif: "doublonPossible", doublons: [{ ...postulee, candidature: { id: "5" } }] }, { status: 409 }));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, doublon).collerUneOffre(OFFRE)).toEqual({ issue: "doublonPossible", doublons: [postulee] });
+  await expect(creerClientDeLApi(JETON_FICTIF, malForme).collerUneOffre(OFFRE)).rejects.toEqual(new ErreurDeLApi(409));
+});
+
+test("la liste des offres se lit en GET, sans aucun paramètre dans son adresse (#38)", async () => {
+  const envoyer = apiQuiRepond(Response.json([offreListeeFictive()]));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, envoyer).listerLesOffres()).toEqual([offreListeeFictive()]);
+
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/offres");
+  expect(options?.method).toBeUndefined();
+  expect(options?.body).toBeUndefined();
+});
+
+test("« Postuler » part en POST vers l'offre, avec la seule date d'envoi, et rend la candidature (#38)", async () => {
+  const envoyer = apiQuiRepond(Response.json(candidatureFictive({ id: 5 }), { status: 201 }));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, envoyer).postuler(3, "2026-11-18T10:00")).toEqual({ issue: "enregistree", candidature: candidatureFictive({ id: 5 }) });
+
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/offres/3/candidature");
+  expect(options?.method).toBe("POST");
+  expect(JSON.parse(String(options?.body))).toEqual({ envoyeeLe: "2026-11-18T10:00" });
+  await expect(creerClientDeLApi(JETON_FICTIF, envoyer).postuler(0, "2026-11-18T10:00")).rejects.toThrow(RangeError);
+});
+
+test("les refus de « Postuler » se lisent, et une réponse qui ne se lit pas est une erreur (#38)", async () => {
+  const repondre = (corps: unknown, status: number) => creerClientDeLApi(JETON_FICTIF, apiQuiRepond(Response.json(corps, { status }))).postuler(3, "2026-11-18T10:00");
+
+  expect(await repondre({ status: 400, errors: { envoyeeLe: ["Indiquez la date et l'heure d'envoi."] } }, 400)).toEqual({
+    issue: "refusee",
+    refus: ["Indiquez la date et l'heure d'envoi."],
+  });
+  expect(await repondre({ status: 409, motif: "dejaPostulee", candidature: 9 }, 409)).toEqual({ issue: "dejaPostulee", candidature: 9 });
+  expect(await repondre({ status: 409, motif: "entrepriseManquante" }, 409)).toEqual({ issue: "entrepriseManquante" });
+  expect(await repondre({ status: 409, motif: "posteARevoir" }, 409)).toEqual({ issue: "posteARevoir" });
+  await expect(repondre({ status: 409, motif: "dejaPostulee", candidature: "9" }, 409)).rejects.toEqual(new ErreurDeLApi(409));
+  await expect(repondre({ status: 409, motif: "autre" }, 409)).rejects.toEqual(new ErreurDeLApi(409));
+  await expect(repondre({ status: 400, errors: { autre: ["ignoré"] } }, 400)).rejects.toEqual(new ErreurDeLApi(400));
+  await expect(repondre({ title: "Cette offre n'existe pas.", status: 404 }, 404)).rejects.toEqual(new ErreurDeLApi(404));
 });

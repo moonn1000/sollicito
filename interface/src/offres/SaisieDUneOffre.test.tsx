@@ -12,10 +12,9 @@ function remplir(libelle: string, valeur: string) {
 
 function afficher(client: ClientDeLApi = clientSimule()) {
   const quandEnregistree = vi.fn();
-  const ouvrirUneOffre = vi.fn();
   const renoncer = vi.fn();
-  render(<SaisieDUneOffre client={client} quandEnregistree={quandEnregistree} ouvrirUneOffre={ouvrirUneOffre} renoncer={renoncer} />);
-  return { client, quandEnregistree, ouvrirUneOffre, renoncer };
+  render(<SaisieDUneOffre client={client} quandEnregistree={quandEnregistree} renoncer={renoncer} />);
+  return { client, quandEnregistree, renoncer };
 }
 
 test("l'écran demande le texte collé, puis les champs à remplir à la main, sans borne de longueur sur le texte", () => {
@@ -89,14 +88,16 @@ test("les refus de l'API s'affichent à côté de leur champ, ligne du caractèr
   expect(screen.getByLabelText("Date de publication").getAttribute("aria-invalid")).toBeNull();
 });
 
-test("le même texte recollé dit que l'offre est déjà enregistrée, et mène à elle", async () => {
+test("le même texte recollé dit que l'offre est déjà enregistrée, et l'ouvre sur place, sans perdre la saisie", async () => {
   const client = clientSimule({
     collerUneOffre: async () => ({ issue: "dejaEnregistree", offre: { id: 7, ajouteeLe: "2026-11-18T13:30:00Z" } }),
+    lireUneOffre: vi.fn<ClientDeLApi["lireUneOffre"]>(async (offre) => offreFictive({ id: offre, poste: "Comptable enregistrée", texte: "Offre fictive." })),
   });
-  const { ouvrirUneOffre, quandEnregistree } = afficher(client);
+  const { quandEnregistree } = afficher(client);
 
   remplir("Texte de l'offre", "Offre fictive.");
   remplir("Poste", "Comptable");
+  remplir("Lieu", "Namur");
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer l'offre" }));
 
   const signal = await screen.findByRole("alert");
@@ -104,7 +105,16 @@ test("le même texte recollé dit que l'offre est déjà enregistrée, et mène 
   expect(titre.textContent).toBe("Cette offre est déjà enregistrée : vous l'avez collée le mercredi 18 novembre 2026. Rien n'a été ajouté.");
   await waitFor(() => expect(document.activeElement).toBe(titre));
   fireEvent.click(within(signal).getByRole("button", { name: "Voir l'offre enregistrée" }));
-  expect(ouvrirUneOffre).toHaveBeenCalledWith(7);
+
+  // L'offre enregistrée s'ouvre dans la saisie (suites de #36) : le texte collé et les champs restent.
+  const apercu = await within(signal).findByRole("region", { name: "Comptable enregistrée" });
+  expect(client.lireUneOffre).toHaveBeenCalledWith(7);
+  expect(apercu.querySelector(".texte-de-l-offre")?.textContent).toBe("Offre fictive.");
+  expect(screen.getByLabelText<HTMLTextAreaElement>("Texte de l'offre").value).toBe("Offre fictive.");
+  expect(screen.getByLabelText<HTMLInputElement>("Lieu").value).toBe("Namur");
+  fireEvent.click(within(apercu).getByRole("button", { name: "Masquer cette offre" }));
+  expect(within(signal).queryByRole("region")).toBeNull();
+  expect(within(signal).getByRole("button", { name: "Voir l'offre enregistrée" })).toBeDefined();
   expect(quandEnregistree).not.toHaveBeenCalled();
 });
 
@@ -113,7 +123,8 @@ test("un doublon possible se montre avant tout enregistrement : garder les deux 
     .fn<ClientDeLApi["collerUneOffre"]>()
     .mockResolvedValueOnce({ issue: "doublonPossible", doublons: [offreSignaleeFictive({ poste: PIEGE, entreprise: { id: 1, nom: PIEGE } })] })
     .mockResolvedValueOnce({ issue: "enregistree", fiche: offreFictive({ id: 12 }) });
-  const { quandEnregistree, ouvrirUneOffre } = afficher(clientSimule({ collerUneOffre }));
+  const lireUneOffre = vi.fn<ClientDeLApi["lireUneOffre"]>(async (offre) => offreFictive({ id: offre, poste: PIEGE, texte: `${PIEGE}\nTexte de l'autre offre.` }));
+  const { quandEnregistree } = afficher(clientSimule({ collerUneOffre, lireUneOffre }));
 
   remplir("Texte de l'offre", "Seconde offre fictive.");
   remplir("Entreprise", "Lumière Verte SA");
@@ -127,7 +138,14 @@ test("un doublon possible se montre avant tout enregistrement : garder les deux 
   expect(within(signal).getByRole("listitem").textContent).toContain(`${PIEGE}, chez ${PIEGE} (Namur), ajoutée le 10/11/2026 09:00`);
   expect(signal.querySelector("img, script, b")).toBeNull();
   fireEvent.click(within(signal).getByRole("button", { name: "Voir cette offre" }));
-  expect(ouvrirUneOffre).toHaveBeenCalledWith(2);
+
+  // Le doublon s'ouvre sur place, échappé, et la saisie reste telle quelle (suites de #36).
+  const apercu = await within(signal).findByRole("region", { name: PIEGE });
+  expect(lireUneOffre).toHaveBeenCalledWith(2);
+  expect(apercu.querySelector(".texte-de-l-offre")?.textContent).toBe(`${PIEGE}\nTexte de l'autre offre.`);
+  expect(signal.querySelector("img, script, b")).toBeNull();
+  expect(screen.getByLabelText<HTMLTextAreaElement>("Texte de l'offre").value).toBe("Seconde offre fictive.");
+  expect(screen.getByLabelText<HTMLInputElement>("Poste").value).toBe("Développeur .NET");
 
   fireEvent.click(within(signal).getByRole("button", { name: "Garder les deux" }));
   await waitFor(() => expect(quandEnregistree).toHaveBeenCalledOnce());

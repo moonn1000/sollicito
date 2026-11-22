@@ -216,7 +216,7 @@ test("un nom de même clé, écrit autrement, attend l'accord : l'écran dit le 
   const apres = ficheFictive({ entreprise: { id: 1, nom: "LUMIÈRE VERTE S.A." } });
   const modifierUneCandidature = vi
     .fn<ReturnType<typeof clientSimule>["modifierUneCandidature"]>()
-    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 3 })
+    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 3, offres: 0 })
     .mockResolvedValueOnce({ issue: "modifiee", fiche: apres });
   const { quandModifiee } = afficher(clientSimule({ modifierUneCandidature }));
 
@@ -243,7 +243,7 @@ test("un nom de même clé, écrit autrement, attend l'accord : l'écran dit le 
 test("un nom qui désigne une autre entreprise le dit, et « Garder » rattache la candidature sous le nom enregistré", async () => {
   const modifierUneCandidature = vi
     .fn<ReturnType<typeof clientSimule>["modifierUneCandidature"]>()
-    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 4, nom: "Brasserie Lune Rousse" }, candidatures: 2 })
+    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 4, nom: "Brasserie Lune Rousse" }, candidatures: 2, offres: 0 })
     .mockResolvedValueOnce({ issue: "modifiee", fiche: ficheFictive({ entreprise: { id: 4, nom: "Brasserie Lune Rousse" } }) });
   const { quandModifiee } = afficher(clientSimule({ modifierUneCandidature }));
 
@@ -262,10 +262,30 @@ test("un nom qui désigne une autre entreprise le dit, et « Garder » rattache 
   expect(modifierUneCandidature.mock.calls[1]).toEqual([7, { entreprise: "Brasserie Lune Rousse", poste: "Comptable", envoyeeLe: "2026-03-27T23:30" }, false]);
 });
 
+test.each([
+  [2, "pour ses 3 candidatures, celle-ci comprise, et pour les 2 offres qui la désignent."],
+  [1, "pour ses 3 candidatures, celle-ci comprise, et pour l'offre qui la désigne."],
+])("l'avertissement compte aussi les offres qui désignent l'entreprise (#38, suites de #36) : %i", async (offres, portee) => {
+  afficher(
+    clientSimule({
+      modifierUneCandidature: async () => ({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 3, offres }),
+    }),
+  );
+
+  await screen.findByLabelText("Entreprise");
+  remplir("Entreprise", "LUMIÈRE VERTE S.A.");
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer les modifications" }));
+
+  const question = await screen.findByRole("region", { name: "Corriger le nom de l'entreprise ?" });
+  expect(within(question).getByText(/^Ce nom est celui/u).textContent).toBe(
+    `Ce nom est celui de l'entreprise de la candidature, écrit autrement. Son nom affiché « Lumière Verte SA » deviendrait « LUMIÈRE VERTE S.A. », ${portee}`,
+  );
+});
+
 test("pour une seule candidature, l'accord se dit au singulier ; modifier un champ retire l'avertissement", async () => {
   afficher(
     clientSimule({
-      modifierUneCandidature: async () => ({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 1 }),
+      modifierUneCandidature: async () => ({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 1, offres: 0 }),
     }),
   );
 
@@ -284,9 +304,9 @@ test("un accord donné, puis un champ modifié, ne vaut plus : l'envoi suivant r
   let repondre: () => void = () => {};
   const modifierUneCandidature = vi
     .fn<ReturnType<typeof clientSimule>["modifierUneCandidature"]>()
-    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 2 })
+    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 2, offres: 0 })
     .mockImplementationOnce(() => new Promise((resoudre) => (repondre = () => resoudre({ issue: "refusee", refus: { envoyeeLe: [PREMIER_EVENEMENT] } }))))
-    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 2 });
+    .mockResolvedValueOnce({ issue: "nomACorriger", entreprise: { id: 1, nom: "Lumière Verte SA" }, candidatures: 2, offres: 0 });
   afficher(clientSimule({ modifierUneCandidature }));
 
   await screen.findByLabelText("Entreprise");

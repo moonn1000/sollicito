@@ -93,6 +93,10 @@ export function proposerDesEntreprises(connues: readonly EntrepriseConnue[], sai
     .slice(0, PROPOSITIONS_AU_PLUS);
 }
 
-function simplifier(texte: string): string {
+/**
+ * Un texte sans accents, en minuscules, ses blancs réduits à une espace : la forme où l'interface cherche, pour les
+ * entreprises proposées comme pour la recherche dans la liste des offres (#38).
+ */
+export function simplifier(texte: string): string {
   return texte.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/\s+/gu, " ").trim();
 }

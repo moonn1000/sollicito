@@ -12,6 +12,7 @@ import type {
 import { proposerDesEntreprises } from "../candidatures/affichage.ts";
 import { Champ, sansLeChamp } from "../formulaires/Champ.tsx";
 import { AIDE_DU_TEXTE, decrireLeDoublon, MESSAGE_DU_DOUBLON, messageDejaEnregistree } from "./affichage.ts";
+import { ApercuDUneOffre } from "./ApercuDUneOffre.tsx";
 
 type Envoi = "pret" | "en-cours" | "echec";
 
@@ -25,9 +26,10 @@ const ORDRE_DES_CHAMPS: readonly ChampDeLOffre[] = ["texte", "entreprise", "post
  * seulement, puis l'entreprise, le poste, le lieu, la date de publication et l'adresse de l'annonce. L'API valide
  * chaque champ : le formulaire envoie la saisie telle quelle et affiche ses refus à côté du champ concerné. Il dit
  * aussi, avant tout enregistrement, que le même texte est déjà enregistré (règle 2), ou que des offres de même
- * entreprise et de même poste le sont (règle 3) : l'utilisateur garde les deux, ou renonce. Un refus ou un signal
- * disparaît dès qu'on modifie la saisie, qu'il ne décrit plus. Le texte n'a pas de longueur bornée à l'écran : un
- * collage trop long serait tronqué sans le dire ; l'API le refuse, et l'écran le dit.
+ * entreprise et de même poste le sont (règle 3) : l'utilisateur garde les deux, ou renonce. L'autre offre s'ouvre sur
+ * place, dans un aperçu, sans quitter le formulaire : le texte collé et les champs restent (suites de #36, #98). Un
+ * refus ou un signal disparaît dès qu'on modifie la saisie, qu'il ne décrit plus. Le texte n'a pas de longueur bornée à
+ * l'écran : un collage trop long serait tronqué sans le dire ; l'API le refuse, et l'écran le dit.
  */
 export function FormulaireDUneOffre({
   client,
@@ -35,7 +37,6 @@ export function FormulaireDUneOffre({
   avecLeTexte,
   envoyer,
   quandEnregistree,
-  ouvrirUneOffre,
   renoncer,
   libelleDuBouton,
   libelleEnCours,
@@ -52,8 +53,6 @@ export function FormulaireDUneOffre({
   envoyer: (saisie: SaisieDUneOffre, garderLesDeux: boolean) => Promise<ResultatDeLOffre>;
   /** Reçoit la fiche de l'offre enregistrée. */
   quandEnregistree: (fiche: FicheDUneOffre) => void;
-  /** Ouvre la fiche d'une autre offre, celle du même texte ou un doublon possible. */
-  ouvrirUneOffre: (offre: number) => void;
   /** Renonce, devant un doublon possible : rien n'est enregistré. */
   renoncer: () => void;
   libelleDuBouton: string;
@@ -69,6 +68,8 @@ export function FormulaireDUneOffre({
   const [refus, setRefus] = useState<RefusDeLOffre>({});
   const [refusRecus, setRefusRecus] = useState(0);
   const [conflit, setConflit] = useState<Conflit>();
+  // L'autre offre ouverte sur place, dans l'aperçu : celle du même texte, ou un doublon possible.
+  const [apercu, setApercu] = useState<number>();
   const [envoi, setEnvoi] = useState<Envoi>("pret");
   const [connues, setConnues] = useState<EntrepriseConnue[]>([]);
   // Lu aussitôt, sans attendre le rendu : deux envois rapprochés n'en font qu'un.
@@ -107,8 +108,10 @@ export function FormulaireDUneOffre({
     }
   }, [refusRecus]);
 
-  // Un signal reçu prend le focus sur son titre : il dit pourquoi rien n'est enregistré.
+  // Un signal reçu prend le focus sur son titre : il dit pourquoi rien n'est enregistré. Un autre signal, ou aucun,
+  // referme l'aperçu, qui portait sur l'ancien.
   useEffect(() => {
+    setApercu(undefined);
     if (conflit !== undefined) {
       titreDuConflit.current?.focus();
     }
@@ -222,11 +225,15 @@ export function FormulaireDUneOffre({
           <h3 ref={titreDuConflit} tabIndex={-1}>
             {messageDejaEnregistree(conflit.ajouteeLe)}
           </h3>
-          <div className="actions">
-            <button type="button" onClick={() => ouvrirUneOffre(conflit.id)}>
-              Voir l'offre enregistrée
-            </button>
-          </div>
+          {apercu === conflit.id ? (
+            <ApercuDUneOffre client={client} offre={conflit.id} masquer={() => setApercu(undefined)} />
+          ) : (
+            <div className="actions">
+              <button type="button" onClick={() => setApercu(conflit.id)}>
+                Voir l'offre enregistrée
+              </button>
+            </div>
+          )}
         </div>
       )}
       {conflit?.sorte === "doublonPossible" && (
@@ -238,9 +245,13 @@ export function FormulaireDUneOffre({
             {conflit.doublons.map((doublon) => (
               <li key={doublon.id}>
                 <span>{decrireLeDoublon(doublon)}</span>{" "}
-                <button type="button" className="secondaire" onClick={() => ouvrirUneOffre(doublon.id)}>
-                  Voir cette offre
-                </button>
+                {apercu === doublon.id ? (
+                  <ApercuDUneOffre client={client} offre={doublon.id} masquer={() => setApercu(undefined)} />
+                ) : (
+                  <button type="button" className="secondaire" onClick={() => setApercu(doublon.id)}>
+                    Voir cette offre
+                  </button>
+                )}
               </li>
             ))}
           </ul>

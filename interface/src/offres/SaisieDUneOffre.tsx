@@ -12,14 +12,11 @@ const VIDE = { texte: "", entreprise: "", poste: "", lieu: "", publieeLe: "", ad
 export function SaisieDUneOffre({
   client,
   quandEnregistree,
-  ouvrirUneOffre,
   renoncer,
 }: {
   client: ClientDeLApi;
   /** Reçoit la fiche de l'offre que l'API vient d'enregistrer. */
   quandEnregistree: (fiche: FicheDUneOffre) => void;
-  /** Ouvre la fiche d'une offre déjà enregistrée. */
-  ouvrirUneOffre: (offre: number) => void;
   /** Renonce à l'offre, devant un doublon possible. */
   renoncer: () => void;
 }) {
@@ -40,7 +37,6 @@ export function SaisieDUneOffre({
         avecLeTexte
         envoyer={(saisie, garderLesDeux) => client.collerUneOffre(saisie, garderLesDeux)}
         quandEnregistree={quandEnregistree}
-        ouvrirUneOffre={ouvrirUneOffre}
         renoncer={renoncer}
         libelleDuBouton="Enregistrer l'offre"
         libelleEnCours="Enregistrement…"

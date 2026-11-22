@@ -34,7 +34,8 @@ type Confirmation = "fermee" | "ouverte" | "annulee";
  * d'entretien ou d'échange ; l'historique, du plus ancien au plus récent. Elle mène à la modification de la
  * candidature, corrige une étape de l'historique, et supprime la candidature après une confirmation affichée dans
  * l'interface, jamais par une boîte du navigateur (#25). Elle planifie et suit la relance de la candidature, et tient les
- * contacts de son entreprise (#14). Les textes s'affichent comme du texte, jamais comme du HTML : React les échappe.
+ * contacts de son entreprise (#14). Faite depuis une offre, elle mène à cette offre (#38), qui reste quand on la
+ * supprime. Les textes s'affichent comme du texte, jamais comme du HTML : React les échappe.
  */
 export function FicheDUneCandidature({
   client,
@@ -45,6 +46,7 @@ export function FicheDUneCandidature({
   annonce,
   maintenant,
   ouvrirLeBrouillon,
+  ouvrirLOffre,
 }: {
   client: ClientDeLApi;
   candidature: number;
@@ -60,6 +62,8 @@ export function FicheDUneCandidature({
   maintenant?: () => Date;
   /** Demande à la fenêtre hôte d'ouvrir le brouillon d'une relance ; absent hors de la fenêtre (#14). */
   ouvrirLeBrouillon?: (relance: number) => Promise<IssueDuBrouillon>;
+  /** Ouvre la fiche de l'offre d'où vient la candidature (#38). */
+  ouvrirLOffre?: (offre: number) => void;
 }) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
   // Les contacts de l'entreprise de la candidature (#14), relus quand elle change d'entreprise.
@@ -377,6 +381,11 @@ export function FicheDUneCandidature({
             <dd>{LIBELLES_DES_STATUTS[fiche.statut] ?? fiche.statut}</dd>
           </dl>
           <div className="actions-de-la-fiche">
+            {fiche.offre !== null && ouvrirLOffre !== undefined && (
+              <button type="button" className="secondaire" onClick={() => ouvrirLOffre(fiche.offre as number)}>
+                Voir l'offre
+              </button>
+            )}
             <button type="button" className="secondaire" disabled={enCours} onClick={modifier}>
               Modifier la candidature
             </button>
@@ -407,7 +416,10 @@ export function FicheDUneCandidature({
               <h3 id="titre-de-la-suppression" ref={titreDeLaConfirmation} tabIndex={-1}>
                 Supprimer cette candidature ?
               </h3>
-              <p id="texte-de-la-suppression">La suppression est définitive : elle emporte tout l'historique de la candidature.</p>
+              <p id="texte-de-la-suppression">
+                La suppression est définitive : elle emporte tout l'historique de la candidature.
+                {fiche.offre !== null && " L'offre reste enregistrée : elle pourra recevoir une nouvelle candidature."}
+              </p>
               <div className="actions">
                 <button type="button" className="danger" disabled={enCours} onClick={() => void supprimer(fiche)}>
                   {suppression === "en-cours" ? "Suppression…" : "Supprimer définitivement"}

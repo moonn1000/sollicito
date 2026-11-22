@@ -14,7 +14,6 @@ export function ModificationDUneOffre({
   offre,
   revenir,
   quandModifiee,
-  ouvrirUneOffre,
 }: {
   client: ClientDeLApi;
   offre: number;
@@ -22,8 +21,6 @@ export function ModificationDUneOffre({
   revenir: () => void;
   /** Reçoit la fiche corrigée. */
   quandModifiee: (fiche: FicheDUneOffre) => void;
-  /** Ouvre la fiche d'un doublon possible. */
-  ouvrirUneOffre: (offre: number) => void;
 }) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
   const titre = useRef<HTMLHeadingElement>(null);
@@ -79,7 +76,6 @@ export function ModificationDUneOffre({
             client.corrigerUneOffre(offre, { entreprise, poste, lieu, publieeLe, adresse }, garderLesDeux)
           }
           quandEnregistree={quandModifiee}
-          ouvrirUneOffre={ouvrirUneOffre}
           renoncer={revenir}
           libelleDuBouton="Enregistrer les modifications"
           libelleEnCours="Enregistrement…"

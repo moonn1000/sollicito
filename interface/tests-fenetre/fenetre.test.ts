@@ -269,7 +269,7 @@ test("une candidature saisie dans la fenêtre s'enregistre dans la base du dossi
   await page.getByLabel("Entreprise").fill(entreprise);
   await page.getByLabel("Poste").fill("Comptable");
   await page.getByLabel("Date et heure d'envoi").fill("2026-03-27T23:30");
-  await page.getByRole("button", { name: "Enregistrer la candidature" }).click();
+  await page.getByRole("button", { name: "Enregistrer la candidature", exact: true }).click();
 
   // L'écriture est passée par le contrôle de l'origine : c'est le navigateur intégré qui a posé l'en-tête Origin.
   await page.getByText(`Candidature enregistrée : Comptable, chez ${entreprise}.`).waitFor();
@@ -406,7 +406,7 @@ test("une relance se planifie depuis la fiche, et son brouillon passe par l'hôt
   await page.getByLabel("Entreprise").fill("Brasserie Lune Rousse");
   await page.getByLabel("Poste").fill(poste);
   await page.getByLabel("Date et heure d'envoi").fill("2026-03-27T23:30");
-  await page.getByRole("button", { name: "Enregistrer la candidature" }).click();
+  await page.getByRole("button", { name: "Enregistrer la candidature", exact: true }).click();
   await page.getByRole("button", { name: `${poste}, chez Brasserie Lune Rousse : ouvrir la fiche` }).click();
   await page.getByRole("heading", { level: 2, name: "Fiche de la candidature" }).waitFor();
 
@@ -479,7 +479,9 @@ test("une offre collée et piégée s'enregistre, sa fiche l'affiche échappée,
   const ouvertsAvant = (await lignes(liens)).length;
   await rechargerLInterface();
 
-  await page.getByRole("button", { name: "Nouvelle offre" }).click();
+  // « Coller une offre » s'ouvre depuis la liste des offres (#38).
+  await page.getByRole("button", { name: "Offres", exact: true }).click();
+  await page.getByRole("button", { name: "Coller une offre", exact: true }).click();
   await page.getByLabel("Texte de l'offre").fill(texte);
   await page.getByLabel("Entreprise").fill("Brasserie Lune Rousse");
   await page.getByLabel("Poste").fill(poste);
@@ -502,14 +504,76 @@ test("une offre collée et piégée s'enregistre, sa fiche l'affiche échappée,
   }
   expect((await lignes(liens)).slice(ouvertsAvant)).toEqual([annonce]);
 
-  // Le même texte, recollé avec un autre poste, est reconnu à son empreinte : rien ne s'ajoute.
-  await page.getByRole("button", { name: "Nouvelle offre" }).click();
+  // Le même texte, recollé avec un autre poste, est reconnu à son empreinte : rien ne s'ajoute. L'offre enregistrée
+  // s'ouvre sur place, et le collage reste dans la saisie (suites de #36).
+  await page.getByRole("button", { name: "Offres", exact: true }).click();
+  await page.getByRole("button", { name: "Coller une offre", exact: true }).click();
   await page.getByLabel("Texte de l'offre").fill(texte);
   await page.getByLabel("Poste").fill("Autre poste fictif");
   await page.getByRole("button", { name: "Enregistrer l'offre" }).click();
   await page.getByText("Cette offre est déjà enregistrée : vous l'avez collée le", { exact: false }).waitFor();
   await page.getByRole("button", { name: "Voir l'offre enregistrée" }).click();
-  await page.getByRole("heading", { level: 2, name: poste }).waitFor();
+  await page.getByRole("heading", { level: 4, name: poste }).waitFor();
+  expect(await page.getByLabel("Texte de l'offre").inputValue()).toBe(texte);
+  expect(await page.getByLabel("Poste").inputValue()).toBe("Autre poste fictif");
+  expect(await page.locator("main h1, main script, main img, main b").count()).toBe(0);
+});
+
+test("la liste des offres affiche une offre piégée échappée, et « Postuler » depuis sa fiche fait une candidature, une seule (#38)", async () => {
+  const { page } = fenetre;
+  const poste = "<b>Brasseuse</b> & cheffe";
+  await rechargerLInterface();
+
+  await page.getByRole("button", { name: "Offres", exact: true }).click();
+  // La liste paraît quand sa lecture revient : on attend sa première ligne.
+  await page.getByRole("row").nth(1).waitFor();
+  const cellules = await page.getByRole("row").nth(1).getByRole("cell").allTextContents();
+  expect(cellules[0]).toBe(poste);
+  expect(cellules[1]).toBe("Brasserie Lune Rousse");
+  expect(cellules[4]).toBe("Aucune");
+  expect(await page.locator("main table b, main table img, main table script").count()).toBe(0);
+
+  // La recherche se fait dans la page : un texte piégé ne crée rien, et la liste vide ne le reprend pas.
+  await page.getByLabel("Rechercher").fill('<img src="x" onerror="alert(1)">');
+  await page.getByText("Aucune offre ne correspond à ces filtres.").waitFor();
+  expect(await page.locator("main img").count()).toBe(0);
+  await page.getByLabel("Rechercher").fill("brasserie LUNE");
+  await page.getByRole("button", { name: `${poste}, chez Brasserie Lune Rousse : ouvrir la fiche` }).click();
+
+  // « Postuler » depuis la fiche : l'entreprise et le poste viennent de l'offre, la date d'envoi est préremplie.
+  await page.getByRole("button", { name: "Postuler", exact: true }).click();
+  await page.getByRole("heading", { level: 2, name: "Postuler à cette offre" }).waitFor();
+  await page.getByRole("button", { name: "Enregistrer la candidature", exact: true }).click();
+  await page.getByText(`Candidature enregistrée depuis l'offre : ${poste}, chez Brasserie Lune Rousse.`).waitFor();
+  await page.getByRole("button", { name: "Voir l'offre", exact: true }).click();
+  await page.getByText("Candidature envoyée le", { exact: false }).waitFor();
+  expect(await page.getByRole("button", { name: "Postuler", exact: true }).count()).toBe(0);
+
+  // Au tableau de bord, la candidature paraît, son poste en texte.
+  await page.getByRole("button", { name: "Tableau de bord", exact: true }).click();
+  await page.getByRole("button", { name: `${poste}, chez Brasserie Lune Rousse : ouvrir la fiche` }).waitFor();
+  expect(await page.locator("main table b").count()).toBe(0);
+
+  // Deux « Postuler » simultanés sur une autre offre, depuis la page : une seule candidature, l'autre refusée (409).
+  const statuts = await page.evaluate(async (jeton) => {
+    const enTetes = { "Sollicito-Jeton": jeton, "Content-Type": "application/json" };
+    const collee = await fetch("/api/offres", {
+      method: "POST",
+      headers: enTetes,
+      body: JSON.stringify({ texte: "Offre fictive à qui postuler deux fois.", poste: "Comptable", entreprise: "Lumière Verte SA" }),
+    });
+    const { id } = (await collee.json()) as { id: number };
+    const envoi = () =>
+      fetch(`/api/offres/${id}/candidature`, { method: "POST", headers: enTetes, body: JSON.stringify({ envoyeeLe: "2026-11-01T09:00" }) }).then(
+        (reponse) => reponse.status,
+      );
+    return Promise.all([envoi(), envoi()]);
+  }, jetonRemis);
+  expect([...statuts].sort()).toEqual([201, 409]);
+  await page.getByRole("button", { name: "Offres", exact: true }).click();
+  await page.getByRole("button", { name: "Effacer les filtres", exact: true }).click();
+  await page.getByRole("button", { name: "Comptable, chez Lumière Verte SA : ouvrir la fiche" }).waitFor();
+  expect(await page.getByRole("button", { name: /^Candidature Envoyée pour / }).count()).toBe(2);
 });
 
 test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fichier", async () => {

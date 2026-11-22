@@ -12,9 +12,10 @@ type Chargement = { etape: "chargement" } | { etape: "prete"; fiche: Fiche } | {
 
 /**
  * L'avertissement d'un nom qui corrigerait celui d'une entreprise enregistrée (ADR-0007) : l'entreprise, sous son nom
- * enregistré, le nom saisi, que l'écran tient de son propre état, et le nombre de candidatures concernées.
+ * enregistré, le nom saisi, que l'écran tient de son propre état, et le nombre de candidatures et d'offres concernées
+ * (#38, suites de #36).
  */
-type Avertissement = { entreprise: EntrepriseConnue; nomSaisi: string; candidatures: number };
+type Avertissement = { entreprise: EntrepriseConnue; nomSaisi: string; candidatures: number; offres: number };
 
 /**
  * L'écran de modification d'une candidature (#25), ouvert depuis sa fiche : son entreprise, son poste et sa date
@@ -121,7 +122,12 @@ export function ModificationDUneCandidature({
                 case "refusee":
                   return { acceptee: false, refus: resultat.refus };
                 case "nomACorriger":
-                  setAvertissement({ entreprise: resultat.entreprise, nomSaisi: envoi.entreprise.trim(), candidatures: resultat.candidatures });
+                  setAvertissement({
+                    entreprise: resultat.entreprise,
+                    nomSaisi: envoi.entreprise.trim(),
+                    candidatures: resultat.candidatures,
+                    offres: resultat.offres,
+                  });
                   return { acceptee: false, refus: {} };
               }
             } catch (erreur) {
@@ -192,11 +198,12 @@ function aideDeLaDate(premier: string, maintenant: Date): string {
 }
 
 // Ce que dit l'avertissement : si la candidature change d'entreprise, quel nom serait corrigé, en quoi, et pour combien
-// de candidatures.
+// de candidatures et d'offres (#38) : une offre qui désigne l'entreprise affiche aussi son nom.
 function texteDeLAvertissement(avertissement: Avertissement, actuelle: EntrepriseConnue): string {
-  const { entreprise, nomSaisi, candidatures } = avertissement;
+  const { entreprise, nomSaisi, candidatures, offres } = avertissement;
   const portee = candidatures === 1 ? "pour cette seule candidature" : `pour ses ${candidatures} candidatures, celle-ci comprise`;
-  const correction = `Son nom affiché « ${entreprise.nom} » deviendrait « ${nomSaisi} », ${portee}.`;
+  const desOffres = offres === 0 ? "" : offres === 1 ? ", et pour l'offre qui la désigne" : `, et pour les ${offres} offres qui la désignent`;
+  const correction = `Son nom affiché « ${entreprise.nom} » deviendrait « ${nomSaisi} », ${portee}${desOffres}.`;
   return entreprise.id === actuelle.id
     ? `Ce nom est celui de l'entreprise de la candidature, écrit autrement. ${correction}`
     : `La candidature quitterait « ${actuelle.nom} » pour rejoindre l'entreprise enregistrée « ${entreprise.nom} », que ce nom désigne. ${correction}`;

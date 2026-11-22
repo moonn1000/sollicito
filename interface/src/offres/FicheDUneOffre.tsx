@@ -3,15 +3,16 @@ import { estIntrouvable, type ClientDeLApi, type FicheDUneOffre as Fiche } from 
 import { afficherLInstant } from "../candidatures/affichage.ts";
 import { LienExterne } from "../liens/LienExterne.tsx";
 import { afficherLeJour } from "../relances/affichage.ts";
-import { decrireLeDoublon, LIBELLES_DES_SOURCES } from "./affichage.ts";
+import { decrireLaCandidature, decrireLeDoublon, LIBELLES_DES_SOURCES } from "./affichage.ts";
 
 type Chargement = { etape: "chargement" } | { etape: "prete"; fiche: Fiche } | { etape: "introuvable" } | { etape: "echec" };
 
 /**
  * La fiche d'une offre (#36) : ses champs, l'adresse de son annonce, par le seul lien externe de l'interface, son texte,
- * tel quel, et ses doublons possibles (règle 3), relus à chaque ouverture. Elle mène à la correction de ses champs.
- * Les textes s'affichent comme du texte, jamais comme du HTML : React les échappe, et les sauts de ligne du texte
- * s'affichent par le style.
+ * tel quel, et ses doublons possibles (règle 3), relus à chaque ouverture, ceux déjà postulés marqués comme tels (#38).
+ * Elle mène à la correction de ses champs, et à « Postuler » (#38) : une offre qui a sa candidature mène à celle-ci, et
+ * une offre sans entreprise demande d'abord la sienne, par sa correction. Les textes s'affichent comme du texte, jamais
+ * comme du HTML : React les échappe, et les sauts de ligne du texte s'affichent par le style.
  */
 export function FicheDUneOffre({
   client,
@@ -19,18 +20,24 @@ export function FicheDUneOffre({
   annonce,
   revenir,
   modifier,
+  postuler,
   ouvrirUneOffre,
+  ouvrirLaCandidature,
 }: {
   client: ClientDeLApi;
   offre: number;
   /** Ce qui vient de se passer, par exemple une offre enregistrée. */
   annonce?: string;
-  /** Mène au tableau de bord. */
+  /** Mène à la liste des offres. */
   revenir: () => void;
   /** Mène à la correction des champs de l'offre. */
   modifier: () => void;
+  /** Mène à « Postuler » (#38). */
+  postuler: () => void;
   /** Ouvre la fiche d'un doublon possible. */
   ouvrirUneOffre: (offre: number) => void;
+  /** Ouvre la fiche de la candidature de cet identifiant. */
+  ouvrirLaCandidature: (candidature: number) => void;
 }) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
   const titre = useRef<HTMLHeadingElement>(null);
@@ -73,7 +80,7 @@ export function FicheDUneOffre({
         )}
         <div className="actions">
           <button type="button" className="secondaire" onClick={revenir}>
-            Revenir au tableau de bord
+            Revenir aux offres
           </button>
         </div>
       </section>
@@ -81,6 +88,8 @@ export function FicheDUneOffre({
   }
 
   const { fiche } = chargement;
+  const { candidature } = fiche;
+  const peutPostuler = candidature === null && fiche.entreprise !== null;
   return (
     <section aria-labelledby="titre-de-l-offre" className="fiche fiche-d-une-offre">
       {annonce !== undefined && (
@@ -119,12 +128,37 @@ export function FicheDUneOffre({
           </>
         )}
       </dl>
+      {candidature !== null && (
+        <div className="candidature-de-l-offre">
+          <p>{decrireLaCandidature(candidature)}</p>
+          <div className="actions">
+            <button type="button" onClick={() => ouvrirLaCandidature(candidature.id)}>
+              Voir la candidature
+            </button>
+          </div>
+        </div>
+      )}
+      {candidature === null && fiche.entreprise === null && (
+        <div className="candidature-de-l-offre">
+          <p>Pour postuler, indiquez d'abord l'entreprise de l'offre.</p>
+          <div className="actions">
+            <button type="button" onClick={modifier}>
+              Indiquer l'entreprise
+            </button>
+          </div>
+        </div>
+      )}
       <div className="actions">
-        <button type="button" onClick={modifier}>
+        {peutPostuler && (
+          <button type="button" onClick={postuler}>
+            Postuler
+          </button>
+        )}
+        <button type="button" className={peutPostuler ? "secondaire" : undefined} onClick={modifier}>
           Modifier l'offre
         </button>
         <button type="button" className="secondaire" onClick={revenir}>
-          Revenir au tableau de bord
+          Revenir aux offres
         </button>
       </div>
       {fiche.doublonsPossibles.length > 0 && (

@@ -1,6 +1,7 @@
 import { vi } from "vitest";
 import type {
   Candidature,
+  CandidatureDeLOffre,
   ChangementDeStatutLu,
   ClientDeLApi,
   ClotureDeRelanceLue,
@@ -11,6 +12,7 @@ import type {
   EtatDesSauvegardes,
   FicheDUneCandidature,
   FicheDUneOffre,
+  OffreListee,
   OffreSignalee,
   RelanceLue,
   RelanceSignalee,
@@ -66,6 +68,27 @@ export function ficheFictive(modifications: Partial<FicheDUneCandidature> = {}):
     correction: null,
     historique: [],
     relances: [],
+    offre: null,
+    ...modifications,
+  };
+}
+
+/** La candidature fictive d'une offre (#38) : envoyée le 18/11/2026 à 10:00, à Bruxelles. */
+export function candidatureDeLOffreFictive(modifications: Partial<CandidatureDeLOffre> = {}): CandidatureDeLOffre {
+  return { id: 5, statut: "Envoyee", envoyeeLe: "2026-11-18T09:00:00Z", ...modifications };
+}
+
+/** Une offre fictive de la liste des offres (#38), sans candidature. */
+export function offreListeeFictive(modifications: Partial<OffreListee> = {}): OffreListee {
+  return {
+    id: 3,
+    source: "TexteColle",
+    entreprise: { id: 1, nom: "Lumière Verte SA" },
+    poste: "Développeur .NET (H/F)",
+    lieu: "Liège",
+    publieeLe: "2026-11-17",
+    ajouteeLe: "2026-11-18T13:30:00Z",
+    candidature: null,
     ...modifications,
   };
 }
@@ -83,11 +106,12 @@ export function offreFictive(modifications: Partial<FicheDUneOffre> = {}): Fiche
     texte: "Développeur .NET (H/F)\n\nMissions : maintenir l'application.",
     ajouteeLe: "2026-11-18T13:30:00Z",
     doublonsPossibles: [],
+    candidature: null,
     ...modifications,
   };
 }
 
-/** Un doublon possible fictif d'une offre. */
+/** Un doublon possible fictif d'une offre, sans candidature. */
 export function offreSignaleeFictive(modifications: Partial<OffreSignalee> = {}): OffreSignalee {
   return {
     id: 2,
@@ -95,6 +119,7 @@ export function offreSignaleeFictive(modifications: Partial<OffreSignalee> = {})
     entreprise: { id: 1, nom: "Lumière Verte SA" },
     lieu: "Namur",
     ajouteeLe: "2026-11-10T08:00:00Z",
+    candidature: null,
     ...modifications,
   };
 }
@@ -248,6 +273,11 @@ export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
     corrigerUneOffre: vi.fn<ClientDeLApi["corrigerUneOffre"]>(async (offre, correction) => ({
       issue: "enregistree",
       fiche: offreFictive({ id: offre, poste: correction.poste.trim() }),
+    })),
+    listerLesOffres: vi.fn<ClientDeLApi["listerLesOffres"]>(async () => []),
+    postuler: vi.fn<ClientDeLApi["postuler"]>(async () => ({
+      issue: "enregistree",
+      candidature: candidatureFictive({ id: 5, poste: "Développeur .NET (H/F)", envoyeeLe: "2026-11-18T09:00:00Z" }),
     })),
     ...modifications,
   } satisfies ClientDeLApi;
