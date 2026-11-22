@@ -110,7 +110,7 @@ postuler ..> : include enregistrer
 | Relances et contacts | Ouvrir le brouillon d'une relance dans sa messagerie, que l'utilisateur envoie lui-même | [#14](https://github.com/moonn1000/sollicito/issues/14) | P3 |
 | Relances et contacts | Tenir les contacts d'une entreprise : nom, adresse e-mail ; les ajouter, les corriger, les supprimer | [#14](https://github.com/moonn1000/sollicito/issues/14) | P3 |
 | Relances et contacts | Régler le délai par défaut des relances, dans les réglages | [#14](https://github.com/moonn1000/sollicito/issues/14) | P3 |
-| Offres | Coller le texte d'une offre et compléter sa fiche | [#36](https://github.com/moonn1000/sollicito/issues/36) | P3 |
+| Offres | Coller le texte d'une offre, compléter sa fiche et la corriger, son texte gardé tel quel | [#36](https://github.com/moonn1000/sollicito/issues/36) | P3 |
 | Offres | Importer un fichier CSV d'offres ‡ | [#40](https://github.com/moonn1000/sollicito/issues/40) | P3 |
 | Offres | Parcourir les offres et faire d'une offre une candidature | [#38](https://github.com/moonn1000/sollicito/issues/38) | P3 |
 | IA facultative | Choisir son fournisseur d'IA, ou aucun : une clé Claude ou OpenAI ‡, chiffrée, ou un modèle local Ollama | [#43](https://github.com/moonn1000/sollicito/issues/43), [#48](https://github.com/moonn1000/sollicito/issues/48), [#45](https://github.com/moonn1000/sollicito/issues/45) | P4 |

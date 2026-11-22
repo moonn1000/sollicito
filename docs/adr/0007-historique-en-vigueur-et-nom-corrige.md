@@ -1,6 +1,6 @@
 # ADR-0007 : étapes corrigées et historique en vigueur, nom d'entreprise corrigé et entreprises proposées
 
-- **Statut** : acceptée
+- **Statut** : acceptée ; « À vérifier » (les offres) tranché par l'[ADR-0013](0013-offres-collees.md) : une entreprise que seule une offre désigne est proposée
 - **Date** : 2026-11-20
 - **Précise** : [ADR-0005](0005-modele-de-domaine.md), « Corriger un statut » (la correction par ajout, étendue aux étapes) ; « Reconnaître une entreprise » (« Le nom affiché reste celui de la première saisie ») ; « Alternatives écartées » et « Conséquences » (l'écran de saisie propose les entreprises déjà enregistrées)
 
