@@ -67,7 +67,7 @@ Une entreprise reste proposée tant qu'une candidature **ou une offre** la dési
 
 - **Le modèle commun** (`OffreRecue`) : la source, les parties de l'empreinte, les champs tels que reçus.
 - **Le port du cœur** (`IImportDesOffres`), que `ImportDesOffres` implémente : valider les champs par les règles du domaine, calculer l'empreinte sur les parties, appliquer les règles 2 et 3, reconnaître l'entreprise, enregistrer, dans une écriture exclusive.
-- **L'adaptateur** de l'offre collée (`ConnecteurDuTexteColle`) fait de la saisie de la route une offre reçue, d'une seule partie.
+- **Les adaptateurs** implémentent une seule interface, `IConnecteurDOffres` : une source, et les offres reçues de ce qu'elle donne. Le premier, celui de l'offre collée (`ConnecteurDuTexteColle`), fait de la saisie de la route une offre reçue, d'une seule partie.
 - **Un banc de tests de contrat** (`ContratDUnConnecteurDOffres`), dont chaque adaptateur hérite : sa source, ses parties, des champs passés tels quels, une entrée vide ou piégée. #40 en héritera.
 
 ### Le corps strict, champ répété compris
