@@ -7,6 +7,10 @@ import { TableauDeBord } from "./candidatures/TableauDeBord.tsx";
 import { HorsDeLaFenetre } from "./connexion.ts";
 import type { IssueDeLaRestauration, IssueDuBrouillon, IssueDuChoixDuDossier } from "./hote/canalDeLHote.ts";
 import { MiseEnPage, type Ecran } from "./miseEnPage/MiseEnPage.tsx";
+import { ANNONCE_DU_RENONCEMENT, annonceDeLOffre } from "./offres/affichage.ts";
+import { FicheDUneOffre } from "./offres/FicheDUneOffre.tsx";
+import { ModificationDUneOffre } from "./offres/ModificationDUneOffre.tsx";
+import { SaisieDUneOffre } from "./offres/SaisieDUneOffre.tsx";
 import { EcranDesReglages } from "./reglages/EcranDesReglages.tsx";
 import { annonceDeLaRestauration } from "./sauvegardes/affichage.ts";
 
@@ -25,7 +29,8 @@ const MESSAGES: Record<Connexion["etat"], string> = {
 
 /**
  * L'interface : la connexion à l'API locale, puis le tableau de bord, l'écran de saisie, la fiche d'une candidature et
- * sa modification, et les réglages (#26), dans la mise en page commune.
+ * sa modification, la saisie d'une offre, sa fiche et sa correction (#36), et les réglages (#26), dans la mise en page
+ * commune.
  */
 export function App({
   connecter,
@@ -94,6 +99,9 @@ export function App({
   const quandSupprimee = (fiche: Fiche) =>
     annoncer(`Candidature supprimée : ${fiche.poste}, chez ${fiche.entreprise.nom}.`, { nom: "tableau" });
 
+  // La fiche d'une autre offre : celle du même texte, ou un doublon possible (#36).
+  const ouvrirUneOffre = (offre: number) => naviguer({ nom: "offre", offre });
+
   // La base vient d'être remplacée : retour au tableau de bord, qui relit tout, avec l'annonce de la restauration.
   const quandRestauree = (issue: "restauree" | "restaureeDepuisUneBaseAbimee", copie: CopieGardee) => {
     setGeneration((avant) => avant + 1);
@@ -151,6 +159,38 @@ export function App({
             candidature={ecran.candidature}
             revenir={() => naviguer({ nom: "fiche", candidature: ecran.candidature })}
             quandModifiee={quandModifiee}
+          />
+        );
+      case "saisieDUneOffre":
+        return (
+          <SaisieDUneOffre
+            client={connexion.client}
+            quandEnregistree={(fiche) => annoncer(annonceDeLOffre("enregistrée", fiche), { nom: "offre", offre: fiche.id })}
+            ouvrirUneOffre={ouvrirUneOffre}
+            renoncer={() => annoncer(ANNONCE_DU_RENONCEMENT, { nom: "tableau" })}
+          />
+        );
+      case "offre":
+        return (
+          <FicheDUneOffre
+            key={ecran.offre}
+            client={connexion.client}
+            offre={ecran.offre}
+            annonce={annonce}
+            revenir={() => naviguer({ nom: "tableau" })}
+            modifier={() => naviguer({ nom: "modificationDUneOffre", offre: ecran.offre })}
+            ouvrirUneOffre={ouvrirUneOffre}
+          />
+        );
+      case "modificationDUneOffre":
+        return (
+          <ModificationDUneOffre
+            key={ecran.offre}
+            client={connexion.client}
+            offre={ecran.offre}
+            revenir={() => naviguer({ nom: "offre", offre: ecran.offre })}
+            quandModifiee={(fiche) => annoncer(annonceDeLOffre("modifiée", fiche), { nom: "offre", offre: fiche.id })}
+            ouvrirUneOffre={ouvrirUneOffre}
           />
         );
     }

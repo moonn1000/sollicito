@@ -10,6 +10,8 @@ import type {
   EtapeLue,
   EtatDesSauvegardes,
   FicheDUneCandidature,
+  FicheDUneOffre,
+  OffreSignalee,
   RelanceLue,
   RelanceSignalee,
 } from "../api/clientDeLApi.ts";
@@ -64,6 +66,35 @@ export function ficheFictive(modifications: Partial<FicheDUneCandidature> = {}):
     correction: null,
     historique: [],
     relances: [],
+    ...modifications,
+  };
+}
+
+/** Une offre collée fictive, de Lumière Verte SA, ajoutée le 18/11/2026 à 14:30, sans doublon possible. */
+export function offreFictive(modifications: Partial<FicheDUneOffre> = {}): FicheDUneOffre {
+  return {
+    id: 3,
+    source: "TexteColle",
+    entreprise: { id: 1, nom: "Lumière Verte SA" },
+    poste: "Développeur .NET (H/F)",
+    lieu: "Liège",
+    publieeLe: "2026-11-17",
+    adresse: "https://emploi.exemple.invalid/offres/123",
+    texte: "Développeur .NET (H/F)\n\nMissions : maintenir l'application.",
+    ajouteeLe: "2026-11-18T13:30:00Z",
+    doublonsPossibles: [],
+    ...modifications,
+  };
+}
+
+/** Un doublon possible fictif d'une offre. */
+export function offreSignaleeFictive(modifications: Partial<OffreSignalee> = {}): OffreSignalee {
+  return {
+    id: 2,
+    poste: "Développeur .NET",
+    entreprise: { id: 1, nom: "Lumière Verte SA" },
+    lieu: "Namur",
+    ajouteeLe: "2026-11-10T08:00:00Z",
     ...modifications,
   };
 }
@@ -208,6 +239,15 @@ export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
     changerLeDelaiParDefaut: vi.fn<ClientDeLApi["changerLeDelaiParDefaut"]>(async (jours) => ({
       issue: "change",
       reglage: { delaiParDefaut: jours, delaiLisible: true, fichierLisible: true },
+    })),
+    collerUneOffre: vi.fn<ClientDeLApi["collerUneOffre"]>(async (saisie) => ({
+      issue: "enregistree",
+      fiche: offreFictive({ id: 12, poste: saisie.poste.trim(), texte: saisie.texte.trim() }),
+    })),
+    lireUneOffre: vi.fn<ClientDeLApi["lireUneOffre"]>(async (offre) => offreFictive({ id: offre })),
+    corrigerUneOffre: vi.fn<ClientDeLApi["corrigerUneOffre"]>(async (offre, correction) => ({
+      issue: "enregistree",
+      fiche: offreFictive({ id: offre, poste: correction.poste.trim() }),
     })),
     ...modifications,
   } satisfies ClientDeLApi;

@@ -1,6 +1,15 @@
 import { expect, test, vi } from "vitest";
 import { JETON_FICTIF } from "../tests/canalSimule.ts";
-import { candidatureFictive, contactFictif, ficheFictive, relanceFictive, relanceSignaleeFictive, sauvegardesFictives } from "../tests/clientSimule.ts";
+import {
+  candidatureFictive,
+  contactFictif,
+  ficheFictive,
+  offreFictive,
+  offreSignaleeFictive,
+  relanceFictive,
+  relanceSignaleeFictive,
+  sauvegardesFictives,
+} from "../tests/clientSimule.ts";
 import { creerClientDeLApi, EN_TETE_DU_JETON, ErreurDeLApi } from "./clientDeLApi.ts";
 
 const SAISIE = { entreprise: "Lumière Verte SA", poste: "Comptable", envoyeeLe: "2026-03-27T23:30" };
@@ -407,4 +416,56 @@ test("les relances du tableau de bord et le délai par défaut se lisent ; le d�
     issue: "impossible",
     motif: "Le délai par défaut n'a pas changé : les réglages n'ont pas pu être relus.",
   });
+});
+
+const OFFRE = { texte: "Offre fictive.", entreprise: "Lumière Verte SA", poste: "Comptable", lieu: "", publieeLe: "", adresse: "" };
+
+test("une offre se colle en POST, l'accord ne part qu'avec garderLesDeux, et sa fiche se lit par son seul identifiant (#36)", async () => {
+  // Une réponse neuve à chaque appel : un corps ne se lit qu'une fois.
+  const envoyer = vi.fn<typeof fetch>(async () => Response.json(offreFictive(), { status: 201 }));
+  const client = creerClientDeLApi(JETON_FICTIF, envoyer);
+
+  expect(await client.collerUneOffre(OFFRE)).toEqual({ issue: "enregistree", fiche: offreFictive() });
+  await client.collerUneOffre(OFFRE, true);
+
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/offres");
+  expect(options?.method).toBe("POST");
+  expect(JSON.parse(String(options?.body))).toEqual(OFFRE);
+  expect(JSON.parse(String(envoyer.mock.calls[1]![1]?.body))).toEqual({ ...OFFRE, garderLesDeux: true });
+
+  const lecture = apiQuiRepond(Response.json(offreFictive()));
+  expect(await creerClientDeLApi(JETON_FICTIF, lecture).lireUneOffre(3)).toEqual(offreFictive());
+  expect(lecture.mock.calls[0]![0]).toBe("/api/offres/3");
+  await expect(creerClientDeLApi(JETON_FICTIF, lecture).lireUneOffre(0)).rejects.toBeInstanceOf(RangeError);
+});
+
+test("la correction d'une offre part en PUT, sans texte, et rend sa fiche", async () => {
+  const envoyer = apiQuiRepond(Response.json(offreFictive(), { status: 200 }));
+  const { texte: _texte, ...correction } = OFFRE;
+
+  expect(await creerClientDeLApi(JETON_FICTIF, envoyer).corrigerUneOffre(3, correction)).toEqual({ issue: "enregistree", fiche: offreFictive() });
+
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/offres/3");
+  expect(options?.method).toBe("PUT");
+  expect(JSON.parse(String(options?.body))).toEqual(correction);
+});
+
+test("les refus d'une offre reviennent champ par champ, et ses deux conflits se lisent ; un conflit mal formé est une erreur", async () => {
+  const refus = apiQuiRepond(Response.json({ status: 400, errors: { texte: ["Collez le texte de l'offre."], inconnu: ["ignoré"] } }, { status: 400 }));
+  const deja = apiQuiRepond(Response.json({ status: 409, motif: "dejaEnregistree", offre: { id: 7, ajouteeLe: "2026-11-18T13:30:00Z" } }, { status: 409 }));
+  const doublon = apiQuiRepond(Response.json({ status: 409, motif: "doublonPossible", doublons: [offreSignaleeFictive()] }, { status: 409 }));
+  const malForme = apiQuiRepond(Response.json({ status: 409, motif: "doublonPossible", doublons: [{ id: "2" }] }, { status: 409 }));
+  const inconnu = apiQuiRepond(Response.json({ status: 409, motif: "autre" }, { status: 409 }));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, refus).collerUneOffre(OFFRE)).toEqual({ issue: "refusee", refus: { texte: ["Collez le texte de l'offre."] } });
+  expect(await creerClientDeLApi(JETON_FICTIF, deja).collerUneOffre(OFFRE)).toEqual({
+    issue: "dejaEnregistree",
+    offre: { id: 7, ajouteeLe: "2026-11-18T13:30:00Z" },
+  });
+  expect(await creerClientDeLApi(JETON_FICTIF, doublon).collerUneOffre(OFFRE)).toEqual({ issue: "doublonPossible", doublons: [offreSignaleeFictive()] });
+  await expect(creerClientDeLApi(JETON_FICTIF, malForme).collerUneOffre(OFFRE)).rejects.toEqual(new ErreurDeLApi(409));
+  await expect(creerClientDeLApi(JETON_FICTIF, inconnu).collerUneOffre(OFFRE)).rejects.toEqual(new ErreurDeLApi(409));
+  await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(new Response(null, { status: 413 }))).collerUneOffre(OFFRE)).rejects.toEqual(new ErreurDeLApi(413));
 });

@@ -467,6 +467,51 @@ test("une relance se planifie depuis la fiche, et son brouillon passe par l'hôt
   expect(await page.locator("main b, main img").count()).toBe(0);
 });
 
+test("une offre collée et piégée s'enregistre, sa fiche l'affiche échappée, et le clic sur son annonce passe par l'hôte (#36)", async () => {
+  const { page, dossierDeDonnees } = fenetre;
+  const liens = join(dossierDeDonnees, "liens-ouverts.txt");
+  const annonce = "https://emploi.exemple.invalid/offres/36?source=fictive";
+  const poste = "<b>Brasseuse</b> & cheffe";
+  const texte =
+    '<h1>Offre</h1>\n<script>document.title = "piégé"</script>\n<img src="x" onerror="alert(1)">\n' +
+    "« Développeuse » à Liège, été 2026 : œuvres & co.\n\n\t" +
+    "Mission fictive. ".repeat(2_000);
+  const ouvertsAvant = (await lignes(liens)).length;
+  await rechargerLInterface();
+
+  await page.getByRole("button", { name: "Nouvelle offre" }).click();
+  await page.getByLabel("Texte de l'offre").fill(texte);
+  await page.getByLabel("Entreprise").fill("Brasserie Lune Rousse");
+  await page.getByLabel("Poste").fill(poste);
+  await page.getByLabel("Adresse de l'annonce").fill(annonce);
+  await page.getByRole("button", { name: "Enregistrer l'offre" }).click();
+
+  // L'écriture est passée par le contrôle de l'origine ; la fiche de l'offre s'ouvre, avec l'annonce.
+  await page.getByText(`Offre enregistrée : ${poste}, chez Brasserie Lune Rousse.`).waitFor();
+  await page.getByRole("heading", { level: 2, name: poste }).waitFor();
+  // Le texte s'affiche tel que collé, à ses blancs de bord près, comme du texte : ni titre, ni script, ni image, ni gras.
+  expect(await page.locator(".texte-de-l-offre").textContent()).toBe(texte.trim());
+  expect(await page.locator("main h1, main script, main img, main b").count()).toBe(0);
+  expect(await page.title()).toBe("Sollicito");
+
+  // Le lien de l'annonce s'ouvre en nouvelle fenêtre, sur le clic : la version de test note l'adresse que l'hôte aurait lancée.
+  await page.getByRole("link", { name: annonce }).click({ noWaitAfter: true });
+  for (let essai = 1; (await lignes(liens)).length <= ouvertsAvant; essai++) {
+    expect(essai).toBeLessThan(80);
+    await attendre(250);
+  }
+  expect((await lignes(liens)).slice(ouvertsAvant)).toEqual([annonce]);
+
+  // Le même texte, recollé avec un autre poste, est reconnu à son empreinte : rien ne s'ajoute.
+  await page.getByRole("button", { name: "Nouvelle offre" }).click();
+  await page.getByLabel("Texte de l'offre").fill(texte);
+  await page.getByLabel("Poste").fill("Autre poste fictif");
+  await page.getByRole("button", { name: "Enregistrer l'offre" }).click();
+  await page.getByText("Cette offre est déjà enregistrée : vous l'avez collée le", { exact: false }).waitFor();
+  await page.getByRole("button", { name: "Voir l'offre enregistrée" }).click();
+  await page.getByRole("heading", { level: 2, name: poste }).waitFor();
+});
+
 test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fichier", async () => {
   const { origineDeLApi, dossierDeDonnees } = fenetre;
 

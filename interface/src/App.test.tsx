@@ -22,6 +22,7 @@ test("connectée, l'interface le dit et ouvre le tableau de bord, dans la mise e
   expect(within(navigation).getAllByRole("button").map((bouton) => bouton.textContent)).toEqual([
     "Tableau de bord",
     "Nouvelle candidature",
+    "Nouvelle offre",
     "Réglages",
   ]);
   expect(within(navigation).getByRole("button", { name: "Tableau de bord" }).getAttribute("aria-current")).toBe("page");
@@ -93,7 +94,7 @@ test("depuis le tableau de bord, on ouvre la fiche, on fait avancer la candidatu
   // La fiche n'est pas une entrée de la navigation : aucune n'est marquée comme la page présente.
   const titre = await screen.findByRole("heading", { level: 2, name: "Fiche de la candidature" });
   const navigation = screen.getByRole("navigation", { name: "Navigation principale" });
-  expect(within(navigation).getAllByRole("button").map((bouton) => bouton.getAttribute("aria-current"))).toEqual([null, null, null]);
+  expect(within(navigation).getAllByRole("button").map((bouton) => bouton.getAttribute("aria-current"))).toEqual([null, null, null, null]);
   await waitFor(() => expect(document.activeElement).toBe(titre));
   fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Entretien" }));
   expect(await screen.findByText("Statut changé : Entretien.")).toBeDefined();
@@ -220,4 +221,22 @@ test("une copie restaurée ramène au tableau de bord, qui relit la base et anno
   expect(await screen.findByText("Poste fictif de la copie")).toBeDefined();
   expect(restaurerUneSauvegarde).toHaveBeenCalledWith("0123456789abcdef", expect.any(Function));
   expect(client.listerLesCandidatures).toHaveBeenCalledTimes(2);
+});
+
+test("une offre collée s'enregistre, puis sa fiche s'ouvre avec l'annonce, et mène à sa correction (#36)", async () => {
+  const client = clientSimule();
+  render(<App connecter={async () => client} />);
+  await screen.findByRole("heading", { level: 2, name: "Tableau de bord" });
+
+  fireEvent.click(screen.getByRole("button", { name: "Nouvelle offre" }));
+  expect(screen.getByRole("button", { name: "Nouvelle offre" }).getAttribute("aria-current")).toBe("page");
+  fireEvent.change(await screen.findByLabelText("Texte de l'offre"), { target: { value: "Offre fictive." } });
+  fireEvent.change(screen.getByLabelText("Poste"), { target: { value: "Comptable" } });
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer l'offre" }));
+
+  expect(await screen.findByText("Offre enregistrée : Comptable, chez Lumière Verte SA.")).toBeDefined();
+  expect(await screen.findByRole("heading", { level: 2, name: "Développeur .NET (H/F)" })).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Modifier l'offre" }));
+  expect(await screen.findByRole("heading", { level: 2, name: "Modifier l'offre" })).toBeDefined();
+  expect(client.lireUneOffre).toHaveBeenCalledWith(12);
 });
