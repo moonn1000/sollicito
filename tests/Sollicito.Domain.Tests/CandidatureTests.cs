@@ -24,6 +24,45 @@ public sealed class CandidatureTests
     }
 
     [Fact]
+    public void Une_candidature_saisie_sans_offre_n_en_designe_aucune()
+    {
+        Assert.Null(Candidature.Enregistrer(7, "Comptable", Maintenant, Maintenant).OffreId);
+    }
+
+    [Fact]
+    public void Postuler_a_une_offre_fait_une_candidature_envoyee_qui_la_designe()
+    {
+        var candidature = Candidature.Postuler(12, 7, " Comptable (H/F) ", Utc(2026, 11, 18, 9, 0), Maintenant);
+
+        Assert.Equal(12, candidature.OffreId);
+        Assert.Equal(7, candidature.EntrepriseId);
+        Assert.Equal("Comptable (H/F)", candidature.Poste);
+        Assert.Equal(StatutDeCandidature.Envoyee, candidature.Statut);
+        Assert.Empty(candidature.Evenements);
+    }
+
+    [Fact]
+    public void Postuler_suit_les_regles_de_l_enregistrement()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Candidature.Postuler(0, 7, "Comptable", Maintenant, Maintenant));
+        Assert.Throws<ArgumentException>(() => Candidature.Postuler(12, 7, "Comptable", Maintenant.AddSeconds(1), Maintenant));
+        Assert.Throws<ArgumentException>(() => Candidature.Postuler(12, 7, "Comp\u0007table", Maintenant, Maintenant));
+    }
+
+    [Fact]
+    public void La_modification_d_une_candidature_ne_la_detache_pas_de_son_offre()
+    {
+        var candidature = Candidature.Postuler(12, 7, "Comptable", Utc(2026, 11, 18, 9, 0), Maintenant);
+
+        candidature.RattacherA(8);
+        candidature.ChangerDePoste("Aide-comptable");
+        candidature.CorrigerLEnvoi(Utc(2026, 11, 17, 9, 0), Maintenant);
+        Assert.True(candidature.EssayerDeChangerDeStatut(StatutDeCandidature.Refusee, Maintenant, out _));
+
+        Assert.Equal(12, candidature.OffreId);
+    }
+
+    [Fact]
     public void Une_candidature_envoyee_a_l_instant_present_est_admise()
     {
         Assert.Equal(Maintenant, Candidature.Enregistrer(1, "Comptable", Maintenant, Maintenant).EnvoyeeLe);

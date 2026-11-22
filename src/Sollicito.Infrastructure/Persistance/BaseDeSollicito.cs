@@ -67,6 +67,10 @@ public sealed class BaseDeSollicito(DbContextOptions<BaseDeSollicito> options) :
             // L'entreprise vit à part : supprimer une candidature la laisse (#25), et une entreprise qui a des
             // candidatures ne se supprime pas.
             candidature.HasOne<Entreprise>().WithMany().HasForeignKey(c => c.EntrepriseId).OnDelete(DeleteBehavior.Restrict);
+            // L'offre d'où elle vient (#38, ADR-0014) : une offre fait l'objet d'au plus une candidature, et la base
+            // elle-même refuse la seconde (l'index unique d'un lien un à un). Une offre supprimée, ce que la V1 ne fait
+            // jamais, laisserait sa candidature, sans offre : SET NULL, figé dans le texte de la table.
+            candidature.HasOne<Offre>().WithOne().HasForeignKey<Candidature>(c => c.OffreId).IsRequired(false).OnDelete(DeleteBehavior.SetNull);
             candidature.HasIndex(c => c.EnvoyeeLe);
             // Ses événements n'existent que par elle : supprimer la candidature les supprime aussi (#25). La
             // candidature les tient dans un champ, qu'elle seule complète.

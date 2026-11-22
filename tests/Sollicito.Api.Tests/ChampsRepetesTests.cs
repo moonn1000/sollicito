@@ -7,7 +7,9 @@ namespace Sollicito.Api.Tests;
 /// <summary>
 /// Un champ répété rend le corps illisible (400) sur toutes les routes de l'API (#36) : sans le réglage
 /// <c>AllowDuplicateProperties = false</c>, le dernier l'emporterait, et le corps strict de #10 se contournerait. Une
-/// route de chaque famille : candidatures, fiche, contacts, relances, réglages, offres. Rien ne s'écrit.
+/// route de chaque famille : candidatures, fiche, contacts, relances, réglages, offres, « Postuler » (#38). Les réglages
+/// JSON du web lisent les noms sans tenir compte de la casse : un champ répété à la casse près (« envoyeeLe », puis
+/// « EnvoyeeLe ») est le même champ, répété, et se refuse de même (suites de #36, #98). Rien ne s'écrit.
 /// </summary>
 public sealed class ChampsRepetesTests
 {
@@ -19,6 +21,8 @@ public sealed class ChampsRepetesTests
         { "POST", "/api/candidatures/1/relances", """{"delai":7,"delai":30}""" },
         { "PUT", "/api/reglages/relances", """{"delaiParDefaut":10,"delaiParDefaut":20}""" },
         { "POST", "/api/offres", """{"texte":"Offre fictive.","poste":"Comptable","garderLesDeux":false,"garderLesDeux":true}""" },
+        { "POST", "/api/offres/1/candidature", """{"envoyeeLe":"2026-11-10T09:00","envoyeeLe":"2026-11-11T09:00"}""" },
+        { "POST", "/api/offres/1/candidature", """{"envoyeeLe":"2026-11-10T09:00","EnvoyeeLe":"2026-11-11T09:00"}""" },
     };
 
     [Theory]
@@ -27,6 +31,8 @@ public sealed class ChampsRepetesTests
     {
         await using var api = await ApiLancee.LancerAsync(new HorlogeDeTest().Utiliser);
         await api.EnregistrerAvecSuccesAsync("Brasserie Lune Rousse", "Brasseuse", "2026-11-10T09:00");
+        // Une offre à qui postuler, d'un autre texte que celle qu'on colle (#38).
+        await api.CollerAvecSuccesAsync("Offre fictive à laquelle postuler.", "Brasseuse", entreprise: "Brasserie Lune Rousse");
         var avant = await InstantaneAsync(api);
 
         using var reponse = await api.EcrireAsync(new HttpMethod(methode), chemin, corps);
@@ -38,14 +44,14 @@ public sealed class ChampsRepetesTests
         Assert.True(sansRepetition.IsSuccessStatusCode, $"{methode} {chemin} : {sansRepetition.StatusCode}");
     }
 
-    // La seconde occurrence du champ répété retirée.
+    // La seconde occurrence du champ répété retirée, à la casse près.
     private static string SansLaRepetition(string corps)
     {
-        foreach (var champ in new[] { "poste", "type", "email", "delai", "delaiParDefaut", "garderLesDeux" })
+        foreach (var champ in new[] { "poste", "type", "email", "delai", "delaiParDefaut", "garderLesDeux", "envoyeeLe" })
         {
             var marque = "\"" + champ + "\":";
             var premiere = corps.IndexOf(marque, StringComparison.Ordinal);
-            var seconde = premiere < 0 ? -1 : corps.IndexOf(marque, premiere + marque.Length, StringComparison.Ordinal);
+            var seconde = premiere < 0 ? -1 : corps.IndexOf(marque, premiere + marque.Length, StringComparison.OrdinalIgnoreCase);
             if (seconde >= 0)
             {
                 var fin = corps.IndexOfAny([',', '}'], seconde);

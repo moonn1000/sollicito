@@ -7,9 +7,8 @@ import { ModificationDUneOffre } from "./ModificationDUneOffre.tsx";
 function afficher(client: ClientDeLApi = clientSimule()) {
   const revenir = vi.fn();
   const quandModifiee = vi.fn();
-  const ouvrirUneOffre = vi.fn();
-  render(<ModificationDUneOffre client={client} offre={3} revenir={revenir} quandModifiee={quandModifiee} ouvrirUneOffre={ouvrirUneOffre} />);
-  return { client, revenir, quandModifiee, ouvrirUneOffre };
+  render(<ModificationDUneOffre client={client} offre={3} revenir={revenir} quandModifiee={quandModifiee} />);
+  return { client, revenir, quandModifiee };
 }
 
 test("la correction préremplit les champs de l'offre, sans son texte, et n'envoie jamais de texte", async () => {

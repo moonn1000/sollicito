@@ -12,8 +12,14 @@ public interface IDepotDesOffres
     /// </summary>
     Task<IEcritureDesOffres> CommencerUneEcritureAsync(CancellationToken annulation);
 
-    /// <summary>La fiche de l'offre de cet identifiant, doublons possibles compris ; rien si elle n'existe pas.</summary>
+    /// <summary>La fiche de l'offre de cet identifiant, doublons possibles et candidature compris ; rien si elle n'existe pas.</summary>
     Task<FicheDUneOffre?> LireAsync(int id, CancellationToken annulation);
+
+    /// <summary>
+    /// Toutes les offres, sans leur texte, avec leur candidature (#38) : les plus récemment ajoutées d'abord, puis par
+    /// ordre d'enregistrement, la plus récente d'abord.
+    /// </summary>
+    Task<IReadOnlyList<OffreListee>> ListerAsync(CancellationToken annulation);
 }
 
 /// <summary>Une écriture exclusive dans la base. La quitter sans l'avoir validée l'annule.</summary>

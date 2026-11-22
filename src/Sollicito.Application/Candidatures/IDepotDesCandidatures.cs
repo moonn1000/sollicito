@@ -59,6 +59,15 @@ public interface IEcritureDesCandidatures : IAsyncDisposable
     /// <summary>Le nombre de candidatures que porte l'entreprise de cet identifiant.</summary>
     Task<int> CompterLesCandidaturesAsync(int entrepriseId, CancellationToken annulation);
 
+    /// <summary>Le nombre d'offres qui désignent l'entreprise de cet identifiant (#36, #38).</summary>
+    Task<int> CompterLesOffresAsync(int entrepriseId, CancellationToken annulation);
+
+    /// <summary>
+    /// L'offre de cet identifiant, telle que « Postuler » la reprend (#38) : son entreprise, son poste, et la candidature
+    /// qui la désigne déjà, s'il y en a une. Rien si elle n'existe pas.
+    /// </summary>
+    Task<OffreAPostuler?> TrouverLOffreAPostulerAsync(int offreId, CancellationToken annulation);
+
     /// <summary>
     /// La candidature de cet identifiant, avec tout son historique, ses relances, son entreprise et les destinataires de
     /// ses relances, pour la faire avancer ou la modifier : ce qui change en elle (statut, événements et relances ajoutés
@@ -96,6 +105,13 @@ public interface IEcritureDesCandidatures : IAsyncDisposable
     /// </summary>
     Task ValiderAsync(CancellationToken annulation);
 }
+
+/// <summary>Ce que « Postuler » lit d'une offre, dans l'écriture qui crée sa candidature (#38).</summary>
+/// <param name="Id">L'identifiant de l'offre.</param>
+/// <param name="Entreprise">Son entreprise, sous son nom affiché, ou rien pour une offre anonyme.</param>
+/// <param name="Poste">Son poste, tel qu'enregistré.</param>
+/// <param name="CandidatureId">La candidature qui la désigne déjà, ou rien.</param>
+public sealed record OffreAPostuler(int Id, EntrepriseConnue? Entreprise, string Poste, int? CandidatureId);
 
 /// <summary>Une candidature, son historique et ses relances compris, et son entreprise.</summary>
 /// <param name="Candidature">La candidature, avec tous ses événements et ses relances, dans l'ordre de leur enregistrement.</param>

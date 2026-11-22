@@ -25,6 +25,8 @@ internal sealed class DepotDesOffres(BaseDeSollicito baseDeSollicito) : IDepotDe
             where offre.Id == id
             join entreprise in baseDeSollicito.Entreprises.AsNoTracking() on offre.EntrepriseId equals (int?)entreprise.Id into entreprises
             from entreprise in entreprises.DefaultIfEmpty()
+            join candidature in baseDeSollicito.Candidatures.AsNoTracking() on (int?)offre.Id equals candidature.OffreId into candidatures
+            from candidature in candidatures.DefaultIfEmpty()
             select new
             {
                 offre.Id,
@@ -37,6 +39,7 @@ internal sealed class DepotDesOffres(BaseDeSollicito baseDeSollicito) : IDepotDe
                 offre.Adresse,
                 offre.Texte,
                 offre.AjouteeLe,
+                Candidature = candidature == null ? null : new CandidatureDeLOffre(candidature.Id, candidature.Statut, candidature.EnvoyeeLe),
             })
             .SingleOrDefaultAsync(annulation);
         if (lue is null)
@@ -57,10 +60,33 @@ internal sealed class DepotDesOffres(BaseDeSollicito baseDeSollicito) : IDepotDe
             lue.Adresse,
             lue.Texte,
             lue.AjouteeLe,
-            doublons);
+            doublons,
+            lue.Candidature);
     }
 
-    // Règle 3 : même entreprise, même poste normalisé, quelle que soit la source ; les plus anciennes d'abord.
+    // Sans le texte : la liste n'en a pas besoin, et l'interface filtre elle-même les champs qu'elle montre (#38). Une
+    // offre a au plus une candidature (index unique) : la jointure ne double aucune ligne.
+    public async Task<IReadOnlyList<OffreListee>> ListerAsync(CancellationToken annulation) =>
+        await (
+            from offre in baseDeSollicito.Offres.AsNoTracking()
+            join entreprise in baseDeSollicito.Entreprises.AsNoTracking() on offre.EntrepriseId equals (int?)entreprise.Id into entreprises
+            from entreprise in entreprises.DefaultIfEmpty()
+            join candidature in baseDeSollicito.Candidatures.AsNoTracking() on (int?)offre.Id equals candidature.OffreId into candidatures
+            from candidature in candidatures.DefaultIfEmpty()
+            orderby offre.AjouteeLe descending, offre.Id descending
+            select new OffreListee(
+                offre.Id,
+                offre.Source,
+                entreprise == null ? null : new EntrepriseConnue(entreprise.Id, entreprise.Nom),
+                offre.Poste,
+                offre.Lieu,
+                offre.PublieeLe,
+                offre.AjouteeLe,
+                candidature == null ? null : new CandidatureDeLOffre(candidature.Id, candidature.Statut, candidature.EnvoyeeLe)))
+            .ToListAsync(annulation);
+
+    // Règle 3 : même entreprise, même poste normalisé, quelle que soit la source ; les plus anciennes d'abord. Chacune avec
+    // sa candidature : un doublon possible déjà postulé se montre (#38).
     private static async Task<IReadOnlyList<OffreSignalee>> DoublonsPossiblesAsync(
         BaseDeSollicito baseDeSollicito,
         int entrepriseId,
@@ -71,8 +97,16 @@ internal sealed class DepotDesOffres(BaseDeSollicito baseDeSollicito) : IDepotDe
             from offre in baseDeSollicito.Offres.AsNoTracking()
             where offre.EntrepriseId == entrepriseId && offre.PosteNormalise == posteNormalise && (sauf == null || offre.Id != sauf)
             join entreprise in baseDeSollicito.Entreprises.AsNoTracking() on offre.EntrepriseId equals (int?)entreprise.Id
+            join candidature in baseDeSollicito.Candidatures.AsNoTracking() on (int?)offre.Id equals candidature.OffreId into candidatures
+            from candidature in candidatures.DefaultIfEmpty()
             orderby offre.AjouteeLe, offre.Id
-            select new OffreSignalee(offre.Id, offre.Poste, new EntrepriseConnue(entreprise.Id, entreprise.Nom), offre.Lieu, offre.AjouteeLe))
+            select new OffreSignalee(
+                offre.Id,
+                offre.Poste,
+                new EntrepriseConnue(entreprise.Id, entreprise.Nom),
+                offre.Lieu,
+                offre.AjouteeLe,
+                candidature == null ? null : new CandidatureDeLOffre(candidature.Id, candidature.Statut, candidature.EnvoyeeLe)))
             .ToListAsync(annulation);
 
     private sealed class Ecriture(BaseDeSollicito baseDeSollicito, IDbContextTransaction transaction) : IEcritureDesOffres

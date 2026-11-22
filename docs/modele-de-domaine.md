@@ -1,10 +1,10 @@
 # Modèle de domaine de la V1
 
-- **Mis à jour le** : 2026-11-22, avec #36 (coller une offre)
-- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D5 ; [ADR-0005](adr/0005-modele-de-domaine.md) (entreprises reconnues, offres dédoublonnées, dates et heures) ; [ADR-0007](adr/0007-historique-en-vigueur-et-nom-corrige.md) (étapes corrigées et historique en vigueur, nom affiché corrigé, entreprises proposées) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) (réglages de l'application, hors de la base) ; [ADR-0011](adr/0011-relances-et-brouillon.md) (contact minimal, relances, brouillon et délai par défaut) ; [ADR-0013](adr/0013-offres-collees.md) (offres collées, empreinte, doublon possible avec accord, entreprises proposées)
+- **Mis à jour le** : 2026-11-22, avec #36 (coller une offre), puis avec #38 (postuler à une offre)
+- **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D5 ; [ADR-0005](adr/0005-modele-de-domaine.md) (entreprises reconnues, offres dédoublonnées, dates et heures) ; [ADR-0007](adr/0007-historique-en-vigueur-et-nom-corrige.md) (étapes corrigées et historique en vigueur, nom affiché corrigé, entreprises proposées) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) (réglages de l'application, hors de la base) ; [ADR-0011](adr/0011-relances-et-brouillon.md) (contact minimal, relances, brouillon et délai par défaut) ; [ADR-0013](adr/0013-offres-collees.md) (offres collées, empreinte, doublon possible avec accord, entreprises proposées) ; [ADR-0014](adr/0014-postuler-a-une-offre.md) (postuler à une offre, le lien porté par la candidature, la liste filtrée dans la page)
 - **Périmètre** : les huit entités de la D5. Six entrent en base en V1 : Entreprise, Contact, Offre, Candidature, Événement de candidature et Relance. Profil et Document sont modélisés ici et entrent en base en V2 ([spec de la V1](https://github.com/moonn1000/sollicito/issues/5), « Entités en base »).
 
-Ce modèle remplace l'esquisse de la D5 (ADR-0005). Le code du domaine le suit depuis #11 (`src/Sollicito.Domain`) : une pull request qui s'en écarte met ce document à jour. #11 y a ajouté les règles de la saisie (voir « Saisie d'une candidature ») ; #12, celles d'une étape (voir « Noter une étape ») ; #25, celles de la modification et de la suppression (voir « Modifier ou supprimer une candidature ») ; #14, celles des relances et du contact (voir « Relances » et « Contact ») ; #36, celles d'une offre collée et de sa correction (voir « Coller une offre »).
+Ce modèle remplace l'esquisse de la D5 (ADR-0005). Le code du domaine le suit depuis #11 (`src/Sollicito.Domain`) : une pull request qui s'en écarte met ce document à jour. #11 y a ajouté les règles de la saisie (voir « Saisie d'une candidature ») ; #12, celles d'une étape (voir « Noter une étape ») ; #25, celles de la modification et de la suppression (voir « Modifier ou supprimer une candidature ») ; #14, celles des relances et du contact (voir « Relances » et « Contact ») ; #36, celles d'une offre collée et de sa correction (voir « Coller une offre ») ; #38, celles de « Postuler » et de la liste des offres (voir « Postuler à une offre »).
 
 ## Les entités
 
@@ -112,7 +112,7 @@ Pour lire le diagramme :
 | Entreprise – Candidature | 1 – 0..* | une candidature a toujours son entreprise, offre ou pas |
 | Entreprise – Offre | 0..1 – 0..* | une offre peut taire son entreprise : offre anonyme, ligne de CSV sans entreprise |
 | Entreprise – Contact | 1 – 0..* | un contact appartient à une seule entreprise |
-| Offre – Candidature | 0..1 – 0..1 | une offre fait l'objet d'au plus une candidature ; une candidature peut se passer d'offre (#11) |
+| Offre – Candidature | 0..1 – 0..1 | une offre fait l'objet d'au plus une candidature ; une candidature peut se passer d'offre (#11). En base, la candidature porte l'identifiant de son offre, unique (#38, ADR-0014) |
 | Candidature – Événement de candidature | 1 – 0..* | l'historique de la candidature |
 | Candidature – Relance | 1 – 0..* | ses relances, dont une seule à faire à la fois |
 | Contact – Relance | 0..1 – 0..* | le destinataire : à la planification, un contact de l'entreprise de la candidature, ou personne |
@@ -298,7 +298,7 @@ Une offre arrive par un connecteur (ADR-0001, D6) : en V1, le texte collé (#36)
 - À l'import d'un fichier CSV (#40), une ligne reconnue par la règle 1 ou 2 est écartée et signalée dans le compte rendu ; un doublon possible (règle 3) est importé, et signalé comme tel.
 - Le texte d'une offre ne change plus après l'import (#36 le garde tel quel) : son empreinte reste juste. Ses champs, eux, se corrigent (voir « Coller une offre »).
 - Un même texte recollé, avec d'autres champs, n'écrase rien : l'offre enregistrée reste telle quelle, et l'écran mène à elle.
-- **Postuler** (#38) : la candidature reprend l'entreprise et le poste de l'offre, puis vit sa vie ; modifier l'offre ensuite ne la change pas. Une offre sans entreprise en demande une avant. Une offre qui a déjà sa candidature n'en reçoit pas une seconde, et le signal de la règle 3 vaut aussi à ce moment : un doublon possible déjà postulé est montré. Supprimer la candidature (#25) laisse l'offre, qui peut en recevoir une nouvelle.
+- **Postuler** (#38) : la candidature reprend l'entreprise et le poste de l'offre, puis vit sa vie ; modifier l'offre ensuite ne la change pas. Une offre sans entreprise en reçoit une avant, par sa correction. Une offre qui a déjà sa candidature n'en reçoit pas une seconde, et le signal de la règle 3 vaut aussi à ce moment : un doublon possible déjà postulé est montré, sans bloquer. Supprimer la candidature (#25) laisse l'offre, qui peut en recevoir une nouvelle. Le détail suit, dans « Postuler à une offre ».
 
 ## Coller une offre
 
@@ -319,6 +319,33 @@ Un champ facultatif vide (absent, rien, ou que des blancs) ne fait rien.
 - **L'adresse de l'annonce** perd ses blancs du début et de la fin ; il reste au plus 2 000 caractères, sans blanc ni caractère de contrôle, de direction ou invalide. Elle commence par `http://` ou `https://`, et c'est une adresse absolue, avec un hôte, sans identifiants (`nom@…`, `nom:motdepasse@…`). Sollicito ne la lit jamais : seul le navigateur par défaut l'ouvre, sur le clic de l'utilisateur (ADR-0006).
 - **Les règles 2 et 3** (voir « Dédoublonner les offres ») se jouent dans la même écriture exclusive que l'enregistrement : la même offre recollée n'est ni recréée ni écrasée, et un doublon possible ne s'enregistre qu'avec l'accord de l'utilisateur. Une offre recollée ou abandonnée ne crée aucune entreprise.
 - **Corriger une offre** : depuis sa fiche, ses champs se corrigent, aux mêmes règles ; jamais son texte ni sa source, qui ne changent plus après l'import. L'entreprise saisie de nouveau se reconnaît par sa clé, ou se crée, sans qu'aucune entreprise ne soit renommée : le nom affiché ne se corrige que par la modification d'une candidature (ADR-0007). La règle 3 se refait quand l'entreprise ou le poste normalisé change. Une offre corrigée ne change aucune candidature (#38).
+- **Une autre offre, sur place** : dans la saisie comme dans la correction, l'offre du même texte (règle 2) ou un doublon possible (règle 3) s'ouvre dans un aperçu, sans quitter le formulaire : le texte collé et les champs remplis restent (#38, suites de #36).
+
+## Postuler à une offre
+
+Depuis la fiche d'une offre, « Postuler » (#38, ADR-0014) en fait une candidature. La candidature désigne l'offre par son identifiant ; une offre fait l'objet d'au plus une candidature.
+
+| Ce que fait « Postuler » | Règle |
+| --- | --- |
+| La date et l'heure d'envoi | la seule saisie : celles de la saisie d'une candidature (voir « Saisie d'une candidature ») |
+| L'entreprise et le poste | ceux de l'offre, lus en base dans l'écriture qui crée la candidature ; ni l'un ni l'autre ne vient de l'écran |
+| Le statut | Envoyée, comme toute candidature |
+
+- **Les refus**, dans cet ordre, sans que rien ne s'enregistre : une offre qui n'existe pas ; une offre qui a déjà sa candidature, que le refus désigne ; une offre sans entreprise ; un poste d'offre que la candidature ne peut pas reprendre, ce qu'une base restaurée, retouchée hors de Sollicito, peut seule porter : le poste d'une offre admise est un texte d'une ligne avec au moins une lettre ou un chiffre, donc toujours un poste de candidature admis ; puis une date d'envoi refusée. Aucun refus ne crée d'entreprise.
+- **L'offre sans entreprise** reçoit d'abord la sienne, par sa correction (voir « Coller une offre ») : reconnue par sa clé ou créée, la règle 3 refaite avec son accord. L'offre et sa candidature désignent ainsi la même entreprise.
+- **Au plus une candidature** : « Postuler » vérifie l'offre et crée la candidature dans une même écriture exclusive, et la base n'admet qu'une candidature par offre (un index unique) : deux « Postuler » simultanés n'en créent qu'une.
+- **Le doublon possible déjà postulé** : la fiche de l'offre marque, parmi ses doublons possibles, ceux qui ont leur candidature, et « Postuler » les rappelle avant l'envoi, sans bloquer.
+- **Chacun vit sa vie** : corriger l'offre ne change pas sa candidature ; modifier la candidature (#25) ne change pas son offre ; ni l'un ni l'autre ne défait le lien. La fiche de l'offre mène à sa candidature, et la fiche de la candidature à son offre.
+- **Supprimer la candidature** (#25) emporte le lien : l'offre reste, et peut en recevoir une nouvelle ; son entreprise reste proposée tant que l'offre la désigne (voir « Reconnaître une entreprise »). Une offre supprimée, ce que la V1 ne fait jamais, laisserait sa candidature, sans offre.
+
+### La liste des offres
+
+- **Toutes les offres**, sans leur texte, avec leur candidature, les plus récemment ajoutées d'abord, puis par ordre d'enregistrement ; sans borne.
+- **Les filtres**, dans l'interface, sur la liste déjà lue : rien de la recherche ne quitte la page.
+  - le texte cherché, de 200 caractères au plus : chacun de ses mots se trouve dans le poste, l'entreprise ou le lieu, sans tenir compte des accents, des majuscules ni des blancs ;
+  - la source : toutes, ou l'une d'elles ;
+  - la date d'ajout : toutes, ou les 7, 30 ou 90 derniers jours, en date locale, aujourd'hui compris. La date de publication, facultative, cacherait les offres qui n'en ont pas.
+- **Les filtres restent le temps de la session**, en mémoire, quand on ouvre une fiche puis qu'on revient.
 
 ## Dates et heures
 
@@ -407,9 +434,9 @@ La fiche d'une candidature (#12) mène à sa modification et à sa suppression (
 - **L'historique en vigueur commence à l'envoi** : la date d'envoi corrigée ne passe pas après le premier événement en vigueur de l'historique, le plus ancien, quelle que soit sa sorte : étape, changement de statut ou correction. Un événement marqué comme corrigé ne compte plus. À l'instant même de ce premier événement, elle est admise. L'écran de modification rappelle cette date sous le champ. La modification relit l'historique dans la même écriture exclusive que les actions de la fiche : une étape notée en même temps ne passe jamais avant l'envoi.
 - **Une date inchangée** : renvoyée telle que l'écran la montre, c'est-à-dire la même minute dans le fuseau du poste, la date d'envoi garde l'instant enregistré, sans repasser par les règles. Corriger le seul poste n'est ainsi jamais refusé pour sa date, ni ne la déplace : ni l'heure qui existe deux fois, relue à l'heure d'hiver, ni une horloge reculée depuis l'envoi, ni les secondes que l'écran ne montre pas.
 - **Ni le statut ni l'historique** ne changent : aucun événement ne s'ajoute, et chacun garde sa date. Le statut n'est pas un champ : l'API refuse un corps qui en porte un. Une candidature close se modifie comme une autre.
-- **Le nom de l'entreprise corrigé** (ADR-0007) : un nom de même clé qu'une entreprise enregistrée, mais écrit autrement, corrige le nom affiché de cette entreprise, pour toutes ses candidatures, celle qu'on modifie comprise.
-  - La correction attend l'accord de l'utilisateur. Sans lui, l'API refuse la modification, sans rien changer. Son refus porte le nom enregistré, lu en base, et le nombre de candidatures concernées, jamais le texte saisi.
-  - L'écran le dit avant l'enregistrement : quel nom serait corrigé, en quoi, pour combien de candidatures, et si la candidature change d'entreprise. L'utilisateur corrige le nom, ou le garde : la candidature rejoint alors l'entreprise sous son nom enregistré, que rien ne renomme.
+- **Le nom de l'entreprise corrigé** (ADR-0007) : un nom de même clé qu'une entreprise enregistrée, mais écrit autrement, corrige le nom affiché de cette entreprise, pour toutes ses candidatures, celle qu'on modifie comprise, et pour les offres qui la désignent.
+  - La correction attend l'accord de l'utilisateur. Sans lui, l'API refuse la modification, sans rien changer. Son refus porte le nom enregistré, lu en base, le nombre de candidatures concernées et celui des offres qui désignent l'entreprise (#38, ADR-0014), jamais le texte saisi.
+  - L'écran le dit avant l'enregistrement : quel nom serait corrigé, en quoi, pour combien de candidatures et d'offres, et si la candidature change d'entreprise. L'utilisateur corrige le nom, ou le garde : la candidature rejoint alors l'entreprise sous son nom enregistré, que rien ne renomme.
   - La règle vaut aussi quand le nom saisi désigne une autre entreprise que celle de la candidature : elle la rejoint, et son nom se corrige avec l'accord.
   - Un nom écrit exactement comme le nom enregistré, à ses blancs près, ou d'une autre clé, ne demande rien.
   - La saisie d'une candidature (#11), elle, garde le nom de la première saisie, sans avertissement.
@@ -439,7 +466,7 @@ Ni les réglages ni les sauvegardes ne sont des entités du domaine : rien d'eux
 | #14 | le contact minimal ; les règles des relances : candidature en cours, une seule à faire, échéance sur la date, délai par défaut en réglage, rangé dans `reglages.json` (#26), relance échue ou de la semaine, choix du destinataire, clôture dans l'historique (la troisième sorte d'événement), abandon quand la candidature se clôt ; et ce que #25 lui confie, faute de relances en base : une date d'envoi corrigée ne déplace pas l'échéance, un changement d'entreprise retire le destinataire de la relance à faire, et la suppression de la candidature emporte ses relances |
 | #25 | les champs modifiables : poste, entreprise (reconnue de nouveau) et date d'envoi, mais pas le statut ; une date d'envoi corrigée qui ne passe pas après le premier événement en vigueur, et qui, renvoyée inchangée, garde l'instant enregistré ; le nom affiché corrigé ; les entreprises proposées, celles qu'une candidature porte encore (#36 y ajoute celles qu'une offre désigne) ; la correction d'une étape et sa version en vigueur ; la suppression d'une candidature emporte ses événements, et laisse son entreprise en base |
 | #36 | la règle 2, sur le texte collé, et l'empreinte pas à pas ; la règle 3, et l'accord de l'utilisateur ; le texte gardé tel quel, ses fins de ligne et ses caractères refusés ; les champs d'une offre, leur correction, jamais celle du texte ; l'adresse de l'annonce ; les entreprises qu'une offre désigne, parmi les propositions ; l'identifiant externe repoussé en V2 |
-| #38 | une offre, au plus une candidature ; « Postuler » reprend l'entreprise et le poste ; l'offre sans entreprise ; et ce que #25 lui confie, faute d'offres en base : supprimer la candidature laisse son offre, qui peut en recevoir une nouvelle ; de #36, l'entreprise de l'offre, déjà proposée, et ses doublons possibles, relus avec la fiche |
+| #38 | une offre, au plus une candidature, le lien porté par la candidature ; « Postuler » reprend l'entreprise et le poste, lus en base, et ne prend de l'écran que la date d'envoi ; l'offre sans entreprise, qui reçoit la sienne par sa correction ; le doublon possible déjà postulé, montré ; la liste des offres et ses filtres, dans la page ; le nom corrigé d'une entreprise, qui compte aussi ses offres ; et ce que #25 lui confie, faute d'offres en base : supprimer la candidature laisse son offre, qui peut en recevoir une nouvelle ; de #36, l'entreprise de l'offre, déjà proposée, et ses doublons possibles, relus avec la fiche |
 | #40 | les règles 2 et 3 pour une ligne de CSV, et leur compte rendu |
 
 ## En V2

@@ -7,9 +7,11 @@ import { TableauDeBord } from "./candidatures/TableauDeBord.tsx";
 import { HorsDeLaFenetre } from "./connexion.ts";
 import type { IssueDeLaRestauration, IssueDuBrouillon, IssueDuChoixDuDossier } from "./hote/canalDeLHote.ts";
 import { MiseEnPage, type Ecran } from "./miseEnPage/MiseEnPage.tsx";
-import { ANNONCE_DU_RENONCEMENT, annonceDeLOffre } from "./offres/affichage.ts";
+import { ANNONCE_DU_RENONCEMENT, annonceDeLaPostulation, annonceDeLOffre, AUCUN_FILTRE, type FiltresDesOffres } from "./offres/affichage.ts";
 import { FicheDUneOffre } from "./offres/FicheDUneOffre.tsx";
+import { ListeDesOffres } from "./offres/ListeDesOffres.tsx";
 import { ModificationDUneOffre } from "./offres/ModificationDUneOffre.tsx";
+import { PostulerAUneOffre } from "./offres/PostulerAUneOffre.tsx";
 import { SaisieDUneOffre } from "./offres/SaisieDUneOffre.tsx";
 import { EcranDesReglages } from "./reglages/EcranDesReglages.tsx";
 import { annonceDeLaRestauration } from "./sauvegardes/affichage.ts";
@@ -29,8 +31,8 @@ const MESSAGES: Record<Connexion["etat"], string> = {
 
 /**
  * L'interface : la connexion à l'API locale, puis le tableau de bord, l'écran de saisie, la fiche d'une candidature et
- * sa modification, la saisie d'une offre, sa fiche et sa correction (#36), et les réglages (#26), dans la mise en page
- * commune.
+ * sa modification, la liste des offres (#38), la saisie d'une offre, sa fiche et sa correction (#36), « Postuler » (#38),
+ * et les réglages (#26), dans la mise en page commune.
  */
 export function App({
   connecter,
@@ -53,6 +55,8 @@ export function App({
   const [generation, setGeneration] = useState(0);
   // Vrai dès que l'utilisateur a changé d'écran : le titre de l'écran atteint reçoit alors le focus.
   const [navigue, setNavigue] = useState(false);
+  // Les filtres de la liste des offres (#38), gardés le temps de la session, en mémoire seulement : jamais écrits.
+  const [filtresDesOffres, setFiltresDesOffres] = useState<FiltresDesOffres>(AUCUN_FILTRE);
 
   useEffect(() => {
     let affichee = true;
@@ -99,8 +103,11 @@ export function App({
   const quandSupprimee = (fiche: Fiche) =>
     annoncer(`Candidature supprimée : ${fiche.poste}, chez ${fiche.entreprise.nom}.`, { nom: "tableau" });
 
-  // La fiche d'une autre offre : celle du même texte, ou un doublon possible (#36).
+  // La fiche d'une offre : depuis la liste, un doublon possible (#36) ou la fiche d'une candidature (#38).
   const ouvrirUneOffre = (offre: number) => naviguer({ nom: "offre", offre });
+
+  // La fiche d'une candidature : depuis la liste des offres, la fiche d'une offre ou « Postuler » (#38).
+  const ouvrirLaCandidature = (candidature: number) => naviguer({ nom: "fiche", candidature });
 
   // La base vient d'être remplacée : retour au tableau de bord, qui relit tout, avec l'annonce de la restauration.
   const quandRestauree = (issue: "restauree" | "restaureeDepuisUneBaseAbimee", copie: CopieGardee) => {
@@ -149,6 +156,7 @@ export function App({
             modifier={() => naviguer({ nom: "modification", candidature: ecran.candidature })}
             quandSupprimee={quandSupprimee}
             ouvrirLeBrouillon={ouvrirLeBrouillon}
+            ouvrirLOffre={ouvrirUneOffre}
           />
         );
       case "modification":
@@ -161,12 +169,24 @@ export function App({
             quandModifiee={quandModifiee}
           />
         );
+      case "offres":
+        return (
+          <ListeDesOffres
+            client={connexion.client}
+            annonce={annonce}
+            filtres={filtresDesOffres}
+            changerLesFiltres={setFiltresDesOffres}
+            collerUneOffre={() => naviguer({ nom: "saisieDUneOffre" })}
+            ouvrirLOffre={ouvrirUneOffre}
+            ouvrirLaCandidature={ouvrirLaCandidature}
+            prendreLeFocus={navigue}
+          />
+        );
       case "saisieDUneOffre":
         return (
           <SaisieDUneOffre
             client={connexion.client}
             quandEnregistree={(fiche) => annoncer(annonceDeLOffre("enregistrée", fiche), { nom: "offre", offre: fiche.id })}
-            ouvrirUneOffre={ouvrirUneOffre}
             renoncer={() => annoncer(ANNONCE_DU_RENONCEMENT, { nom: "tableau" })}
           />
         );
@@ -177,9 +197,11 @@ export function App({
             client={connexion.client}
             offre={ecran.offre}
             annonce={annonce}
-            revenir={() => naviguer({ nom: "tableau" })}
+            revenir={() => naviguer({ nom: "offres" })}
             modifier={() => naviguer({ nom: "modificationDUneOffre", offre: ecran.offre })}
+            postuler={() => naviguer({ nom: "postuler", offre: ecran.offre })}
             ouvrirUneOffre={ouvrirUneOffre}
+            ouvrirLaCandidature={ouvrirLaCandidature}
           />
         );
       case "modificationDUneOffre":
@@ -190,7 +212,18 @@ export function App({
             offre={ecran.offre}
             revenir={() => naviguer({ nom: "offre", offre: ecran.offre })}
             quandModifiee={(fiche) => annoncer(annonceDeLOffre("modifiée", fiche), { nom: "offre", offre: fiche.id })}
-            ouvrirUneOffre={ouvrirUneOffre}
+          />
+        );
+      case "postuler":
+        return (
+          <PostulerAUneOffre
+            key={ecran.offre}
+            client={connexion.client}
+            offre={ecran.offre}
+            revenir={() => naviguer({ nom: "offre", offre: ecran.offre })}
+            quandEnregistree={(candidature) => annoncer(annonceDeLaPostulation(candidature), { nom: "fiche", candidature: candidature.id })}
+            ouvrirLaCandidature={ouvrirLaCandidature}
+            indiquerLEntreprise={() => naviguer({ nom: "modificationDUneOffre", offre: ecran.offre })}
           />
         );
     }

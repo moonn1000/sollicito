@@ -1,6 +1,6 @@
 # Cas d'utilisation de la V1
 
-- **Mis à jour le** : 2026-11-21, avec #14
+- **Mis à jour le** : 2026-11-22, avec #38
 - **Décisions** : [ADR-0004](adr/0004-v1-resserree-paliers.md) (ce que livre la V1, ses paliers, sa règle de coupe) ; [ADR-0001](adr/0001-cadrage-architecture-v1.md), D7 et D8 (IA facultative, l'humain valide chaque envoi) ; [ADR-0011](adr/0011-relances-et-brouillon.md) (relances, contacts, brouillon et délai par défaut)
 - **Périmètre** : ce que la personne en recherche d'emploi fait dans Sollicito en V1, palier par palier. Les règles de chaque cas sont dans le [modèle de domaine](modele-de-domaine.md), leurs protections dans le [modèle de menaces](modele-de-menaces.md) ; les systèmes extérieurs sont ceux des [vues d'architecture](vues-d-architecture.md).
 
@@ -112,7 +112,7 @@ postuler ..> : include enregistrer
 | Relances et contacts | Régler le délai par défaut des relances, dans les réglages | [#14](https://github.com/moonn1000/sollicito/issues/14) | P3 |
 | Offres | Coller le texte d'une offre, compléter sa fiche et la corriger, son texte gardé tel quel | [#36](https://github.com/moonn1000/sollicito/issues/36) | P3 |
 | Offres | Importer un fichier CSV d'offres ‡ | [#40](https://github.com/moonn1000/sollicito/issues/40) | P3 |
-| Offres | Parcourir les offres et faire d'une offre une candidature | [#38](https://github.com/moonn1000/sollicito/issues/38) | P3 |
+| Offres | Parcourir les offres, filtrées par texte, source et date d'ajout dans la page, et faire d'une offre une candidature, une seule, qui reprend son entreprise et son poste | [#38](https://github.com/moonn1000/sollicito/issues/38) | P3 |
 | IA facultative | Choisir son fournisseur d'IA, ou aucun : une clé Claude ou OpenAI ‡, chiffrée, ou un modèle local Ollama | [#43](https://github.com/moonn1000/sollicito/issues/43), [#48](https://github.com/moonn1000/sollicito/issues/48), [#45](https://github.com/moonn1000/sollicito/issues/45) | P4 |
 | IA facultative | Faire remplir par l'IA la fiche d'une offre collée, relue avant l'enregistrement | [#46](https://github.com/moonn1000/sollicito/issues/46) | P4 |
 | IA facultative | Faire rédiger par l'IA un brouillon de relance ‡, relu avant l'ouverture dans la messagerie | [#47](https://github.com/moonn1000/sollicito/issues/47) | P4 |

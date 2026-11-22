@@ -657,3 +657,54 @@ button {
 .lien-refuse {
   overflow-wrap: anywhere;
 }
+
+/* La liste des offres et « Postuler » (#38) : les filtres, sur une ligne quand la place le permet, le compte des offres,
+   et l'aperçu d'une autre offre, ouvert sur place dans la saisie d'une offre (suites de #36). Le tableau reprend celui
+   des candidatures. */
+
+.filtres-des-offres {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.75rem 1rem;
+  margin: 1rem 0 0.5rem;
+}
+
+.filtres-des-offres .champ {
+  flex: 1 1 11rem;
+}
+
+.filtres-des-offres .champ:first-child {
+  flex-basis: 18rem;
+}
+
+.filtres-des-offres .aide {
+  margin: 0;
+}
+
+.compte-des-offres {
+  margin: 0 0 0.5rem;
+  color: var(--texte-discret);
+}
+
+.candidature-de-l-offre p {
+  margin: 0.75rem 0 0.5rem;
+}
+
+.apercu-d-une-offre {
+  margin: 0.5rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--bordure);
+  border-radius: 0.4rem;
+  background: var(--fond);
+}
+
+.apercu-d-une-offre h4 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.apercu-d-une-offre .texte-de-l-offre {
+  max-height: 20rem;
+  overflow-y: auto;
+}

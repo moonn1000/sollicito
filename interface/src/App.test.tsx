@@ -3,7 +3,7 @@ import { expect, test, vi } from "vitest";
 import { App } from "./App.tsx";
 import { ErreurDeLApi } from "./api/clientDeLApi.ts";
 import { HorsDeLaFenetre } from "./connexion.ts";
-import { candidatureFictive, changementFictif, clientSimule, ficheFictive, sauvegardesFictives } from "./tests/clientSimule.ts";
+import { candidatureFictive, changementFictif, clientSimule, ficheFictive, offreListeeFictive, sauvegardesFictives } from "./tests/clientSimule.ts";
 
 test("l'écran d'accueil affiche le nom de l'application", () => {
   render(<App connecter={() => new Promise(() => {})} />);
@@ -22,7 +22,7 @@ test("connectée, l'interface le dit et ouvre le tableau de bord, dans la mise e
   expect(within(navigation).getAllByRole("button").map((bouton) => bouton.textContent)).toEqual([
     "Tableau de bord",
     "Nouvelle candidature",
-    "Nouvelle offre",
+    "Offres",
     "Réglages",
   ]);
   expect(within(navigation).getByRole("button", { name: "Tableau de bord" }).getAttribute("aria-current")).toBe("page");
@@ -228,8 +228,11 @@ test("une offre collée s'enregistre, puis sa fiche s'ouvre avec l'annonce, et m
   render(<App connecter={async () => client} />);
   await screen.findByRole("heading", { level: 2, name: "Tableau de bord" });
 
-  fireEvent.click(screen.getByRole("button", { name: "Nouvelle offre" }));
-  expect(screen.getByRole("button", { name: "Nouvelle offre" }).getAttribute("aria-current")).toBe("page");
+  // « Coller une offre » s'ouvre depuis la liste des offres (#38), qui reste l'entrée de la navigation.
+  fireEvent.click(screen.getByRole("button", { name: "Offres" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Coller une offre" }));
+  expect(screen.getByRole("heading", { level: 2, name: "Coller une offre" })).toBeDefined();
+  expect(screen.getByRole("button", { name: "Offres" }).getAttribute("aria-current")).toBe("page");
   fireEvent.change(await screen.findByLabelText("Texte de l'offre"), { target: { value: "Offre fictive." } });
   fireEvent.change(screen.getByLabelText("Poste"), { target: { value: "Comptable" } });
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer l'offre" }));
@@ -239,4 +242,46 @@ test("une offre collée s'enregistre, puis sa fiche s'ouvre avec l'annonce, et m
   fireEvent.click(screen.getByRole("button", { name: "Modifier l'offre" }));
   expect(await screen.findByRole("heading", { level: 2, name: "Modifier l'offre" })).toBeDefined();
   expect(client.lireUneOffre).toHaveBeenCalledWith(12);
+});
+
+test("depuis la liste des offres, « Postuler » enregistre la candidature et ouvre sa fiche, qui mène à l'offre (#38)", async () => {
+  const client = clientSimule({
+    listerLesOffres: async () => [offreListeeFictive()],
+    lireLaFiche: async (candidature) => ficheFictive({ id: candidature, poste: "Développeur .NET (H/F)", offre: 3 }),
+  });
+  render(<App connecter={async () => client} />);
+  await screen.findByRole("heading", { level: 2, name: "Tableau de bord" });
+
+  fireEvent.click(screen.getByRole("button", { name: "Offres" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Développeur .NET (H/F), chez Lumière Verte SA : ouvrir la fiche" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Postuler" }));
+  expect(await screen.findByRole("heading", { level: 2, name: "Postuler à cette offre" })).toBeDefined();
+  fireEvent.click(await screen.findByRole("button", { name: "Enregistrer la candidature" }));
+
+  expect(await screen.findByText("Candidature enregistrée depuis l'offre : Développeur .NET (H/F), chez Lumière Verte SA.")).toBeDefined();
+  expect(client.postuler).toHaveBeenCalledWith(3, expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u));
+  fireEvent.click(await screen.findByRole("button", { name: "Voir l'offre" }));
+  expect(await screen.findByRole("heading", { level: 2, name: "Développeur .NET (H/F)" })).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Revenir aux offres" }));
+  expect(await screen.findByRole("heading", { level: 2, name: "Offres" })).toBeDefined();
+});
+
+test("les filtres de la liste des offres restent quand on ouvre une fiche, puis qu'on revient (#38)", async () => {
+  const listerLesOffres = vi.fn(async () => [offreListeeFictive(), offreListeeFictive({ id: 4, poste: "Comptable", lieu: "Namur" })]);
+  const client = clientSimule({ listerLesOffres });
+  render(<App connecter={async () => client} />);
+  await screen.findByRole("heading", { level: 2, name: "Tableau de bord" });
+
+  fireEvent.click(screen.getByRole("button", { name: "Offres" }));
+  fireEvent.change(await screen.findByLabelText("Rechercher"), { target: { value: "namur" } });
+  fireEvent.click(await screen.findByRole("button", { name: "Comptable, chez Lumière Verte SA : ouvrir la fiche" }));
+  // La fiche lue d'abord : son bouton de retour remplace celui du chargement.
+  await screen.findByRole("heading", { level: 2, name: "Développeur .NET (H/F)" });
+  fireEvent.click(screen.getByRole("button", { name: "Revenir aux offres" }));
+
+  expect(await screen.findByText("1 offre sur 2")).toBeDefined();
+  expect(screen.getByLabelText<HTMLInputElement>("Rechercher").value).toBe("namur");
+  // Lue à chaque ouverture, toujours sans paramètre : la recherche ne quitte pas la page.
+  expect(listerLesOffres).toHaveBeenCalledTimes(2);
+  expect(listerLesOffres.mock.calls.every((appel) => appel.length === 0)).toBe(true);
 });

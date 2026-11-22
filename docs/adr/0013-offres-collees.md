@@ -1,6 +1,6 @@
 # ADR-0013 : offres collées, texte gardé, empreinte, doublon possible avec accord, entreprises proposées
 
-- **Statut** : acceptée
+- **Statut** : acceptée ; « Pour #38 » (« Les entreprises proposées ») et la liste des offres (« Conséquences ») précisés par l'[ADR-0014](0014-postuler-a-une-offre.md) : le lien porté par la candidature, l'entreprise d'abord sur l'offre, la liste filtrée dans la page
 - **Date** : 2026-11-22
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D5 (l'identifiant externe d'une offre attend une source qui en fournit un), D6 (le connecteur commun, en forme minimale) et D9 (le lien de l'annonce d'une offre) ; [ADR-0005](0005-modele-de-domaine.md), « Dédoublonner les offres » (l'empreinte pas à pas, l'accord devant un doublon possible, le poste normalisé) ; [ADR-0007](0007-historique-en-vigueur-et-nom-corrige.md), « À vérifier » (une entreprise que seule une offre désigne est proposée)
 

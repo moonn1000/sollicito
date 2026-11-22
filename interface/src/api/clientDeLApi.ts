@@ -53,13 +53,13 @@ export type ResultatDeLEnregistrement =
 
 /**
  * Ce que rend la modification d'une candidature : sa fiche à jour ; les refus de ses champs ; ou l'entreprise dont le
- * nom saisi corrigerait le nom affiché, et le nombre de candidatures concernées, celle qu'on modifie comprise : la
- * modification attend alors l'accord de l'utilisateur (ADR-0007).
+ * nom saisi corrigerait le nom affiché, le nombre de candidatures concernées, celle qu'on modifie comprise, et celui des
+ * offres qui la désignent (#38) : la modification attend alors l'accord de l'utilisateur (ADR-0007).
  */
 export type ResultatDeLaModification =
   | { issue: "modifiee"; fiche: FicheDUneCandidature }
   | { issue: "refusee"; refus: RefusDeLaSaisie }
-  | { issue: "nomACorriger"; entreprise: EntrepriseConnue; candidatures: number };
+  | { issue: "nomACorriger"; entreprise: EntrepriseConnue; candidatures: number; offres: number };
 
 /** Le type d'une étape de l'historique, tel que l'API l'écrit (modèle de domaine, « Types énumérés »). */
 export type TypeDEtape = "Appel" | "Entretien" | "Echange" | "Autre";
@@ -148,6 +148,8 @@ export interface FicheDUneCandidature extends Candidature {
   historique: EvenementDeLHistorique[];
   /** Ses relances, dans l'ordre de leur planification : au plus une à faire (#14). */
   relances: RelanceLue[];
+  /** L'identifiant de l'offre d'où elle vient (#38), ou rien. */
+  offre: number | null;
 }
 
 /** Un contact tel que la fiche l'envoie, champ par champ (#14). */
@@ -304,11 +306,21 @@ const CHAMPS_DU_CONTACT: readonly ChampDuContact[] = ["nom", "email"];
 
 const CHAMPS_DE_LA_RELANCE: readonly ChampDeLaRelance[] = ["delai", "destinataire"];
 
-/** Une réponse de l'API en erreur : jeton refusé, origine refusée, route inconnue… */
 /** La source d'une offre : le connecteur qui l'a fait entrer (#36 ; l'import CSV de #40 ajoutera la sienne). */
 export type SourceDOffre = "TexteColle";
 
-/** Une offre signalée comme doublon possible d'une autre (règle 3) : de quoi la reconnaître, et l'ouvrir. */
+/** La candidature d'une offre (#38) : de quoi la reconnaître, et l'ouvrir. */
+export interface CandidatureDeLOffre {
+  id: number;
+  statut: StatutDeCandidature;
+  /** L'instant de son envoi, en UTC. */
+  envoyeeLe: string;
+}
+
+/**
+ * Une offre signalée comme doublon possible d'une autre (règle 3) : de quoi la reconnaître, et l'ouvrir ; et sa
+ * candidature, s'il y en a une : un doublon possible déjà postulé se montre (#38).
+ */
 export interface OffreSignalee {
   id: number;
   poste: string;
@@ -316,7 +328,35 @@ export interface OffreSignalee {
   lieu: string | null;
   /** L'instant de son import, en UTC. */
   ajouteeLe: string;
+  candidature: CandidatureDeLOffre | null;
 }
+
+/** Une offre telle que la liste des offres la montre (#38) : ses champs, sans son texte, et sa candidature. */
+export interface OffreListee {
+  id: number;
+  source: SourceDOffre;
+  /** Son entreprise, ou rien pour une offre anonyme. */
+  entreprise: EntrepriseConnue | null;
+  poste: string;
+  lieu: string | null;
+  /** Le jour de sa publication, sans heure ni fuseau : `2026-11-18`. */
+  publieeLe: string | null;
+  /** L'instant de l'import, en UTC. */
+  ajouteeLe: string;
+  candidature: CandidatureDeLOffre | null;
+}
+
+/**
+ * Ce que rend « Postuler » (#38) : la candidature enregistrée ; les refus de la date d'envoi ; l'offre qui a déjà sa
+ * candidature, que l'API désigne ; l'offre sans entreprise ; ou l'offre dont le poste ne se reprend pas. Une offre
+ * inconnue lève une `ErreurDeLApi` 404.
+ */
+export type ResultatDeLaPostulation =
+  | { issue: "enregistree"; candidature: Candidature }
+  | { issue: "refusee"; refus: string[] }
+  | { issue: "dejaPostulee"; candidature: number }
+  | { issue: "entrepriseManquante" }
+  | { issue: "posteARevoir" };
 
 /** La fiche d'une offre (#36), telle que l'API la rend : ses doublons possibles sont relus à chaque lecture. */
 export interface FicheDUneOffre {
@@ -335,6 +375,8 @@ export interface FicheDUneOffre {
   /** L'instant de l'import, en UTC. */
   ajouteeLe: string;
   doublonsPossibles: OffreSignalee[];
+  /** Sa candidature, faite par « Postuler » (#38), ou rien. */
+  candidature: CandidatureDeLOffre | null;
 }
 
 /** Une offre collée telle que l'écran l'envoie, champ par champ, sans rien convertir. */
@@ -368,6 +410,7 @@ export type ResultatDeLOffre =
   | { issue: "dejaEnregistree"; offre: { id: number; ajouteeLe: string } }
   | { issue: "doublonPossible"; doublons: OffreSignalee[] };
 
+/** Une réponse de l'API en erreur : jeton refusé, origine refusée, route inconnue… */
 export class ErreurDeLApi extends Error {
   readonly statut: number;
 
@@ -450,6 +493,16 @@ export interface ClientDeLApi {
   lireUneOffre(offre: number): Promise<FicheDUneOffre>;
   /** Corrige les champs d'une offre, jamais son texte ; une `ErreurDeLApi` 404 si elle n'existe pas. */
   corrigerUneOffre(offre: number, correction: CorrectionDUneOffre, garderLesDeux?: boolean): Promise<ResultatDeLOffre>;
+  /**
+   * Toutes les offres, sans leur texte, les plus récemment ajoutées d'abord, avec leur candidature (#38). La liste se
+   * lit sans paramètre : l'interface la filtre elle-même, et rien de la recherche ne quitte la page.
+   */
+  listerLesOffres(): Promise<OffreListee[]>;
+  /**
+   * Postule à une offre (#38) : la candidature reprend son entreprise et son poste, à la date et l'heure d'envoi
+   * saisies, sans décalage. Une `ErreurDeLApi` 404 si l'offre n'existe pas.
+   */
+  postuler(offre: number, envoyeeLe: string): Promise<ResultatDeLaPostulation>;
 }
 
 /**
@@ -665,13 +718,60 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
         await ecrire(adresseDeLOffre(offre), garderLesDeux ? { ...correction, garderLesDeux: true } : correction, "PUT"),
         200,
       ),
+    listerLesOffres: async () => (await lire("/api/offres")) as OffreListee[],
+    postuler: async (offre, envoyeeLe) => postulerALOffre(await ecrire(`${adresseDeLOffre(offre)}/candidature`, { envoyeeLe })),
   };
 }
 
 /** Le refus d'un texte d'offre trop long, celui de l'API (ADR-0013). */
 export const TEXTE_TROP_LONG = "Le texte de l'offre ne doit pas dépasser 50 000 caractères.";
 
-const CHAMPS_DE_L_OFFRE: readonly ChampDeLOffre[] =["texte", "entreprise", "poste", "lieu", "publieeLe", "adresse"];
+const CHAMPS_DE_L_OFFRE: readonly ChampDeLOffre[] = ["texte", "entreprise", "poste", "lieu", "publieeLe", "adresse"];
+
+// La candidature enregistrée (201), les refus de la date (400), ou un refus que l'état de l'offre explique (409) ; une
+// offre inconnue (404) lève une erreur, comme toute autre réponse.
+async function postulerALOffre(reponse: Response): Promise<ResultatDeLaPostulation> {
+  if (reponse.status === 201) {
+    return { issue: "enregistree", candidature: (await reponse.json()) as Candidature };
+  }
+
+  if (reponse.status === 400) {
+    const refus = lireLesRefus(await reponse.json().catch(() => undefined), ["envoyeeLe"] as const);
+    if (refus?.envoyeeLe !== undefined) {
+      return { issue: "refusee", refus: refus.envoyeeLe };
+    }
+  }
+
+  if (reponse.status === 409) {
+    const probleme: unknown = await reponse.json().catch(() => undefined);
+    const { motif, candidature } = typeof probleme === "object" && probleme !== null ? (probleme as { motif?: unknown; candidature?: unknown }) : {};
+    if (motif === "dejaPostulee" && Number.isSafeInteger(candidature) && (candidature as number) > 0) {
+      return { issue: "dejaPostulee", candidature: candidature as number };
+    }
+
+    if (motif === "entrepriseManquante" || motif === "posteARevoir") {
+      return { issue: motif };
+    }
+  }
+
+  throw new ErreurDeLApi(reponse.status);
+}
+
+// La candidature d'une offre, rien, ou undefined si la valeur n'en a pas la forme.
+function lireUneCandidatureDeLOffre(valeur: unknown): CandidatureDeLOffre | null | undefined {
+  if (valeur === null || valeur === undefined) {
+    return null;
+  }
+
+  if (typeof valeur !== "object") {
+    return undefined;
+  }
+
+  const { id, statut, envoyeeLe } = valeur as Record<string, unknown>;
+  return Number.isSafeInteger(id) && typeof statut === "string" && typeof envoyeeLe === "string"
+    ? { id: id as number, statut: statut as StatutDeCandidature, envoyeeLe }
+    : undefined;
+}
 
 // La fiche (201 à l'enregistrement, 200 à la correction), les refus des champs (400), ou l'offre déjà enregistrée et les
 // doublons possibles (409), que l'API lit en base.
@@ -727,7 +827,7 @@ function lireUneOffreSignalee(valeur: unknown): OffreSignalee | undefined {
     return undefined;
   }
 
-  const { id, poste, entreprise, lieu, ajouteeLe } = valeur as Record<string, unknown>;
+  const { id, poste, entreprise, lieu, ajouteeLe, candidature } = valeur as Record<string, unknown>;
   if (!Number.isSafeInteger(id) || typeof poste !== "string" || typeof ajouteeLe !== "string" || (lieu !== null && typeof lieu !== "string")) {
     return undefined;
   }
@@ -736,9 +836,10 @@ function lireUneOffreSignalee(valeur: unknown): OffreSignalee | undefined {
     return undefined;
   }
 
+  const sienne = lireUneCandidatureDeLOffre(candidature);
   const { id: idDeLEntreprise, nom } = entreprise as { id?: unknown; nom?: unknown };
-  return Number.isSafeInteger(idDeLEntreprise) && typeof nom === "string"
-    ? { id: id as number, poste, entreprise: { id: idDeLEntreprise as number, nom }, lieu: lieu as string | null, ajouteeLe }
+  return Number.isSafeInteger(idDeLEntreprise) && typeof nom === "string" && sienne !== undefined
+    ? { id: id as number, poste, entreprise: { id: idDeLEntreprise as number, nom }, lieu: lieu as string | null, ajouteeLe, candidature: sienne }
     : undefined;
 }
 
@@ -814,19 +915,29 @@ function lireLeMotif(probleme: unknown): string | undefined {
   return typeof detail === "string" && detail.length > 0 ? detail : typeof title === "string" ? title : undefined;
 }
 
-// L'entreprise dont le nom serait corrigé, et le nombre de candidatures concernées ; rien si le problème ne les porte pas.
-function lireLeNomACorriger(probleme: unknown): { entreprise: EntrepriseConnue; candidatures: number } | undefined {
+// L'entreprise dont le nom serait corrigé, et le nombre de candidatures et d'offres concernées (#38) ; rien si le
+// problème ne les porte pas.
+function lireLeNomACorriger(probleme: unknown): { entreprise: EntrepriseConnue; candidatures: number; offres: number } | undefined {
   if (typeof probleme !== "object" || probleme === null) {
     return undefined;
   }
 
-  const { entreprise, candidatures } = probleme as { entreprise?: unknown; candidatures?: unknown };
-  if (typeof entreprise !== "object" || entreprise === null || !Number.isSafeInteger(candidatures) || (candidatures as number) < 1) {
+  const { entreprise, candidatures, offres } = probleme as { entreprise?: unknown; candidatures?: unknown; offres?: unknown };
+  if (
+    typeof entreprise !== "object" ||
+    entreprise === null ||
+    !Number.isSafeInteger(candidatures) ||
+    (candidatures as number) < 1 ||
+    !Number.isSafeInteger(offres) ||
+    (offres as number) < 0
+  ) {
     return undefined;
   }
 
   const { id, nom } = entreprise as { id?: unknown; nom?: unknown };
-  return Number.isSafeInteger(id) && typeof nom === "string" ? { entreprise: { id: id as number, nom }, candidatures: candidatures as number } : undefined;
+  return Number.isSafeInteger(id) && typeof nom === "string"
+    ? { entreprise: { id: id as number, nom }, candidatures: candidatures as number, offres: offres as number }
+    : undefined;
 }
 
 // Les refus d'un problème de validation (`errors`), pour les seuls champs attendus ; rien si le problème n'en a pas.

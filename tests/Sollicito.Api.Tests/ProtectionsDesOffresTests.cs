@@ -9,9 +9,9 @@ using static Sollicito.Api.Tests.Outils.AppelsDesOffres;
 namespace Sollicito.Api.Tests;
 
 /// <summary>
-/// Les trois routes des offres (#36) passent par les protections de #10 (ADR-0001, D9 ; ADR-0003) : <c>Host</c> (400),
-/// jeton (401), <c>Origin</c> (403) ; elles figurent dans la documentation OpenAPI, et la porte de la base (#28) les
-/// garde d'office (503). Une requête refusée n'enregistre ni ne change rien.
+/// Les routes des offres (#36), leur liste et « Postuler » (#38) passent par les protections de #10 (ADR-0001, D9 ;
+/// ADR-0003) : <c>Host</c> (400), jeton (401), <c>Origin</c> (403) ; elles figurent dans la documentation OpenAPI, et la
+/// porte de la base (#28) les garde d'office (503). Une requête refusée n'enregistre ni ne change rien.
 /// </summary>
 public sealed class ProtectionsDesOffresTests
 {
@@ -19,8 +19,10 @@ public sealed class ProtectionsDesOffresTests
     private static readonly (string Methode, string Chemin, string? Corps, HttpStatusCode Attendu)[] LesRoutes =
     [
         ("POST", "/api/offres", """{"texte":"Autre offre fictive.","poste":"Chauffeur"}""", HttpStatusCode.Created),
+        ("GET", "/api/offres", null, HttpStatusCode.OK),
         ("GET", "/api/offres/{offre}", null, HttpStatusCode.OK),
         ("PUT", "/api/offres/{offre}", """{"poste":"Chauffeur"}""", HttpStatusCode.OK),
+        ("POST", "/api/offres/{offre}/candidature", """{"envoyeeLe":"2026-11-18T10:00"}""", HttpStatusCode.Created),
     ];
 
     public static TheoryData<string, string, string?> Routes
@@ -170,8 +172,10 @@ public sealed class ProtectionsDesOffresTests
         foreach (var (chemin, methode, operation, codes) in new (string, string, string, string[])[]
         {
             ("/api/offres", "post", "CollerUneOffre", ["201", "400", "409", "413"]),
+            ("/api/offres", "get", "ListerLesOffres", ["200"]),
             ("/api/offres/{id}", "get", "LireUneOffre", ["200", "404"]),
             ("/api/offres/{id}", "put", "CorrigerUneOffre", ["200", "400", "404", "409"]),
+            ("/api/offres/{id}/candidature", "post", "PostulerAUneOffre", ["201", "400", "404", "409", "413"]),
         })
         {
             var route = chemins[chemin]![methode]!.AsObject();
@@ -202,7 +206,8 @@ public sealed class ProtectionsDesOffresTests
         return (offre, await InstantaneAsync(api, offre));
     }
 
-    // Ce qu'une requête refusée ne doit pas changer : l'offre, les offres suivantes, les entreprises proposées.
+    // Ce qu'une requête refusée ne doit pas changer : l'offre, sa candidature, les offres suivantes, les candidatures, les
+    // entreprises proposées.
     private static async Task<string> InstantaneAsync(ApiLancee api, int offre)
     {
         var instantane = new StringBuilder((await api.LireLOffreAsync(offre)).ToJsonString());
@@ -211,6 +216,7 @@ public sealed class ProtectionsDesOffresTests
             instantane.Append(suivante.StatusCode);
         }
 
+        instantane.Append((await api.ListerAsync()).ToJsonString());
         instantane.Append((await api.ListerLesEntreprisesAsync()).ToJsonString());
         return instantane.ToString();
     }

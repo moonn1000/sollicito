@@ -297,6 +297,45 @@ test("« Modifier la candidature » mène à l'écran de modification", async ()
   expect(modifier).toHaveBeenCalledOnce();
 });
 
+test("une candidature faite depuis une offre mène à elle, et sa suppression dit que l'offre reste (#38)", async () => {
+  const ouvrirLOffre = vi.fn();
+  render(
+    <FicheDUneCandidature
+      client={clientSimule({ lireLaFiche: async (candidature) => ficheFictive({ id: candidature, offre: 12 }) })}
+      candidature={7}
+      revenir={vi.fn()}
+      modifier={vi.fn()}
+      quandSupprimee={vi.fn()}
+      maintenant={maintenant}
+      ouvrirLOffre={ouvrirLOffre}
+    />,
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Voir l'offre" }));
+  expect(ouvrirLOffre).toHaveBeenCalledWith(12);
+  fireEvent.click(screen.getByRole("button", { name: "Supprimer la candidature" }));
+  expect(within(confirmation()!).getByText(/^La suppression est définitive/u).textContent).toBe(
+    "La suppression est définitive : elle emporte tout l'historique de la candidature. L'offre reste enregistrée : elle pourra recevoir une nouvelle candidature.",
+  );
+});
+
+test("une candidature saisie sans offre ne mène à aucune offre", async () => {
+  render(
+    <FicheDUneCandidature
+      client={clientSimule()}
+      candidature={7}
+      revenir={vi.fn()}
+      modifier={vi.fn()}
+      quandSupprimee={vi.fn()}
+      maintenant={maintenant}
+      ouvrirLOffre={vi.fn()}
+    />,
+  );
+
+  await screen.findByRole("button", { name: "Modifier la candidature" });
+  expect(screen.queryByRole("button", { name: "Voir l'offre" })).toBeNull();
+});
+
 test("« Supprimer la candidature » demande une confirmation dans la fiche, sans boîte du navigateur ; « Annuler » ne supprime rien", async () => {
   const boiteDuNavigateur = vi.spyOn(window, "confirm").mockReturnValue(true);
   const { client, quandSupprimee } = afficher();
