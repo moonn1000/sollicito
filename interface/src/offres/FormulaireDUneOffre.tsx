@@ -68,8 +68,10 @@ export function FormulaireDUneOffre({
   const [refus, setRefus] = useState<RefusDeLOffre>({});
   const [refusRecus, setRefusRecus] = useState(0);
   const [conflit, setConflit] = useState<Conflit>();
-  // L'autre offre ouverte sur place, dans l'aperçu : celle du même texte, ou un doublon possible.
-  const [apercu, setApercu] = useState<number>();
+  // L'autre offre ouverte sur place, dans l'aperçu : celle du même texte, ou un doublon possible, et le signal qui l'a
+  // montrée. Elle ne s'affiche que sous ce signal-là : un autre signal, ou aucun, la referme d'office, sans attendre un
+  // effet qu'un clic rapide devancerait.
+  const [apercu, setApercu] = useState<{ signal: Conflit; offre: number }>();
   const [envoi, setEnvoi] = useState<Envoi>("pret");
   const [connues, setConnues] = useState<EntrepriseConnue[]>([]);
   // Lu aussitôt, sans attendre le rendu : deux envois rapprochés n'en font qu'un.
@@ -108,14 +110,15 @@ export function FormulaireDUneOffre({
     }
   }, [refusRecus]);
 
-  // Un signal reçu prend le focus sur son titre : il dit pourquoi rien n'est enregistré. Un autre signal, ou aucun,
-  // referme l'aperçu, qui portait sur l'ancien.
+  // Un signal reçu prend le focus sur son titre : il dit pourquoi rien n'est enregistré.
   useEffect(() => {
-    setApercu(undefined);
     if (conflit !== undefined) {
       titreDuConflit.current?.focus();
     }
   }, [conflit]);
+
+  // Vrai si l'aperçu de cette offre est ouvert sous le signal affiché.
+  const ouverte = (offre: number) => apercu !== undefined && apercu.signal === conflit && apercu.offre === offre;
 
   const propositions = useMemo(() => proposerDesEntreprises(connues, saisie.entreprise), [connues, saisie.entreprise]);
 
@@ -225,11 +228,11 @@ export function FormulaireDUneOffre({
           <h3 ref={titreDuConflit} tabIndex={-1}>
             {messageDejaEnregistree(conflit.ajouteeLe)}
           </h3>
-          {apercu === conflit.id ? (
+          {ouverte(conflit.id) ? (
             <ApercuDUneOffre client={client} offre={conflit.id} masquer={() => setApercu(undefined)} />
           ) : (
             <div className="actions">
-              <button type="button" onClick={() => setApercu(conflit.id)}>
+              <button type="button" onClick={() => setApercu({ signal: conflit, offre: conflit.id })}>
                 Voir l'offre enregistrée
               </button>
             </div>
@@ -245,10 +248,10 @@ export function FormulaireDUneOffre({
             {conflit.doublons.map((doublon) => (
               <li key={doublon.id}>
                 <span>{decrireLeDoublon(doublon)}</span>{" "}
-                {apercu === doublon.id ? (
+                {ouverte(doublon.id) ? (
                   <ApercuDUneOffre client={client} offre={doublon.id} masquer={() => setApercu(undefined)} />
                 ) : (
-                  <button type="button" className="secondaire" onClick={() => setApercu(doublon.id)}>
+                  <button type="button" className="secondaire" onClick={() => setApercu({ signal: conflit, offre: doublon.id })}>
                     Voir cette offre
                   </button>
                 )}

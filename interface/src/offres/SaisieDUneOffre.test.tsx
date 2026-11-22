@@ -152,6 +152,25 @@ test("un doublon possible se montre avant tout enregistrement : garder les deux 
   expect(collerUneOffre).toHaveBeenLastCalledWith(expect.objectContaining({ texte: "Seconde offre fictive.", poste: "Développeur .NET" }), true);
 });
 
+test("l'aperçu ne vaut que pour son signal : modifier la saisie le referme, et le signal suivant repart fermé", async () => {
+  afficher(clientSimule({ collerUneOffre: async () => ({ issue: "doublonPossible", doublons: [offreSignaleeFictive()] }) }));
+
+  remplir("Texte de l'offre", "Seconde offre fictive.");
+  remplir("Poste", "Développeur .NET");
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer l'offre" }));
+  // Le clic suit aussitôt l'apparition du signal, sans attendre son focus.
+  fireEvent.click(await screen.findByRole("button", { name: "Voir cette offre" }));
+  expect(await screen.findByRole("region", { name: "Développeur .NET (H/F)" })).toBeDefined();
+
+  remplir("Lieu", "Namur");
+  expect(screen.queryByRole("alert")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer l'offre" }));
+
+  const signal = await screen.findByRole("alert");
+  expect(within(signal).getByRole("button", { name: "Voir cette offre" })).toBeDefined();
+  expect(within(signal).queryByRole("region")).toBeNull();
+});
+
 test("renoncer à la nouvelle n'enregistre rien, et modifier la saisie retire le signal", async () => {
   const client = clientSimule({ collerUneOffre: async () => ({ issue: "doublonPossible", doublons: [offreSignaleeFictive()] }) });
   const { renoncer } = afficher(client);
