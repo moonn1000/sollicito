@@ -68,7 +68,14 @@ public static class TexteDUneLigne
     /// La règle de <see cref="EstAdmis"/>, qui peut admettre en plus les sauts de ligne (U+000A) et les tabulations
     /// (U+0009), seuls caractères de contrôle d'un texte sur plusieurs lignes (<see cref="TexteSurPlusieursLignes"/>).
     /// </summary>
-    internal static bool SansCaractereInterdit(string texte, bool sautsDeLigneEtTabulationsAdmis)
+    internal static bool SansCaractereInterdit(string texte, bool sautsDeLigneEtTabulationsAdmis) =>
+        PremierCaractereInterdit(texte, sautsDeLigneEtTabulationsAdmis) < 0;
+
+    /// <summary>
+    /// La position, en unités UTF-16, du premier caractère que refuse la règle de <see cref="SansCaractereInterdit"/>,
+    /// ou -1 s'il n'y en a aucun : le texte d'une offre (#36) dit ainsi à quelle ligne il est refusé.
+    /// </summary>
+    internal static int PremierCaractereInterdit(string texte, bool sautsDeLigneEtTabulationsAdmis)
     {
         ArgumentNullException.ThrowIfNull(texte);
         for (var i = 0; i < texte.Length; i++)
@@ -79,9 +86,9 @@ public static class TexteDUneLigne
                 continue;
             }
 
-            if (char.IsControl(caractere) || caractere is (>= '‪' and <= '‮') or (>= '⁦' and <= '⁩'))
+            if (char.IsControl(caractere) || caractere is (>= '\u202A' and <= '\u202E') or (>= '\u2066' and <= '\u2069'))
             {
-                return false;
+                return i;
             }
 
             int pointDeCode = caractere;
@@ -89,24 +96,26 @@ public static class TexteDUneLigne
             {
                 if (i + 1 >= texte.Length || !char.IsLowSurrogate(texte[i + 1]))
                 {
-                    return false;
+                    return i;
                 }
 
                 pointDeCode = char.ConvertToUtf32(caractere, texte[i + 1]);
+                if (EstUnNonCaractere(pointDeCode))
+                {
+                    return i;
+                }
+
                 i++;
-            }
-            else if (char.IsLowSurrogate(caractere))
-            {
-                return false;
+                continue;
             }
 
-            if (EstUnNonCaractere(pointDeCode))
+            if (char.IsLowSurrogate(caractere) || EstUnNonCaractere(pointDeCode))
             {
-                return false;
+                return i;
             }
         }
 
-        return true;
+        return -1;
     }
 
     // Les 66 non-caractères d'Unicode : U+FDD0 à U+FDEF, et U+xFFFE et U+xFFFF de chacun des 17 plans.

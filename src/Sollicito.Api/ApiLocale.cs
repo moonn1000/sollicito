@@ -8,11 +8,13 @@ using Sollicito.Api.Donnees;
 using Sollicito.Api.Erreurs;
 using Sollicito.Api.Interface;
 using Sollicito.Api.Journaux;
+using Sollicito.Api.Offres;
 using Sollicito.Api.Relances;
 using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Securite;
 using Sollicito.Application.Candidatures;
 using Sollicito.Application.Contacts;
+using Sollicito.Application.Offres;
 using Sollicito.Application.Relances;
 using Sollicito.Infrastructure;
 using Sollicito.Infrastructure.Persistance;
@@ -124,13 +126,19 @@ public static class ApiLocale
         builder.Services.AddScoped<RelancesDesCandidatures>();
         builder.Services.AddSingleton<ReglageDesRelances>();
         builder.Services.AddSingleton<BrouillonsDesRelances>();
+        // Les offres collées (#36) : le connecteur du texte collé, le cœur qui dédoublonne et enregistre, et leurs fiches.
+        builder.Services.AddSingleton<ConnecteurDuTexteColle>();
+        builder.Services.AddScoped<IImportDesOffres, ImportDesOffres>();
+        builder.Services.AddScoped<OffresEnregistrees>();
 
         // Les statuts s'écrivent en toutes lettres. Un champ inconnu du corps rend la requête illisible plutôt que
-        // d'être ignoré : le statut, par exemple, ne vient jamais de l'interface.
+        // d'être ignoré : le statut, par exemple, ne vient jamais de l'interface. Un champ répété aussi (#36) : sans
+        // ce réglage, le dernier l'emporterait, et le corps strict se contournerait.
         builder.Services.ConfigureHttpJsonOptions(json =>
         {
             json.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
             json.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+            json.SerializerOptions.AllowDuplicateProperties = false;
             // Un nombre s'écrit en nombre, comme le délai d'une relance (#14) : les réglages du web liraient aussi "7".
             json.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
         });
@@ -164,6 +172,7 @@ public static class ApiLocale
         RoutesDesSauvegardes.Declarer(app);
         RoutesDesContacts.Declarer(app);
         RoutesDesRelances.Declarer(app);
+        RoutesDesOffres.Declarer(app);
 
         return app;
     }

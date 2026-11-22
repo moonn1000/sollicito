@@ -37,11 +37,35 @@ public static class CleDEntreprise
     /// <param name="nom">Un nom d'entreprise, en Unicode valide (voir <see cref="Textes.TexteDUneLigne.EstAdmis"/>).</param>
     public static string De(string nom)
     {
-        ArgumentNullException.ThrowIfNull(nom);
+        var mots = MotsDe(nom);
+
+        // 5. La forme juridique qui termine le nom, tant qu'il y en a une, sans jamais retirer le dernier mot.
+        while (mots.Count > 1 && FormesEnFin.Contains(mots[^1]))
+        {
+            mots.RemoveAt(mots.Count - 1);
+        }
+
+        // 6. Puis celle qui l'ouvre, parmi les formes belges qui ne commencent jamais une marque.
+        while (mots.Count > 1 && FormesEnTete.Contains(mots[0]))
+        {
+            mots.RemoveAt(0);
+        }
+
+        return string.Join(' ', mots);
+    }
+
+    /// <summary>
+    /// Les étapes 1 à 4, que le poste d'une offre reprend aussi (<see cref="Offres.PosteNormalise"/>) : les mots du texte,
+    /// sans accents, en minuscules, sans ponctuation.
+    /// </summary>
+    /// <param name="texte">Un texte en Unicode valide (voir <see cref="Textes.TexteDUneLigne.EstAdmis"/>).</param>
+    internal static List<string> MotsDe(string texte)
+    {
+        ArgumentNullException.ThrowIfNull(texte);
 
         // 1. Décomposition NFKD, accents retirés, « œ » et « æ » en deux lettres.
-        var sansAccents = new StringBuilder(nom.Length);
-        foreach (var rune in nom.Normalize(NormalizationForm.FormKD).EnumerateRunes())
+        var sansAccents = new StringBuilder(texte.Length);
+        foreach (var rune in texte.Normalize(NormalizationForm.FormKD).EnumerateRunes())
         {
             var categorie = Rune.GetUnicodeCategory(rune);
             if (categorie is UnicodeCategory.NonSpacingMark or UnicodeCategory.SpacingCombiningMark or UnicodeCategory.EnclosingMark)
@@ -82,20 +106,6 @@ public static class CleDEntreprise
         }
 
         // 4. Une seule espace entre deux mots, aucune au début ni à la fin.
-        var mots = lettresEtChiffres.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
-
-        // 5. La forme juridique qui termine le nom, tant qu'il y en a une, sans jamais retirer le dernier mot.
-        while (mots.Count > 1 && FormesEnFin.Contains(mots[^1]))
-        {
-            mots.RemoveAt(mots.Count - 1);
-        }
-
-        // 6. Puis celle qui l'ouvre, parmi les formes belges qui ne commencent jamais une marque.
-        while (mots.Count > 1 && FormesEnTete.Contains(mots[0]))
-        {
-            mots.RemoveAt(0);
-        }
-
-        return string.Join(' ', mots);
+        return lettresEtChiffres.ToString().Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList();
     }
 }

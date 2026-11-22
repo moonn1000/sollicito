@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Sollicito.Application.Candidatures;
+using Sollicito.Application.Offres;
 using Sollicito.Infrastructure.Persistance;
 
 namespace Sollicito.Infrastructure;
@@ -23,6 +24,7 @@ public static class ServicesDeLInfrastructure
         services.AddDbContext<BaseDeSollicito>((fournisseur, options) =>
             options.UseSqlite(fournisseur.GetRequiredService<DossierDeLaBase>().ChaineDeConnexion()));
         services.AddScoped<IDepotDesCandidatures, DepotDesCandidatures>();
+        services.AddScoped<IDepotDesOffres, DepotDesOffres>();
         return services;
     }
 }

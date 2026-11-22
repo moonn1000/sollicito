@@ -22,8 +22,9 @@ public interface IDepotDesCandidatures
     Task<IReadOnlyList<CandidatureListee>> ListerAsync(CancellationToken annulation);
 
     /// <summary>
-    /// Les entreprises que l'écran de saisie et celui de modification proposent, dans l'ordre de leur clé : celles qu'une
-    /// candidature porte encore. Une entreprise sans candidature reste en base, et sa clé la reconnaît toujours.
+    /// Les entreprises que proposent les écrans de saisie et de modification, des candidatures comme des offres, dans
+    /// l'ordre de leur clé : celles qu'une candidature ou une offre désigne encore (ADR-0013). Une entreprise que plus
+    /// rien ne désigne reste en base, et sa clé la reconnaît toujours.
     /// </summary>
     Task<IReadOnlyList<EntrepriseConnue>> ListerLesEntreprisesAsync(CancellationToken annulation);
 
