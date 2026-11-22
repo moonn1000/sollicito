@@ -91,13 +91,15 @@ public sealed class ModificationDesCandidatures(IDepotDesCandidatures depot, Tim
         }
         else if (!string.Equals(entreprise.Nom, nom, StringComparison.Ordinal))
         {
-            // Même clé, écrit autrement : le nom affiché de l'entreprise se corrige pour toutes ses candidatures, mais
-            // seulement avec l'accord de l'utilisateur, à qui l'écran dit d'abord combien de candidatures changent.
+            // Même clé, écrit autrement : le nom affiché de l'entreprise se corrige pour toutes ses candidatures, et pour
+            // les offres qui la désignent (#38), mais seulement avec l'accord de l'utilisateur, à qui l'écran dit d'abord
+            // combien de candidatures et d'offres changent.
             if (saisie.CorrigerLeNomDeLEntreprise != true)
             {
                 var portees = await ecriture.CompterLesCandidaturesAsync(entreprise.Id, annulation);
                 var concernees = portees + (candidature.EntrepriseId == entreprise.Id ? 0 : 1);
-                return new ResultatDuSuivi.NomACorriger(new EntrepriseConnue(entreprise.Id, entreprise.Nom), concernees);
+                var offres = await ecriture.CompterLesOffresAsync(entreprise.Id, annulation);
+                return new ResultatDuSuivi.NomACorriger(new EntrepriseConnue(entreprise.Id, entreprise.Nom), concernees, offres);
             }
 
             entreprise.CorrigerLeNom(nom);

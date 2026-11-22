@@ -139,6 +139,22 @@ internal sealed class DepotDesCandidatures(BaseDeSollicito baseDeSollicito) : ID
         public Task<int> CompterLesCandidaturesAsync(int entrepriseId, CancellationToken annulation) =>
             baseDeSollicito.Candidatures.CountAsync(candidature => candidature.EntrepriseId == entrepriseId, annulation);
 
+        public Task<int> CompterLesOffresAsync(int entrepriseId, CancellationToken annulation) =>
+            baseDeSollicito.Offres.CountAsync(offre => offre.EntrepriseId == entrepriseId, annulation);
+
+        // L'offre, son entreprise et la candidature qui la désigne déjà, lues dans la transaction de l'écriture.
+        public Task<OffreAPostuler?> TrouverLOffreAPostulerAsync(int offreId, CancellationToken annulation) =>
+            (from offre in baseDeSollicito.Offres.AsNoTracking()
+             where offre.Id == offreId
+             join entreprise in baseDeSollicito.Entreprises.AsNoTracking() on offre.EntrepriseId equals (int?)entreprise.Id into entreprises
+             from entreprise in entreprises.DefaultIfEmpty()
+             select new OffreAPostuler(
+                 offre.Id,
+                 entreprise == null ? null : new EntrepriseConnue(entreprise.Id, entreprise.Nom),
+                 offre.Poste,
+                 baseDeSollicito.Candidatures.Where(candidature => candidature.OffreId == offre.Id).Select(candidature => (int?)candidature.Id).FirstOrDefault()))
+            .SingleOrDefaultAsync(annulation);
+
         public Task<CandidatureSuivie?> TrouverLaCandidatureAsync(int id, CancellationToken annulation) =>
             ChargerAsync(baseDeSollicito, id, annulation);
 

@@ -10,8 +10,11 @@ namespace Sollicito.Application.Offres;
 /// </summary>
 public sealed class OffresEnregistrees(IDepotDesOffres depot, TimeProvider horloge)
 {
-    /// <summary>La fiche de l'offre, doublons possibles compris ; rien si elle n'existe pas.</summary>
+    /// <summary>La fiche de l'offre, doublons possibles et candidature compris ; rien si elle n'existe pas.</summary>
     public Task<FicheDUneOffre?> LireAsync(int id, CancellationToken annulation) => depot.LireAsync(id, annulation);
+
+    /// <summary>Toutes les offres, sans leur texte, les plus récemment ajoutées d'abord (#38).</summary>
+    public Task<IReadOnlyList<OffreListee>> ListerAsync(CancellationToken annulation) => depot.ListerAsync(annulation);
 
     /// <summary>Corrige les champs de l'offre, ou dit pourquoi elle ne l'est pas, sans rien changer.</summary>
     public async Task<ResultatDeLaCorrection> CorrigerAsync(int id, CorrectionDUneOffre correction, CancellationToken annulation)

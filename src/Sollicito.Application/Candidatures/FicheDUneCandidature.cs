@@ -19,6 +19,7 @@ namespace Sollicito.Application.Candidatures;
 /// <param name="Correction">La correction du dernier changement, si un changement est à corriger.</param>
 /// <param name="Historique">Ses événements, du plus ancien au plus récent ; à égalité, dans l'ordre d'enregistrement.</param>
 /// <param name="Relances">Ses relances, dans l'ordre de leur planification : au plus une à faire.</param>
+/// <param name="Offre">L'identifiant de l'offre d'où elle vient (#38), ou rien.</param>
 public sealed record FicheDUneCandidature(
     int Id,
     EntrepriseConnue Entreprise,
@@ -28,7 +29,8 @@ public sealed record FicheDUneCandidature(
     IReadOnlyList<StatutDeCandidature> PassagesPermis,
     CorrectionPossible? Correction,
     IReadOnlyList<EvenementDeLHistorique> Historique,
-    IReadOnlyList<RelanceLue> Relances)
+    IReadOnlyList<RelanceLue> Relances,
+    int? Offre)
 {
     /// <summary>La fiche d'une candidature et de son entreprise.</summary>
     public static FicheDUneCandidature De(CandidatureSuivie suivie)
@@ -49,7 +51,8 @@ public sealed record FicheDUneCandidature(
             candidature.PassagesPermis,
             aCorriger is null ? null : new CorrectionPossible(aCorriger.Id, aCorriger.Nouveau, aCorriger.Ancien),
             [.. candidature.Historique.Select(evenement => EvenementDeLHistorique.De(candidature, evenement, Destinataire))],
-            [.. candidature.Relances.Select(relance => new RelanceLue(relance.Id, relance.Echeance, relance.Etat, Destinataire(relance)))]);
+            [.. candidature.Relances.Select(relance => new RelanceLue(relance.Id, relance.Echeance, relance.Etat, Destinataire(relance)))],
+            candidature.OffreId);
     }
 }
 

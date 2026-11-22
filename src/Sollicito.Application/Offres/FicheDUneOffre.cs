@@ -1,9 +1,13 @@
 using Sollicito.Application.Candidatures;
+using Sollicito.Domain.Candidatures;
 using Sollicito.Domain.Offres;
 
 namespace Sollicito.Application.Offres;
 
-/// <summary>La fiche d'une offre (#36) : ses champs, son texte et ses doublons possibles (règle 3), relus à chaque lecture.</summary>
+/// <summary>
+/// La fiche d'une offre (#36) : ses champs, son texte et ses doublons possibles (règle 3), relus à chaque lecture, et sa
+/// candidature, si elle en a une (#38).
+/// </summary>
 /// <param name="Id">Son identifiant.</param>
 /// <param name="Source">Le connecteur qui l'a fait entrer.</param>
 /// <param name="Entreprise">Son entreprise, sous son nom affiché, ou rien pour une offre anonyme.</param>
@@ -14,6 +18,7 @@ namespace Sollicito.Application.Offres;
 /// <param name="Texte">Son texte, tel quel, ou rien.</param>
 /// <param name="AjouteeLe">L'instant de l'import, en UTC.</param>
 /// <param name="DoublonsPossibles">Les autres offres de même entreprise et de même poste normalisé, les plus anciennes d'abord.</param>
+/// <param name="Candidature">Sa candidature, faite par « Postuler », ou rien.</param>
 public sealed record FicheDUneOffre(
     int Id,
     SourceDOffre Source,
@@ -24,17 +29,50 @@ public sealed record FicheDUneOffre(
     string? Adresse,
     string? Texte,
     DateTime AjouteeLe,
-    IReadOnlyList<OffreSignalee> DoublonsPossibles);
+    IReadOnlyList<OffreSignalee> DoublonsPossibles,
+    CandidatureDeLOffre? Candidature);
 
-/// <summary>Une offre signalée comme doublon possible d'une autre (règle 3) : de quoi la reconnaître, et l'ouvrir.</summary>
+/// <summary>
+/// Une offre signalée comme doublon possible d'une autre (règle 3) : de quoi la reconnaître, et l'ouvrir ; et sa
+/// candidature, s'il y en a une : un doublon possible déjà postulé se montre (#38).
+/// </summary>
 /// <param name="Id">Son identifiant.</param>
 /// <param name="Poste">Son poste.</param>
 /// <param name="Entreprise">Son entreprise, sous son nom affiché.</param>
 /// <param name="Lieu">Son lieu, ou rien.</param>
 /// <param name="AjouteeLe">L'instant de son import, en UTC.</param>
-public sealed record OffreSignalee(int Id, string Poste, EntrepriseConnue Entreprise, string? Lieu, DateTime AjouteeLe);
+/// <param name="Candidature">Sa candidature, ou rien.</param>
+public sealed record OffreSignalee(int Id, string Poste, EntrepriseConnue Entreprise, string? Lieu, DateTime AjouteeLe, CandidatureDeLOffre? Candidature);
 
 /// <summary>L'offre déjà enregistrée qu'un même texte recollé retrouve (règle 2).</summary>
 /// <param name="Id">Son identifiant.</param>
 /// <param name="AjouteeLe">L'instant de son import, en UTC.</param>
 public sealed record OffreDejaEnregistree(int Id, DateTime AjouteeLe);
+
+/// <summary>La candidature d'une offre (#38) : de quoi la reconnaître, et l'ouvrir.</summary>
+/// <param name="Id">Son identifiant.</param>
+/// <param name="Statut">Son statut.</param>
+/// <param name="EnvoyeeLe">L'instant de son envoi, en UTC.</param>
+public sealed record CandidatureDeLOffre(int Id, StatutDeCandidature Statut, DateTime EnvoyeeLe);
+
+/// <summary>
+/// Une offre telle que la liste des offres la montre (#38) : ses champs, sans son texte, et sa candidature, s'il y en a
+/// une. L'interface filtre elle-même la liste : rien de la recherche ne quitte la page.
+/// </summary>
+/// <param name="Id">Son identifiant.</param>
+/// <param name="Source">Le connecteur qui l'a fait entrer.</param>
+/// <param name="Entreprise">Son entreprise, sous son nom affiché, ou rien pour une offre anonyme.</param>
+/// <param name="Poste">Le poste offert.</param>
+/// <param name="Lieu">Le lieu, ou rien.</param>
+/// <param name="PublieeLe">Le jour de sa publication, ou rien.</param>
+/// <param name="AjouteeLe">L'instant de l'import, en UTC.</param>
+/// <param name="Candidature">Sa candidature, ou rien.</param>
+public sealed record OffreListee(
+    int Id,
+    SourceDOffre Source,
+    EntrepriseConnue? Entreprise,
+    string Poste,
+    string? Lieu,
+    DateOnly? PublieeLe,
+    DateTime AjouteeLe,
+    CandidatureDeLOffre? Candidature);

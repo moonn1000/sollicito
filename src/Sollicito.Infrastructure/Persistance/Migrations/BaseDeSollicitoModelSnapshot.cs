@@ -29,6 +29,9 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                     b.Property<DateTime>("EnvoyeeLe")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("OffreId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Poste")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -44,6 +47,9 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                     b.HasIndex("EntrepriseId");
 
                     b.HasIndex("EnvoyeeLe");
+
+                    b.HasIndex("OffreId")
+                        .IsUnique();
 
                     b.ToTable("Candidatures", (string)null);
                 });
@@ -280,6 +286,11 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
                         .HasForeignKey("EntrepriseId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("Sollicito.Domain.Offres.Offre", null)
+                        .WithOne()
+                        .HasForeignKey("Sollicito.Domain.Candidatures.Candidature", "OffreId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("Sollicito.Domain.Candidatures.EvenementDeCandidature", b =>

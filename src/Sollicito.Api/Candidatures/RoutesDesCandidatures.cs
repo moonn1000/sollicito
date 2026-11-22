@@ -207,7 +207,7 @@ internal static class RoutesDesCandidatures
                 statusCode: StatusCodes.Status409Conflict,
                 title: titreDuConflit ?? titreDuRefus,
                 detail: nonPermis.Motif),
-            // Le nom enregistré, lu en base, et le nombre de candidatures concernées ; jamais le nom saisi.
+            // Le nom enregistré, lu en base, et le nombre de candidatures et d'offres concernées ; jamais le nom saisi.
             ResultatDuSuivi.NomACorriger nomACorriger => TypedResults.Problem(
                 statusCode: StatusCodes.Status409Conflict,
                 title: TitreDuNomACorriger,
@@ -216,6 +216,7 @@ internal static class RoutesDesCandidatures
                 {
                     ["entreprise"] = nomACorriger.Entreprise,
                     ["candidatures"] = nomACorriger.Candidatures,
+                    ["offres"] = nomACorriger.Offres,
                 }),
             _ => throw new UnreachableException(),
         };

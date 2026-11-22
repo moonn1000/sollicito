@@ -87,10 +87,39 @@ public sealed class JournauxDesOffresTests
                 })),
             ];
 
-            // Porte fermée, pendant une restauration : refusé par 503.
+            // La liste (#38), puis « Postuler » : accepté, déjà postulé, offre anonyme, date refusée, offre inconnue, et
+            // ses corps illisibles (champ inconnu, répété, répété à la casse près, type inattendu, trop gros).
+            var anonyme = Id(await api.CollerAvecSuccesAsync($"Offre anonyme de {Donnee}.", $"Poste anonyme de {Donnee}", lieu: $"Lieu {Donnee}"));
+            HttpStatusCode[] statutsDePostuler =
+            [
+                await StatutAsync(api.EnvoyerAsync(HttpMethod.Get, Route, jeton: true)),
+                await StatutAsync(api.PostulerAsync(offre, "2026-11-18T10:00")),
+                await StatutAsync(api.PostulerAsync(offre, "2026-11-18T10:00")),
+                await StatutAsync(api.PostulerAsync(anonyme, "2026-11-18T10:00")),
+                await StatutAsync(api.PostulerAsync(999, Donnee)),
+                await StatutAsync(api.EcrireAsync(HttpMethod.Post, AdresseDePostuler(anonyme), $$"""{"envoyeeLe":"2026-11-18T10:00","entreprise":"{{Donnee}}"}""")),
+                await StatutAsync(api.EcrireAsync(HttpMethod.Post, AdresseDePostuler(anonyme), $$"""{"envoyeeLe":"{{Donnee}}","envoyeeLe":"{{Donnee}}"}""")),
+                await StatutAsync(api.EcrireAsync(HttpMethod.Post, AdresseDePostuler(anonyme), $$"""{"envoyeeLe":"{{Donnee}}","EnvoyeeLe":"{{Donnee}}"}""")),
+                await StatutAsync(api.EcrireAsync(HttpMethod.Post, AdresseDePostuler(anonyme), $$"""{"envoyeeLe":["{{Donnee}}"]}""")),
+                await StatutAsync(api.EcrireAsync(HttpMethod.Post, AdresseDePostuler(anonyme), CorpsDePostuler(Donnee + new string('a', 20_000)))),
+            ];
+            Assert.Equal(
+                [
+                    HttpStatusCode.OK, HttpStatusCode.Created, HttpStatusCode.Conflict, HttpStatusCode.Conflict, HttpStatusCode.NotFound,
+                    HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.RequestEntityTooLarge,
+                ],
+                statutsDePostuler);
+
+            // Une date refusée, sur une offre qui a son entreprise et pas de candidature.
+            var libre = Id(await api.CollerAvecSuccesAsync($"Offre libre de {Donnee}.", $"Poste libre de {Donnee}", entreprise: $"Entreprise {Donnee}"));
+            Assert.Equal(HttpStatusCode.BadRequest, await StatutAsync(api.PostulerAsync(libre, Donnee)));
+
+            // Porte fermée, pendant une restauration : refusé par 503, pour coller comme pour la liste et « Postuler ».
             var porte = api.Services.GetRequiredService<PorteDeLaBase>();
             Assert.True(await porte.FermerAsync(TimeSpan.FromSeconds(10), TimeProvider.System, TestContext.Current.CancellationToken));
             var pendantLaRestauration = await StatutAsync(api.CollerAsync($"Pendant de {Donnee}.", $"Poste de {Donnee}"));
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, await StatutAsync(api.EnvoyerAsync(HttpMethod.Get, Route, jeton: true)));
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, await StatutAsync(api.PostulerAsync(libre, "2026-11-18T10:00")));
             porte.Ouvrir();
 
             Assert.Equal(
@@ -112,19 +141,38 @@ public sealed class JournauxDesOffresTests
         Assert.Contains(entrees, entree => entree.StartsWith(nameof(LogLevel.Debug) + " Microsoft.EntityFrameworkCore.Database.Transaction ", StringComparison.Ordinal));
         Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(entrees, entree => entree.Contains(empreinte, StringComparison.OrdinalIgnoreCase));
+        // Ni sous ses formes normalisées (suites de #36, #98) : le poste normalisé et la clé de l'entreprise, que la base
+        // garde, et la donnée sans sa ponctuation, d'où elles viennent.
+        foreach (var forme in FormesNormalisees)
+        {
+            Assert.DoesNotContain(entrees, entree => entree.Contains(forme, StringComparison.OrdinalIgnoreCase));
+        }
     }
+
+    // La donnée, telle que la normalisation du poste et la clé d'une entreprise l'écrivent.
+    private static readonly string[] FormesNormalisees =
+    [
+        Domain.Offres.PosteNormalise.De(Donnee),
+        Domain.Offres.PosteNormalise.De($"Poste de {Donnee}"),
+        Domain.Entreprises.CleDEntreprise.De($"Entreprise {Donnee}"),
+    ];
 
     [Theory]
     [InlineData("POST", "/api/offres", $$"""{"texte":"{{Donnee}}","poste":"Comptable"}""")]
+    [InlineData("GET", "/api/offres", null)]
     [InlineData("GET", "/api/offres/1", null)]
     [InlineData("PUT", "/api/offres/1", $$"""{"poste":"{{Donnee}}"}""")]
+    [InlineData("POST", "/api/offres/1/candidature", $$"""{"envoyeeLe":"{{Donnee}}"}""")]
     public async Task Une_exception_pendant_une_route_des_offres_n_ecrit_que_son_type(string methode, string chemin, string? corps)
     {
         var capture = new CaptureDesJournaux();
         await using (var api = await ApiLancee.LancerAsync(builder =>
         {
             ToutJournaliser(builder, capture);
-            builder.ConfigureTestServices(services => services.AddScoped<IDepotDesOffres>(_ => new DepotDesOffresEnPanne()));
+            // « Postuler » écrit par le dépôt des candidatures (#38) : les deux sont en panne.
+            builder.ConfigureTestServices(services => services
+                .AddScoped<IDepotDesOffres>(_ => new DepotDesOffresEnPanne())
+                .AddScoped<Application.Candidatures.IDepotDesCandidatures>(_ => new DepotEnPanne(Donnee)));
         }))
         {
             using var reponse = await api.EnvoyerAsync(new HttpMethod(methode), chemin, jeton: true, requete =>
@@ -162,6 +210,9 @@ public sealed class JournauxDesOffresTests
             throw new InvalidOperationException($"Panne simulée : {Donnee}");
 
         public Task<FicheDUneOffre?> LireAsync(int id, CancellationToken annulation) =>
+            throw new InvalidOperationException($"Panne simulée : {Donnee}");
+
+        public Task<IReadOnlyList<OffreListee>> ListerAsync(CancellationToken annulation) =>
             throw new InvalidOperationException($"Panne simulée : {Donnee}");
     }
 }

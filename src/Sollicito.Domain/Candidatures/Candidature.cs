@@ -23,6 +23,11 @@ namespace Sollicito.Domain.Candidatures;
 /// et chaque relance faite ou abandonnée entre dans l'historique. Clore la candidature abandonne sa relance à faire ; la
 /// rattacher à une autre entreprise en retire le destinataire.
 /// </para>
+/// <para>
+/// Faite depuis une offre (« Postuler », #38), elle désigne cette offre par son identifiant, pour toujours : l'offre vit
+/// à part, et ni sa correction ni la modification de la candidature ne défont le lien. Une offre fait l'objet d'au plus
+/// une candidature.
+/// </para>
 /// </summary>
 public sealed class Candidature
 {
@@ -64,6 +69,9 @@ public sealed class Candidature
 
     /// <summary>L'identifiant de l'entreprise à qui la candidature est envoyée.</summary>
     public int EntrepriseId { get; private set; }
+
+    /// <summary>L'identifiant de l'offre d'où elle vient (#38), ou rien pour une candidature saisie sans offre (#11).</summary>
+    public int? OffreId { get; private set; }
 
     /// <summary>Le poste visé.</summary>
     public string Poste { get; private set; }
@@ -144,6 +152,24 @@ public sealed class Candidature
         }
 
         return new Candidature(entrepriseId, posteLu, envoyeeLe, StatutDeCandidature.Envoyee);
+    }
+
+    /// <summary>
+    /// Postule à une offre (#38) : une candidature enregistrée comme par <see cref="Enregistrer"/>, aux mêmes règles, qui
+    /// désigne l'offre d'où elle vient. L'appelant lui donne l'entreprise et le poste de l'offre, et a vérifié que l'offre
+    /// n'a pas encore de candidature.
+    /// </summary>
+    /// <param name="offreId">L'identifiant de l'offre, déjà enregistrée.</param>
+    /// <param name="entrepriseId">L'identifiant de l'entreprise de l'offre.</param>
+    /// <param name="poste">Le poste de l'offre.</param>
+    /// <param name="envoyeeLe">L'instant de l'envoi, en UTC.</param>
+    /// <param name="maintenant">L'instant présent, en UTC.</param>
+    public static Candidature Postuler(int offreId, int entrepriseId, string? poste, DateTime envoyeeLe, DateTime maintenant)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(offreId);
+        var candidature = Enregistrer(entrepriseId, poste, envoyeeLe, maintenant);
+        candidature.OffreId = offreId;
+        return candidature;
     }
 
     /// <summary>Vrai si une correction désigne ce changement : il reste dans l'historique, marqué comme corrigé.</summary>

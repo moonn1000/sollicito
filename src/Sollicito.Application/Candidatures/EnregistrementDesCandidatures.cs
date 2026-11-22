@@ -66,6 +66,68 @@ public sealed class EnregistrementDesCandidatures(IDepotDesCandidatures depot, T
     }
 
     /// <summary>
+    /// Postule à une offre (#38, ADR-0014) : la candidature reprend l'entreprise et le poste de l'offre, lus en base dans
+    /// l'écriture qui la crée, et part d'Envoyée à la date d'envoi saisie, aux règles de l'enregistrement (#11). Elle
+    /// désigne l'offre, qui n'en reçoit jamais une seconde. Rien n'est enregistré si l'offre n'existe pas, si elle a déjà sa
+    /// candidature, si elle n'a pas d'entreprise, si son poste ne se reprend pas, ou si la date est refusée ; aucune
+    /// entreprise n'est jamais créée.
+    /// </summary>
+    public async Task<ResultatDeLaPostulation> PostulerAsync(int offreId, SaisieDUnePostulation saisie, CancellationToken annulation)
+    {
+        ArgumentNullException.ThrowIfNull(saisie);
+
+        // La date se lit avant l'écriture, sans conclure : l'état de l'offre passe avant elle, puisqu'une date corrigée
+        // n'aiderait pas une offre déjà postulée.
+        var maintenant = horloge.GetUtcNow().UtcDateTime;
+        var dateAdmise = EssayerDeLireLEnvoi(saisie.EnvoyeeLe, maintenant, out var envoyeeLe, out var refusDeLaDate);
+
+        // L'écriture est exclusive : deux « Postuler » simultanés sur une même offre passent l'un après l'autre, et le
+        // second trouve la candidature du premier. L'index unique de la base refuserait de toute façon la seconde.
+        await using var ecriture = await depot.CommencerUneEcritureAsync(annulation);
+        var offre = await ecriture.TrouverLOffreAPostulerAsync(offreId, annulation);
+        if (offre is null)
+        {
+            return new ResultatDeLaPostulation.Introuvable();
+        }
+
+        if (offre.CandidatureId is { } candidatureId)
+        {
+            return new ResultatDeLaPostulation.DejaPostulee(candidatureId);
+        }
+
+        if (offre.Entreprise is null)
+        {
+            return new ResultatDeLaPostulation.EntrepriseManquante();
+        }
+
+        // Le poste d'une offre admise est toujours un poste de candidature admis ; seule une base restaurée, retouchée
+        // hors de Sollicito, pourrait y déroger : la route le dit au lieu d'échouer.
+        if (!Candidature.EssayerDeLireLePoste(offre.Poste, out var poste, out _))
+        {
+            return new ResultatDeLaPostulation.PosteARevoir();
+        }
+
+        if (!dateAdmise)
+        {
+            return new ResultatDeLaPostulation.Refusee(new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                [SaisieDUneCandidature.Champs.EnvoyeeLe] = [refusDeLaDate],
+            });
+        }
+
+        var candidature = Candidature.Postuler(offre.Id, offre.Entreprise.Id, poste, envoyeeLe, maintenant);
+        await ecriture.AjouterAsync(candidature, annulation);
+        await ecriture.ValiderAsync(annulation);
+
+        return new ResultatDeLaPostulation.Enregistree(new CandidatureListee(
+            candidature.Id,
+            offre.Entreprise,
+            candidature.Poste,
+            candidature.EnvoyeeLe,
+            candidature.Statut));
+    }
+
+    /// <summary>
     /// Lit la forme d'une date et d'une heure d'envoi saisies, requises : <c>AAAA-MM-JJTHH:MM</c>, les secondes en
     /// option. Rend l'heure saisie, sans fuseau, ou le motif du refus. La modification d'une candidature (#25) la lit de
     /// même.
@@ -121,4 +183,37 @@ public abstract record ResultatDeLEnregistrement
 
     /// <summary>La saisie est refusée : pour chaque champ refusé, ses messages. Rien n'est enregistré.</summary>
     public sealed record Refusee(IReadOnlyDictionary<string, string[]> Refus) : ResultatDeLEnregistrement;
+}
+
+/// <summary>
+/// « Postuler » tel que l'interface l'envoie (#38) : la seule date et heure d'envoi, telles que tapées, sans décalage.
+/// L'entreprise et le poste viennent de l'offre, lus en base : un corps qui en porte est illisible, comme un statut.
+/// </summary>
+/// <param name="EnvoyeeLe">La date et l'heure d'envoi, sans décalage : <c>2026-03-27T23:30</c>, les secondes en option.</param>
+public sealed record SaisieDUnePostulation(string? EnvoyeeLe);
+
+/// <summary>Ce que rend « Postuler » (#38).</summary>
+public abstract record ResultatDeLaPostulation
+{
+    private ResultatDeLaPostulation()
+    {
+    }
+
+    /// <summary>La candidature est enregistrée, et désigne l'offre.</summary>
+    public sealed record Enregistree(CandidatureListee Candidature) : ResultatDeLaPostulation;
+
+    /// <summary>La date d'envoi est refusée : ses messages. Rien n'est enregistré.</summary>
+    public sealed record Refusee(IReadOnlyDictionary<string, string[]> Refus) : ResultatDeLaPostulation;
+
+    /// <summary>L'offre n'existe pas.</summary>
+    public sealed record Introuvable : ResultatDeLaPostulation;
+
+    /// <summary>L'offre a déjà sa candidature, de cet identifiant, lu en base : rien n'est enregistré.</summary>
+    public sealed record DejaPostulee(int CandidatureId) : ResultatDeLaPostulation;
+
+    /// <summary>L'offre n'a pas d'entreprise : elle s'indique d'abord par sa correction (#36).</summary>
+    public sealed record EntrepriseManquante : ResultatDeLaPostulation;
+
+    /// <summary>Le poste de l'offre ne se reprend pas tel quel : l'offre se corrige d'abord.</summary>
+    public sealed record PosteARevoir : ResultatDeLaPostulation;
 }

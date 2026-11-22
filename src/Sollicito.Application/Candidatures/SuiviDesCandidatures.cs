@@ -266,5 +266,6 @@ public abstract record ResultatDuSuivi
     /// </summary>
     /// <param name="Entreprise">L'entreprise que reconnaît le nom saisi, sous son nom enregistré.</param>
     /// <param name="Candidatures">Les candidatures qui afficheraient le nom corrigé, celle qu'on modifie comprise.</param>
-    public sealed record NomACorriger(EntrepriseConnue Entreprise, int Candidatures) : ResultatDuSuivi;
+    /// <param name="Offres">Les offres qui désignent l'entreprise, et afficheraient aussi le nom corrigé (#38, suites de #36).</param>
+    public sealed record NomACorriger(EntrepriseConnue Entreprise, int Candidatures, int Offres) : ResultatDuSuivi;
 }
