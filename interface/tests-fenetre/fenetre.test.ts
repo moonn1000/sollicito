@@ -161,9 +161,15 @@ test("un lien http ou https cliqué en nouvelle fenêtre s'ouvre dans le navigat
   }, liens);
 
   // Un script qui ouvre une fenêtre sans geste de l'utilisateur. Playwright en donne un à chaque évaluation ; il
-  // expire au bout de cinq secondes.
+  // expire au bout de cinq secondes, mais toute entrée réelle reçue par la fenêtre pendant l'attente la relance (#88,
+  // point 20). L'attente n'a donc pas de durée fixe : elle dure tant que l'activation est là, dans cette seule évaluation
+  // (une autre en redonnerait une), sans dépasser trente secondes.
   const activationAuMomentDeLOuverture = await page.evaluate(async () => {
-    await new Promise((resoudre) => setTimeout(resoudre, 6_000));
+    const limite = Date.now() + 30_000;
+    while (navigator.userActivation.isActive && Date.now() < limite) {
+      await new Promise((resoudre) => setTimeout(resoudre, 100));
+    }
+
     const active = navigator.userActivation.isActive;
     window.open("https://exemple.invalid/sans-geste");
     return active;
