@@ -9,6 +9,7 @@ import {
 import { ApercuDUneOffre } from "./ApercuDUneOffre.tsx";
 import {
   annonceDeLImport,
+  COPIE_AVANT_L_IMPORT_IMPOSSIBLE,
   decrireLesComptes,
   decrireLesDoublons,
   decrireLesMotifs,
@@ -23,7 +24,8 @@ type Etat =
   | { etape: "apercu"; contenu: ArrayBuffer; compteRendu: CompteRenduDUnFichier; gardees: ReadonlySet<number> }
   | { etape: "import"; contenu: ArrayBuffer; compteRendu: CompteRenduDUnFichier; gardees: ReadonlySet<number> }
   | { etape: "fait"; compteRendu: CompteRenduDUnFichier; different: boolean }
-  | { etape: "refuse"; motif: string; pendantLImport: boolean }
+  // Le refus, tel que l'alerte le dit.
+  | { etape: "refuse"; alerte: string }
   | { etape: "echec"; pendantLImport: boolean };
 
 const ECHEC_DE_L_EXAMEN = "Le fichier n'a pas pu être examiné. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.";
@@ -77,7 +79,7 @@ export function ImportDOffres({
 
     // Refusé avant d'être lu : un fichier trop gros ne passe pas en mémoire pour rien.
     if (fichier.size > TAILLE_MAXIMALE_DU_FICHIER) {
-      setEtat({ etape: "refuse", motif: FICHIER_TROP_GROS, pendantLImport: false });
+      setEtat({ etape: "refuse", alerte: FICHIER_TROP_GROS });
       return;
     }
 
@@ -92,7 +94,9 @@ export function ImportDOffres({
       setEtat(
         resultat.issue === "lu"
           ? { etape: "apercu", contenu, compteRendu: resultat.compteRendu, gardees: new Set() }
-          : { etape: "refuse", motif: resultat.motif, pendantLImport: false },
+          : resultat.issue === "refuse"
+            ? { etape: "refuse", alerte: resultat.motif }
+            : { etape: "echec", pendantLImport: false },
       );
     } catch {
       if (numero === choix.current) {
@@ -134,7 +138,7 @@ export function ImportDOffres({
       setEtat(
         resultat.issue === "lu"
           ? { etape: "fait", compteRendu: resultat.compteRendu, different: differeDeLApercu(compteRendu, gardees, resultat.compteRendu) }
-          : { etape: "refuse", motif: resultat.motif, pendantLImport: true },
+          : { etape: "refuse", alerte: resultat.issue === "refuse" ? `${resultat.motif} Rien n'a été importé.` : COPIE_AVANT_L_IMPORT_IMPOSSIBLE },
       );
     } catch {
       if (numero === choix.current) {
@@ -184,7 +188,7 @@ export function ImportDOffres({
         <>
           <p className="alerte" role="alert">
             {etat.etape === "refuse"
-              ? `${etat.motif}${etat.pendantLImport ? " Rien n'a été importé." : ""}`
+              ? etat.alerte
               : etat.pendantLImport
                 ? ECHEC_DE_L_IMPORT
                 : ECHEC_DE_L_EXAMEN}

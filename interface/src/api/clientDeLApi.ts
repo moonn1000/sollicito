@@ -462,17 +462,20 @@ export interface CompteRenduDUnFichier {
   comptes: ComptesDuFichier;
 }
 
-/** Ce que rendent l'aperçu et l'import d'un fichier CSV (#40) : le compte rendu, ou le motif du refus du fichier entier. */
-export type ResultatDuFichier = { issue: "lu"; compteRendu: CompteRenduDUnFichier } | { issue: "refuse"; motif: string };
+/**
+ * Ce que rendent l'aperçu et l'import d'un fichier CSV (#40) : le compte rendu, le motif du refus du fichier entier, ou, à
+ * l'import seulement, la copie de la base avant lui qui n'a pas pu se faire (ADR-0015) : rien n'est importé.
+ */
+export type ResultatDuFichier =
+  | { issue: "lu"; compteRendu: CompteRenduDUnFichier }
+  | { issue: "refuse"; motif: string }
+  | { issue: "copieImpossible" };
 
 /** La taille la plus grande d'un fichier CSV d'offres, en octets : 2 Mo (#40). */
 export const TAILLE_MAXIMALE_DU_FICHIER = 2 * 1024 * 1024;
 
 /** Le refus d'un fichier trop gros, celui de l'API (#40). */
 export const FICHIER_TROP_GROS = "Le fichier dépasse 2 Mo : découpez-le en plusieurs fichiers.";
-
-/** Le refus d'un import que la copie de la base, faite avant lui, n'a pas pu précéder (#40, ADR-0015). */
-export const COPIE_AVANT_L_IMPORT_IMPOSSIBLE = "Sollicito n'a pas pu copier votre base avant l'import : vérifiez la place libre sur le disque, puis réessayez.";
 
 /** Une réponse de l'API en erreur : jeton refusé, origine refusée, route inconnue… */
 export class ErreurDeLApi extends Error {
@@ -820,7 +823,7 @@ async function lireLeCompteRendu(reponse: Response): Promise<ResultatDuFichier> 
   }
 
   if (reponse.status === 409) {
-    return { issue: "refuse", motif: COPIE_AVANT_L_IMPORT_IMPOSSIBLE };
+    return { issue: "copieImpossible" };
   }
 
   throw new ErreurDeLApi(reponse.status);

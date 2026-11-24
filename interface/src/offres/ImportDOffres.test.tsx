@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import { COPIE_AVANT_L_IMPORT_IMPOSSIBLE, FICHIER_TROP_GROS, type ClientDeLApi } from "../api/clientDeLApi.ts";
+import { FICHIER_TROP_GROS, type ClientDeLApi } from "../api/clientDeLApi.ts";
 import {
   clientSimule,
   comptesFictifs,
@@ -204,14 +204,14 @@ test("un import que la copie de la base n'a pas pu précéder dit que rien n'a �
   afficher(
     clientSimule({
       examinerUnFichierCsv: vi.fn(async () => ({ issue: "lu" as const, compteRendu: compteRenduFictif() })),
-      importerUnFichierCsv: vi.fn(async () => ({ issue: "refuse" as const, motif: COPIE_AVANT_L_IMPORT_IMPOSSIBLE })),
+      importerUnFichierCsv: vi.fn(async () => ({ issue: "copieImpossible" as const })),
     }),
   );
   choisir(fichier());
   fireEvent.click(await screen.findByRole("button", { name: "Importer 1 offre" }));
 
   expect((await screen.findByRole("alert")).textContent).toBe(
-    "Sollicito n'a pas pu copier votre base avant l'import : vérifiez la place libre sur le disque, puis réessayez. Rien n'a été importé.",
+    "Sollicito n'a pas pu copier votre base avant l'import : rien n'a été importé. Réessayez dans un instant ; si l'erreur revient, vérifiez la place libre sur le disque.",
   );
   expect(screen.getByRole("button", { name: "Choisir un autre fichier" })).toBeDefined();
 });

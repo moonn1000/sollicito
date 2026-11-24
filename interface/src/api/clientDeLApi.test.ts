@@ -465,10 +465,7 @@ test("un fichier refusé rend son motif ; un corps trop gros, celui de la taille
     motif: "Le fichier dépasse 2 Mo : découpez-le en plusieurs fichiers.",
   });
   const copieManquee = Response.json({ title: "L'import n'est pas fait : la copie de la base, avant lui, n'a pas pu se faire.", status: 409 }, { status: 409 });
-  expect(await creerClientDeLApi(JETON_FICTIF, apiQuiRepond(copieManquee)).importerUnFichierCsv(new ArrayBuffer(1), [])).toEqual({
-    issue: "refuse",
-    motif: "Sollicito n'a pas pu copier votre base avant l'import : vérifiez la place libre sur le disque, puis réessayez.",
-  });
+  expect(await creerClientDeLApi(JETON_FICTIF, apiQuiRepond(copieManquee)).importerUnFichierCsv(new ArrayBuffer(1), [])).toEqual({ issue: "copieImpossible" });
   const accordRefuse = Response.json({ errors: { garder: ["Les lignes gardées doivent être des lignes d'offres du fichier, chacune une fois."] } }, { status: 400 });
   await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(accordRefuse)).importerUnFichierCsv(new ArrayBuffer(1), [99])).rejects.toBeInstanceOf(ErreurDeLApi);
   await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(new Response(null, { status: 503 }))).examinerUnFichierCsv(new ArrayBuffer(1))).rejects.toBeInstanceOf(ErreurDeLApi);

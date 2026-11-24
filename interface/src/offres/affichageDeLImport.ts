@@ -5,6 +5,13 @@ import { decrireLeDoublon } from "./affichage.ts";
 /** L'en-tête du format, à recopier en première ligne du fichier (#40, docs/import-csv.md). */
 export const EN_TETE_DU_FORMAT = "poste;entreprise;lieu;publieeLe;adresse;texte";
 
+/**
+ * Ce que dit l'écran d'un import que la copie de la base n'a pas pu précéder (#40, ADR-0015) : la place manque, ou une
+ * autre opération sur les copies est en cours. Rien n'a été importé.
+ */
+export const COPIE_AVANT_L_IMPORT_IMPOSSIBLE =
+  "Sollicito n'a pas pu copier votre base avant l'import : rien n'a été importé. Réessayez dans un instant ; si l'erreur revient, vérifiez la place libre sur le disque.";
+
 /** Le moment d'un compte rendu : l'aperçu, qui n'écrit rien, ou l'import, qui a écrit. */
 export type MomentDuCompteRendu = "apercu" | "import";
 
