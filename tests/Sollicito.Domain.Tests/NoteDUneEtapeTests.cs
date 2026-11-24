@@ -1,4 +1,5 @@
 using Sollicito.Domain.Candidatures;
+using Sollicito.Domain.Offres;
 
 namespace Sollicito.Domain.Tests;
 
@@ -27,6 +28,14 @@ public sealed class NoteDUneEtapeTests
     [InlineData("Ligne 1\r\nLigne 2", "Ligne 1\nLigne 2")]
     [InlineData("Ligne 1\rLigne 2\n\nLigne 4", "Ligne 1\nLigne 2\n\nLigne 4")]
     [InlineData("Salaire :\t3 000 € brut", "Salaire :\t3 000 € brut")]
+    // Les sept formes de fin de ligne du modèle de domaine (« Coller une offre ») : CRLF, CR, U+000B, U+000C, U+0085,
+    // U+2028 et U+2029. Une note les ramène toutes à U+000A, comme le texte d'une offre (#82, point 10).
+    [InlineData("Ligne 1\u000BLigne 2", "Ligne 1\nLigne 2")]
+    [InlineData("Ligne 1\u000CLigne 2", "Ligne 1\nLigne 2")]
+    [InlineData("Ligne 1\u0085Ligne 2", "Ligne 1\nLigne 2")]
+    [InlineData("Ligne 1\u2028Ligne 2", "Ligne 1\nLigne 2")]
+    [InlineData("Ligne 1\u2029Ligne 2", "Ligne 1\nLigne 2")]
+    [InlineData("Ligne 1\r\nLigne 2\rLigne 3\u2028Ligne 4\u2029\u2029Ligne 6", "Ligne 1\nLigne 2\nLigne 3\nLigne 4\n\nLigne 6")]
     [InlineData("<b>gras</b> & \"guillemets\"", "<b>gras</b> & \"guillemets\"")]
     public void Une_note_garde_ses_lignes_et_ses_tabulations_et_perd_ses_blancs_d_extremite(string saisie, string attendue)
     {
@@ -47,6 +56,34 @@ public sealed class NoteDUneEtapeTests
         Assert.Equal("La note ne doit pas dépasser 2000 caractères.", erreur);
     }
 
+    // Les sept formes, et le saut de ligne lui-même, comme le texte d'une offre les lit.
+    public static TheoryData<string> LesFinsDeLigne =>
+    [
+        "\r\n",
+        "\r",
+        "\n",
+        "\u000B",
+        "\u000C",
+        "\u0085",
+        "" + (char)0x2028,
+        "" + (char)0x2029,
+    ];
+
+    // La fonction des fins de ligne est écrite deux fois, pour la note et pour le texte d'une offre : ce test garde
+    // qu'elles disent la même chose, tant que l'offre ne reprend pas la fonction commune (#82, point 10).
+    [Theory]
+    [MemberData(nameof(LesFinsDeLigne))]
+    public void Une_note_et_un_texte_d_offre_ramenent_une_fin_de_ligne_de_la_meme_facon(string fin)
+    {
+        var saisie = "Ligne 1" + fin + "Ligne 2";
+
+        Assert.True(TexteDUneOffre.EssayerDeLire(saisie, out var texteDeLOffre, out _));
+        Assert.True(Etape.EssayerDeLireLaNote(saisie, out var note, out _));
+
+        Assert.Equal(texteDeLOffre, note);
+        Assert.Equal("Ligne 1\nLigne 2", note);
+    }
+
     // Construits à l'exécution : un attribut garde ses chaînes en UTF-8, où une moitié isolée de paire de
     // substitution deviendrait un caractère de remplacement, valide.
     public static TheoryData<string> CaracteresRefuses =>
@@ -55,9 +92,6 @@ public sealed class NoteDUneEtapeTests
         "Appel\u0007reçu",
         "Appel\u001Breçu",
         "Appel\u007Freçu",
-        "Appel\u0085reçu",
-        "Appel\u000Breçu",
-        "Appel\u000Creçu",
         "Appel" + (char)0x202E + "uçer",
         "Appel" + (char)0x2067 + "reçu",
         "Appel" + (char)0xD800 + "reçu",
