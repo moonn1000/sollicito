@@ -13,6 +13,7 @@ const maintenant = () => new Date("2026-11-18T13:30:00Z");
 
 interface Rappels {
   collerUneOffre: () => void;
+  importerUnFichier: () => void;
   ouvrirLOffre: (offre: number) => void;
   ouvrirLaCandidature: (candidature: number) => void;
 }
@@ -26,6 +27,7 @@ function Avec({ client, ...rappels }: { client: ClientDeLApi } & Rappels) {
       filtres={filtres}
       changerLesFiltres={setFiltres}
       collerUneOffre={rappels.collerUneOffre}
+      importerUnFichier={rappels.importerUnFichier}
       ouvrirLOffre={rappels.ouvrirLOffre}
       ouvrirLaCandidature={rappels.ouvrirLaCandidature}
       maintenant={maintenant}
@@ -38,6 +40,7 @@ function afficher(offres: OffreListee[] | Error) {
   const client = clientSimule({ listerLesOffres });
   const rappels = {
     collerUneOffre: vi.fn<Rappels["collerUneOffre"]>(),
+    importerUnFichier: vi.fn<Rappels["importerUnFichier"]>(),
     ouvrirLOffre: vi.fn<Rappels["ouvrirLOffre"]>(),
     ouvrirLaCandidature: vi.fn<Rappels["ouvrirLaCandidature"]>(),
   };
@@ -68,7 +71,7 @@ const OFFRES = [
 ];
 
 test("la liste montre les offres dans l'ordre de l'API, avec leur candidature, et chaque ligne mène à sa fiche", async () => {
-  const { ouvrirLOffre, ouvrirLaCandidature, collerUneOffre } = afficher(OFFRES);
+  const { ouvrirLOffre, ouvrirLaCandidature, collerUneOffre, importerUnFichier } = afficher(OFFRES);
 
   const tableau = await screen.findByRole("table");
   expect(within(tableau).getAllByRole("columnheader").map((entete) => entete.textContent)).toEqual(["Poste", "Entreprise", "Lieu", "Ajoutée le", "Candidature"]);
@@ -84,6 +87,8 @@ test("la liste montre les offres dans l'ordre de l'API, avec leur candidature, e
   expect(ouvrirLaCandidature).toHaveBeenCalledWith(9);
   fireEvent.click(screen.getByRole("button", { name: "Coller une offre" }));
   expect(collerUneOffre).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole("button", { name: "Importer un fichier CSV" }));
+  expect(importerUnFichier).toHaveBeenCalledOnce();
 });
 
 test("des textes piégés s'affichent tels quels et échappés dans la liste", async () => {
@@ -166,7 +171,7 @@ test("le filtre par source propose les sources, et « Effacer les filtres » ren
   await screen.findByRole("table");
 
   const source = screen.getByLabelText<HTMLSelectElement>("Source");
-  expect(Array.from(source.options).map((option) => option.textContent)).toEqual(["Toutes les sources", "Texte collé"]);
+  expect(Array.from(source.options).map((option) => option.textContent)).toEqual(["Toutes les sources", "Texte collé", "Fichier CSV"]);
   expect(screen.queryByRole("button", { name: "Effacer les filtres" })).toBeNull();
   fireEvent.change(source, { target: { value: "TexteColle" } });
   chercher("comptable");

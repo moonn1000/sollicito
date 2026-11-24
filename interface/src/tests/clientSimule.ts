@@ -5,6 +5,8 @@ import type {
   ChangementDeStatutLu,
   ClientDeLApi,
   ClotureDeRelanceLue,
+  ComptesDuFichier,
+  CompteRenduDUnFichier,
   ContactConnu,
   CopieGardee,
   EntrepriseConnue,
@@ -12,6 +14,7 @@ import type {
   EtatDesSauvegardes,
   FicheDUneCandidature,
   FicheDUneOffre,
+  LigneDuCompteRendu,
   OffreListee,
   OffreSignalee,
   RelanceLue,
@@ -195,6 +198,34 @@ export const ENTREPRISES_FICTIVES: EntrepriseConnue[] = [
 ];
 
 /** Le client de l'API, simulé : chaque appel est un espion qui répond ce que le test veut. */
+/** Une ligne de compte rendu d'un fichier CSV (#40), à importer : la ligne 2, « Comptable », chez Lumière Verte. */
+export function ligneDuCompteRenduFictive(modifications: Partial<LigneDuCompteRendu> = {}): LigneDuCompteRendu {
+  return {
+    ligne: 2,
+    sort: "aImporter",
+    poste: "Comptable",
+    entreprise: "Lumière Verte",
+    lieu: "Liège",
+    offre: null,
+    trouvee: null,
+    ligneDOrigine: null,
+    doublons: null,
+    lignesDuFichier: null,
+    refus: null,
+    ...modifications,
+  };
+}
+
+/** Les comptes d'un fichier d'une seule ligne, à importer. */
+export function comptesFictifs(modifications: Partial<ComptesDuFichier> = {}): ComptesDuFichier {
+  return { lignes: 1, lignesVides: 0, aImporter: 1, importees: 0, dejaEnregistrees: 0, enDouble: 0, doublonsPossibles: 0, invalides: 0, ...modifications };
+}
+
+/** Le compte rendu d'un fichier d'une seule ligne, à importer. */
+export function compteRenduFictif(modifications: Partial<CompteRenduDUnFichier> = {}): CompteRenduDUnFichier {
+  return { lignes: [ligneDuCompteRenduFictive()], comptes: comptesFictifs(), ...modifications };
+}
+
 export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
   return {
     lireEtat: vi.fn<ClientDeLApi["lireEtat"]>(async () => ({ statut: "pret" })),
@@ -278,6 +309,14 @@ export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
     postuler: vi.fn<ClientDeLApi["postuler"]>(async () => ({
       issue: "enregistree",
       candidature: candidatureFictive({ id: 5, poste: "Développeur .NET (H/F)", envoyeeLe: "2026-11-18T09:00:00Z" }),
+    })),
+    examinerUnFichierCsv: vi.fn<ClientDeLApi["examinerUnFichierCsv"]>(async () => ({ issue: "lu", compteRendu: compteRenduFictif() })),
+    importerUnFichierCsv: vi.fn<ClientDeLApi["importerUnFichierCsv"]>(async () => ({
+      issue: "lu",
+      compteRendu: compteRenduFictif({
+        lignes: [ligneDuCompteRenduFictive({ sort: "importee", offre: 21 })],
+        comptes: comptesFictifs({ aImporter: 0, importees: 1 }),
+      }),
     })),
     ...modifications,
   } satisfies ClientDeLApi;

@@ -11,6 +11,7 @@ export type Ecran =
   | { nom: "saisie" }
   | { nom: "offres" }
   | { nom: "saisieDUneOffre" }
+  | { nom: "importDOffres" }
   | { nom: "reglages" }
   | { nom: "fiche"; candidature: number }
   | { nom: "modification"; candidature: number }
@@ -27,9 +28,10 @@ const ENTREES: readonly { ecran: Entree; libelle: string }[] = [
   { ecran: "reglages", libelle: "Réglages" },
 ];
 
-// L'entrée de la navigation où l'on se trouve : « Coller une offre » s'ouvre depuis la liste des offres.
+// L'entrée de la navigation où l'on se trouve : « Coller une offre » et « Importer des offres » s'ouvrent depuis la liste
+// des offres.
 function entreeDe(ecran: Ecran): string {
-  return ecran.nom === "saisieDUneOffre" ? "offres" : ecran.nom;
+  return ecran.nom === "saisieDUneOffre" || ecran.nom === "importDOffres" ? "offres" : ecran.nom;
 }
 
 /**

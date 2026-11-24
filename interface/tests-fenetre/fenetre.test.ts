@@ -576,6 +576,54 @@ test("la liste des offres affiche une offre piégée échappée, et « Postuler 
   expect(await page.getByRole("button", { name: /^Candidature Envoyée pour / }).count()).toBe(2);
 });
 
+test("un fichier CSV piégé s'examine, s'importe en une fois, et ses offres paraissent échappées dans la liste (#40)", async () => {
+  const { page } = fenetre;
+  const poste = "<img src=x onerror=alert(1)> Magasinier";
+  const texte = "<script>alert('fictif')</script>\nDeuxième ligne";
+  await rechargerLInterface();
+  await page.getByRole("button", { name: "Offres", exact: true }).click();
+  await page.getByRole("button", { name: "Importer un fichier CSV", exact: true }).click();
+  await page.getByRole("heading", { level: 2, name: "Importer des offres" }).waitFor();
+
+  // Un fichier avec BOM, ; pour séparateur, des cellules entre guillemets, un saut de ligne dans le texte, une formule et
+  // une date refusée. Il se pose sans dialogue, par CDP : la page n'en lit que les octets.
+  const contenu =
+    [
+      `${String.fromCharCode(0xfeff)}poste;entreprise;lieu;publieeLe;texte`,
+      `"${poste}";Brasserie Lune Rousse SRL;Liège;18/11/2026;"${texte.replace("\n", "\r\n")}"`,
+      `=1+1;Lumière Verte;"Namur; centre";;`,
+      `Chauffeur;Lumière Verte;Huy;31/02/2026;`,
+    ].join("\r\n") + "\r\n";
+  await page.getByLabel("Fichier CSV").setInputFiles({ name: "offres-fictives.csv", mimeType: "text/csv", buffer: Buffer.from(contenu, "utf8") });
+
+  // L'aperçu : les deux premières lignes à importer, la troisième invalide ; les cellules en texte, telles que lues. La
+  // liste montrera ensuite l'entreprise reconnue, sous son nom enregistré.
+  await page.getByRole("heading", { level: 3, name: "Aperçu" }).waitFor();
+  const apercu = page.getByRole("table", { name: "Ce que Sollicito ferait de chaque ligne." });
+  expect(await apercu.getByRole("row").nth(1).getByRole("cell").allTextContents()).toEqual(["2", poste, "Brasserie Lune Rousse SRL", "Liège", "À importer"]);
+  expect(await apercu.getByRole("row").nth(2).getByRole("cell").nth(1).textContent()).toBe("=1+1");
+  await apercu.getByText("colonne publieeLe : La date de publication s'écrit JJ/MM/AAAA ou AAAA-MM-JJ, par exemple 18/11/2026.").waitFor();
+  expect(await page.locator("main img, main script").count()).toBe(0);
+
+  await page.getByRole("button", { name: "Importer 2 offres", exact: true }).click();
+  await page.getByRole("heading", { level: 3, name: "Compte rendu" }).waitFor();
+  await page.getByText("2 offres importées.", { exact: true }).waitFor();
+
+  // La liste montre les offres importées, sous leur source ; la fiche, leur texte échappé.
+  await page.getByRole("button", { name: "Revenir aux offres", exact: true }).click();
+  await page.getByRole("row").nth(1).waitFor();
+  await page.getByLabel("Source").selectOption("FichierCsv");
+  await page.getByText("2 offres sur", { exact: false }).waitFor();
+  expect(await page.locator("main table img, main table script").count()).toBe(0);
+  await page.getByRole("button", { name: `${poste}, chez Brasserie Lune Rousse : ouvrir la fiche` }).click();
+  await page.getByRole("heading", { level: 2, name: poste }).waitFor();
+  expect(await page.locator(".texte-de-l-offre").textContent()).toBe(texte);
+  await page.getByText("Fichier CSV", { exact: true }).waitFor();
+  expect(await page.locator("main img, main script").count()).toBe(0);
+  await page.getByRole("button", { name: "Revenir aux offres", exact: true }).click();
+  await page.getByRole("button", { name: "Effacer les filtres", exact: true }).click();
+});
+
 test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fichier", async () => {
   const { origineDeLApi, dossierDeDonnees } = fenetre;
 

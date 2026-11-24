@@ -425,6 +425,50 @@ test("les relances du tableau de bord et le délai par défaut se lisent ; le d�
   });
 });
 
+test("l'aperçu et l'import d'un fichier CSV envoient ses seuls octets, en base64, et l'import ses lignes gardées (#40)", async () => {
+  const envoyer = vi.fn<typeof fetch>(async () => Response.json({ lignes: [], comptes: {} }, { status: 200 }));
+  const client = creerClientDeLApi(JETON_FICTIF, envoyer);
+  const octets = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode("poste\nDéveloppeur\n"), 0xff]);
+
+  expect((await client.examinerUnFichierCsv(octets.buffer)).issue).toBe("lu");
+  expect((await client.importerUnFichierCsv(octets.buffer, [4, 9])).issue).toBe("lu");
+
+  const [[cheminDeLApercu, apercu], [cheminDeLImport, importer]] = envoyer.mock.calls;
+  expect(cheminDeLApercu).toBe("/api/offres/import/apercu");
+  expect(cheminDeLImport).toBe("/api/offres/import");
+  expect(apercu?.method).toBe("POST");
+  const corpsDeLApercu = JSON.parse(apercu!.body as string) as Record<string, unknown>;
+  expect(Object.keys(corpsDeLApercu)).toEqual(["contenu"]);
+  expect(Uint8Array.from(atob(corpsDeLApercu.contenu as string), (caractere) => caractere.charCodeAt(0))).toEqual(octets);
+  expect(JSON.parse(importer!.body as string)).toEqual({ contenu: corpsDeLApercu.contenu, garder: [4, 9] });
+});
+
+test("un fichier de 2 Mo passe en base64 sans dépasser la pile", async () => {
+  const envoyer = vi.fn<typeof fetch>(async () => Response.json({ lignes: [], comptes: {} }, { status: 200 }));
+  const octets = new Uint8Array(2 * 1024 * 1024).map((_, i) => i % 251);
+
+  await creerClientDeLApi(JETON_FICTIF, envoyer).examinerUnFichierCsv(octets.buffer);
+
+  const { contenu } = JSON.parse(envoyer.mock.calls[0][1]!.body as string) as { contenu: string };
+  expect(contenu.length).toBe(Math.ceil(octets.length / 3) * 4);
+  expect(contenu.slice(0, 8)).toBe(btoa(String.fromCharCode(...octets.subarray(0, 6))));
+});
+
+test("un fichier refusé rend son motif ; un corps trop gros, celui de la taille ; une autre réponse lève une erreur (#40)", async () => {
+  const refuse = Response.json({ errors: { contenu: ["Le fichier est vide."] } }, { status: 400 });
+  expect(await creerClientDeLApi(JETON_FICTIF, apiQuiRepond(refuse)).examinerUnFichierCsv(new ArrayBuffer(0))).toEqual({
+    issue: "refuse",
+    motif: "Le fichier est vide.",
+  });
+  expect(await creerClientDeLApi(JETON_FICTIF, apiQuiRepond(new Response(null, { status: 413 }))).importerUnFichierCsv(new ArrayBuffer(1), [])).toEqual({
+    issue: "refuse",
+    motif: "Le fichier dépasse 2 Mo : découpez-le en plusieurs fichiers.",
+  });
+  const accordRefuse = Response.json({ errors: { garder: ["Les lignes gardées doivent être des lignes d'offres du fichier, chacune une fois."] } }, { status: 400 });
+  await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(accordRefuse)).importerUnFichierCsv(new ArrayBuffer(1), [99])).rejects.toBeInstanceOf(ErreurDeLApi);
+  await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(new Response(null, { status: 503 }))).examinerUnFichierCsv(new ArrayBuffer(1))).rejects.toBeInstanceOf(ErreurDeLApi);
+});
+
 const OFFRE = { texte: "Offre fictive.", entreprise: "Lumière Verte SA", poste: "Comptable", lieu: "", publieeLe: "", adresse: "" };
 
 test("une offre se colle en POST, l'accord ne part qu'avec garderLesDeux, et sa fiche se lit par son seul identifiant (#36)", async () => {
