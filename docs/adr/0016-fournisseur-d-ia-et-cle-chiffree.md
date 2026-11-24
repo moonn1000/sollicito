@@ -82,7 +82,7 @@ Toutes passent par les protections de l'API (#10), figurent dans OpenAPI, lisent
 
 ### Les journaux
 
-L'API écrit le fournisseur choisi (une valeur d'une liste fermée), la clé enregistrée, remplacée, retirée, effacée au changement, ou illisible avec le type de l'erreur, et le motif d'un refus. Jamais la clé, sa longueur, son début ou son empreinte ; jamais le chemin du trousseau ou de la clé ; jamais le message d'une exception de DPAPI ou de Data Protection. Data Protection, sans fournisseur de journaux, n'écrit rien.
+L'API écrit le fournisseur choisi (une valeur d'une liste fermée), la clé enregistrée, remplacée, retirée, effacée au changement, ou illisible avec le type de l'erreur (au niveau Debug, parce que l'état se relit souvent), et le motif d'un refus. Jamais la clé, sa longueur, son début ou son empreinte ; jamais le chemin du trousseau ou de la clé ; jamais le message d'une exception de DPAPI ou de Data Protection. Data Protection, sans fournisseur de journaux, n'écrit rien.
 
 ## Alternatives écartées
 
@@ -104,7 +104,8 @@ L'API écrit le fournisseur choisi (une valeur d'une liste fermée), la clé enr
   - la clé est à ressaisir sur un autre poste, sous un autre compte, ou après la réinitialisation d'un mot de passe Windows ;
   - le trousseau, une fois né, reste dans le dossier de données, même sans clé : il ne protège plus rien ;
   - le trousseau se garde en mémoire : un trousseau abîmé pendant une séance ne se voit qu'au lancement suivant ;
-  - quand une clé est enregistrée mais que le trousseau n'a plus de clé valide (absent, abîmé, ou à son renouvellement de 90 jours), la simple lecture de l'état en crée une, comme Data Protection le fait d'office : seule l'absence de toute clé d'IA garantit qu'aucun trousseau ne s'écrit.
+  - quand une clé est enregistrée mais que le trousseau n'a plus de clé valide (absent, abîmé, ou à son renouvellement de 90 jours), la simple lecture de l'état en crée une, comme Data Protection le fait d'office : seule l'absence de toute clé d'IA garantit qu'aucun trousseau ne s'écrit ;
+  - après des réglages illisibles, réécrits par le choix d'un dossier des sauvegardes, choisir de nouveau un fournisseur efface la clé restée sur le disque, sans confirmation : l'écran ne la montre pas tant qu'aucun choix n'est fait. Elle se ressaisit.
 
 ## À vérifier
 
