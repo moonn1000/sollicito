@@ -448,6 +448,7 @@ Pour les stories suivantes : une route ne porte qu'un identifiant, jamais une do
 - le retour au dossier par défaut, réussi, puis impossible ;
 - un réglage illisible ;
 - une migration ratée, et une copie d'avant impossible, dont l'hôte écrit l'échec du lancement avec toute la chaîne de l'exception ;
+- trois échecs d'écriture qui n'écrivent que le type de l'erreur (#88, point 14) : une copie ancienne tenue, que la rotation ne peut pas effacer, puis l'instant de la dernière copie et le réglage du dossier, dont les fichiers sont tenus (un accès refusé, qui ne cite aucun chemin : seul le libellé exact des témoins, qui porte le type, les garde) ;
 - la sonde de #80, point 1 : un fichier à la place du dossier de données ;
 - la restauration (#28) : réussie, porte fermée un moment, refusée pour chaque motif, impossible, et depuis une base abîmée.
 
