@@ -69,6 +69,29 @@ test("une clé refusée se dit sous le champ, qui se vide aussi", async () => {
   expect(document.body.innerHTML).not.toContain("SOLLICITO-ESSAI-43");
 });
 
+test("une clé tapée mais non envoyée ne passe pas dans le champ d'un autre fournisseur", async () => {
+  const client = clientSimule({ lireLEtatDeLIA: async () => claude() });
+  render(<SectionDeLIA client={client} />);
+
+  const champDeClaude = (await screen.findByLabelText("Clé d'API de Claude")) as HTMLInputElement;
+  fireEvent.change(champDeClaude, { target: { value: CLE } });
+  expect(champDeClaude.value).toBe(CLE);
+
+  // Choisir un autre fournisseur vide le champ, avant même d'enregistrer le choix.
+  fireEvent.click(screen.getByLabelText("OpenAI, avec votre clé"));
+  expect(champDeClaude.value).toBe("");
+
+  // Une clé retapée, puis le choix enregistré : le champ d'OpenAI est vide, et rien n'a été envoyé.
+  fireEvent.change(champDeClaude, { target: { value: CLE } });
+  fireEvent.click(screen.getByRole("button", { name: "Enregistrer ce choix" }));
+
+  const champDOpenAI = (await screen.findByLabelText("Clé d'API d'OpenAI")) as HTMLInputElement;
+  expect(client.choisirLeFournisseurDIA).toHaveBeenCalledWith("OpenAI");
+  expect(champDOpenAI.value).toBe("");
+  expect(client.enregistrerLaCleDIA).not.toHaveBeenCalled();
+  expect(document.body.innerHTML).not.toContain("SOLLICITO-ESSAI-43");
+});
+
 test("remplacer la clé rouvre le champ, et Annuler le referme sans rien envoyer", async () => {
   const client = clientSimule({ lireLEtatDeLIA: async () => claude({ cle: "Enregistree" }) });
   render(<SectionDeLIA client={client} />);

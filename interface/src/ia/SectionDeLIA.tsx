@@ -45,6 +45,8 @@ export function SectionDeLIA({ client, prendreLeFocus = false }: { client: Clien
   function adopter(etat: EtatDeLIA) {
     setChargement({ etape: "pret", etat });
     setChoix(etat.fournisseur);
+    // La clé tapée mais non envoyée ne survit pas à un nouvel état : le champ est le même pour Claude et pour OpenAI.
+    setCle("");
   }
 
   function lire() {
@@ -226,6 +228,8 @@ export function SectionDeLIA({ client, prendreLeFocus = false }: { client: Clien
                       setChoix(fournisseur.valeur);
                       setConfirmation("aucune");
                       setMessage(undefined);
+                      // Une clé tapée pour un fournisseur ne passe pas à un autre.
+                      setCle("");
                     }}
                   />
                   {fournisseur.libelle}
