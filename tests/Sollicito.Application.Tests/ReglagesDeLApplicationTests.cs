@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Sollicito.Application.IA;
 using Sollicito.Application.Sauvegardes;
 
 namespace Sollicito.Application.Tests;
@@ -52,7 +53,7 @@ public sealed class ReglagesDeLApplicationTests
     public void Un_fichier_illisible_en_entier_rend_les_reglages_par_defaut_en_le_disant(string texte)
     {
         Assert.Equal(
-            new LectureDesReglages(ReglagesDeLApplication.ParDefaut, Lisible: false, DelaiLisible: false, FichierLisible: false),
+            new LectureDesReglages(ReglagesDeLApplication.ParDefaut, Lisible: false, DelaiLisible: false, FichierLisible: false, FournisseurLisible: false),
             ReglagesDeLApplication.Lire(texte));
     }
 
@@ -186,5 +187,104 @@ public sealed class ReglagesDeLApplicationTests
     public void Un_delai_hors_bornes_ne_s_ecrit_pas(int jours)
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => ReglagesDeLApplication.AvecLeDelaiDesRelances(null, jours));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{ "fournisseurDIA": null }""")]
+    [InlineData("""{ "dossierDesSauvegardes": "E:\\Copies", "delaiDesRelances": 10 }""")]
+    public void Sans_fournisseur_ecrit_aucun_choix_n_est_fait_et_aucune_IA_ne_s_applique(string texte)
+    {
+        var lecture = ReglagesDeLApplication.Lire(texte);
+
+        Assert.True(lecture.FournisseurLisible);
+        Assert.Null(lecture.Reglages.Fournisseur);
+        Assert.Equal(FournisseurDIA.Aucun, lecture.Reglages.FournisseurEnVigueur);
+        Assert.Equal(FournisseurDIA.Aucun, ReglagesDeLApplication.ParDefaut.FournisseurEnVigueur);
+    }
+
+    [Theory]
+    [InlineData("Aucun", FournisseurDIA.Aucun)]
+    [InlineData("Claude", FournisseurDIA.Claude)]
+    [InlineData("OpenAI", FournisseurDIA.OpenAI)]
+    [InlineData("Ollama", FournisseurDIA.Ollama)]
+    public void Un_fournisseur_choisi_se_relit_par_son_nom_exact(string nom, FournisseurDIA attendu)
+    {
+        var lecture = ReglagesDeLApplication.Lire($$"""{ "fournisseurDIA": "{{nom}}" }""");
+
+        Assert.True(lecture.FournisseurLisible);
+        Assert.Equal(attendu, lecture.Reglages.Fournisseur);
+        Assert.Equal(attendu, lecture.Reglages.FournisseurEnVigueur);
+    }
+
+    [Theory]
+    [InlineData("\"claude\"")]
+    [InlineData("\"CLAUDE\"")]
+    [InlineData("\" Claude\"")]
+    [InlineData("\"Mistral\"")]
+    [InlineData("\"\"")]
+    [InlineData("1")]
+    [InlineData("true")]
+    [InlineData("[\"Claude\"]")]
+    [InlineData("{ \"nom\": \"Claude\" }")]
+    public void Un_fournisseur_illisible_vaut_aucune_IA_sans_toucher_aux_autres_reglages(string valeur)
+    {
+        var lecture = ReglagesDeLApplication.Lire($$"""{ "dossierDesSauvegardes": "E:\\Copies", "delaiDesRelances": 12, "fournisseurDIA": {{valeur}} }""");
+
+        Assert.False(lecture.FournisseurLisible);
+        Assert.Null(lecture.Reglages.Fournisseur);
+        Assert.Equal(FournisseurDIA.Aucun, lecture.Reglages.FournisseurEnVigueur);
+        Assert.True(lecture.Lisible);
+        Assert.True(lecture.DelaiLisible);
+        Assert.True(lecture.FichierLisible);
+        Assert.Equal(@"E:\Copies", lecture.Reglages.DossierDesSauvegardes);
+        Assert.Equal(12, lecture.Reglages.DelaiDesRelances);
+    }
+
+    [Fact]
+    public void Un_dossier_et_un_delai_illisibles_ne_touchent_pas_au_fournisseur()
+    {
+        var lecture = ReglagesDeLApplication.Lire("""{ "dossierDesSauvegardes": 3, "delaiDesRelances": "7", "fournisseurDIA": "OpenAI" }""");
+
+        Assert.False(lecture.Lisible);
+        Assert.False(lecture.DelaiLisible);
+        Assert.True(lecture.FournisseurLisible);
+        Assert.Equal(FournisseurDIA.OpenAI, lecture.Reglages.Fournisseur);
+    }
+
+    [Fact]
+    public void Ecrire_le_fournisseur_garde_un_fichier_de_main_et_ses_reglages_inconnus()
+    {
+        // Le fichier tel que main l'écrit : le dossier choisi, le délai changé, et un réglage qu'il ne connaît pas.
+        const string DeMain = """{ "dossierDesSauvegardes": "D:\\Copies", "delaiDesRelances": 14, "reglageAVenir": { "a": [1, 2] } }""";
+
+        var texte = ReglagesDeLApplication.AvecLeFournisseurDIA(DeMain, FournisseurDIA.Claude);
+
+        var relu = JsonNode.Parse(texte)!.AsObject();
+        Assert.Equal("Claude", relu["fournisseurDIA"]!.GetValue<string>());
+        Assert.Equal(@"D:\Copies", relu["dossierDesSauvegardes"]!.GetValue<string>());
+        Assert.Equal(14, relu["delaiDesRelances"]!.GetValue<int>());
+        Assert.Equal(2, relu["reglageAVenir"]!["a"]!.AsArray().Count);
+        var lecture = ReglagesDeLApplication.Lire(texte);
+        Assert.Equal(new ReglagesDeLApplication(@"D:\Copies", 14, FournisseurDIA.Claude), lecture.Reglages);
+        Assert.True(lecture.Lisible && lecture.DelaiLisible && lecture.FournisseurLisible && lecture.FichierLisible);
+    }
+
+    [Fact]
+    public void Aucune_IA_choisie_s_ecrit_pour_que_le_choix_reste_fait()
+    {
+        var texte = ReglagesDeLApplication.AvecLeFournisseurDIA("""{ "fournisseurDIA": "Claude" }""", FournisseurDIA.Aucun);
+
+        Assert.Equal("Aucun", JsonNode.Parse(texte)!["fournisseurDIA"]!.GetValue<string>());
+        Assert.Equal(FournisseurDIA.Aucun, ReglagesDeLApplication.Lire(texte).Reglages.Fournisseur);
+    }
+
+    [Fact]
+    public void Les_autres_ecritures_gardent_le_fournisseur()
+    {
+        const string Avant = """{ "fournisseurDIA": "OpenAI" }""";
+
+        Assert.Equal(FournisseurDIA.OpenAI, ReglagesDeLApplication.Lire(ReglagesDeLApplication.AvecLeDossier(Avant, @"E:\Copies")).Reglages.Fournisseur);
+        Assert.Equal(FournisseurDIA.OpenAI, ReglagesDeLApplication.Lire(ReglagesDeLApplication.AvecLeDelaiDesRelances(Avant, 9)).Reglages.Fournisseur);
     }
 }

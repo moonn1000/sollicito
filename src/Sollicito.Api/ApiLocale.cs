@@ -6,6 +6,7 @@ using Sollicito.Api.Candidatures;
 using Sollicito.Api.Contacts;
 using Sollicito.Api.Donnees;
 using Sollicito.Api.Erreurs;
+using Sollicito.Api.IA;
 using Sollicito.Api.Interface;
 using Sollicito.Api.Journaux;
 using Sollicito.Api.Offres;
@@ -17,6 +18,7 @@ using Sollicito.Application.Contacts;
 using Sollicito.Application.Offres;
 using Sollicito.Application.Relances;
 using Sollicito.Infrastructure;
+using Sollicito.Infrastructure.IA;
 using Sollicito.Infrastructure.Persistance;
 
 namespace Sollicito.Api;
@@ -133,6 +135,11 @@ public static class ApiLocale
         builder.Services.AddSingleton<ITemoinDeLImport, JournalDeLImport>();
         builder.Services.AddScoped<IImportDesOffres, ImportDesOffres>();
         builder.Services.AddScoped<OffresEnregistrees>();
+        // L'IA facultative (#43, ADR-0016) : le fournisseur choisi, dans les réglages, et sa clé, chiffrée à part. La garde
+        // de la clé prend le dossier de la base des services, celui d'un test compris, et ne construit Data Protection
+        // qu'au premier usage : rien ne s'écrit au lancement.
+        builder.Services.AddSingleton<GardeDeLaCle>();
+        builder.Services.AddSingleton<ReglageDeLIA>();
 
         // Les statuts s'écrivent en toutes lettres. Un champ inconnu du corps rend la requête illisible plutôt que
         // d'être ignoré : le statut, par exemple, ne vient jamais de l'interface. Un champ répété aussi (#36) : sans
@@ -177,6 +184,7 @@ public static class ApiLocale
         RoutesDesRelances.Declarer(app);
         RoutesDesOffres.Declarer(app);
         RoutesDeLImport.Declarer(app);
+        RoutesDeLIA.Declarer(app);
 
         return app;
     }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Sollicito.Application.IA;
 using Sollicito.Domain.Relances;
 
 namespace Sollicito.Application.Sauvegardes;
@@ -7,7 +8,7 @@ namespace Sollicito.Application.Sauvegardes;
 /// <summary>
 /// Les réglages de l'application (ADR-0008) : un fichier JSON du dossier de données, hors de la base, que ni les copies
 /// ni une restauration n'emportent. Le dossier des sauvegardes en est le premier (#26), le délai par défaut des relances
-/// le deuxième (#14, ADR-0011) ; le fournisseur d'IA (#43) s'y ajoutera.
+/// le deuxième (#14, ADR-0011), le fournisseur d'IA le troisième (#43, ADR-0016).
 /// <list type="bullet">
 /// <item>Chaque réglage se lit à part : un réglage mal écrit rend sa valeur par défaut, en le disant, sans toucher aux
 /// autres.</item>
@@ -20,7 +21,11 @@ namespace Sollicito.Application.Sauvegardes;
 /// <param name="DelaiDesRelances">
 /// Le délai par défaut d'une relance, en jours ; <c>null</c> pour celui d'usine (<see cref="DelaiDeRelance.ParDefaut"/>).
 /// </param>
-public sealed record ReglagesDeLApplication(string? DossierDesSauvegardes, int? DelaiDesRelances = null)
+/// <param name="Fournisseur">
+/// Le fournisseur d'IA choisi ; <c>null</c> tant qu'aucun choix n'est enregistré, ce qui vaut aucune IA. « Aucune IA »
+/// choisie s'écrit, elle : la carte du tableau de bord ne la propose plus (#43).
+/// </param>
+public sealed record ReglagesDeLApplication(string? DossierDesSauvegardes, int? DelaiDesRelances = null, FournisseurDIA? Fournisseur = null)
 {
     /// <summary>Le nom du fichier des réglages, dans le dossier de données.</summary>
     public const string NomDuFichier = "reglages.json";
@@ -32,6 +37,8 @@ public sealed record ReglagesDeLApplication(string? DossierDesSauvegardes, int? 
 
     private const string ProprieteDuDelai = "delaiDesRelances";
 
+    private const string ProprieteDuFournisseur = "fournisseurDIA";
+
     private static readonly JsonSerializerOptions Ecriture = new() { WriteIndented = true };
 
     /// <summary>Les réglages d'un premier lancement, ou d'un fichier absent.</summary>
@@ -40,12 +47,15 @@ public sealed record ReglagesDeLApplication(string? DossierDesSauvegardes, int? 
     /// <summary>Le délai par défaut des relances qui s'applique : celui du réglage, ou celui d'usine.</summary>
     public int DelaiDesRelancesEnVigueur => DelaiDesRelances ?? DelaiDeRelance.ParDefaut;
 
+    /// <summary>Le fournisseur d'IA qui s'applique : celui du réglage, ou aucun.</summary>
+    public FournisseurDIA FournisseurEnVigueur => Fournisseur ?? FournisseurDIA.Aucun;
+
     /// <summary>
     /// Lit le texte du fichier, ou son absence (<c>null</c>). Absent, il rend les réglages par défaut. Illisible en entier
     /// (JSON mal formé, propriété répétée, autre chose qu'un objet), il les rend aussi, en le disant pour chaque réglage.
-    /// Lisible, chaque réglage se lit à part : un dossier qui n'est pas un chemin absolu, ou un délai qui n'est pas un
-    /// entier de <see cref="DelaiDeRelance.Minimum"/> à <see cref="DelaiDeRelance.Maximum"/>, rend sa valeur par défaut,
-    /// en le disant, sans toucher à l'autre.
+    /// Lisible, chaque réglage se lit à part : un dossier qui n'est pas un chemin absolu, un délai qui n'est pas un entier
+    /// de <see cref="DelaiDeRelance.Minimum"/> à <see cref="DelaiDeRelance.Maximum"/>, ou un fournisseur d'IA qui n'est pas
+    /// l'un des noms exacts, rend sa valeur par défaut, en le disant, sans toucher aux autres.
     /// </summary>
     public static LectureDesReglages Lire(string? texte)
     {
@@ -56,12 +66,17 @@ public sealed record ReglagesDeLApplication(string? DossierDesSauvegardes, int? 
 
         if (LireLObjet(texte) is not { } reglages)
         {
-            return new LectureDesReglages(ParDefaut, Lisible: false, DelaiLisible: false, FichierLisible: false);
+            return LectureDesReglages.IllisibleEnEntier;
         }
 
         var dossierLisible = EssayerDeLireLeDossier(reglages, out var dossier);
         var delaiLisible = EssayerDeLireLeDelai(reglages, out var delai);
-        return new LectureDesReglages(new ReglagesDeLApplication(dossier, delai), dossierLisible, delaiLisible);
+        var fournisseurLisible = EssayerDeLireLeFournisseur(reglages, out var fournisseur);
+        return new LectureDesReglages(
+            new ReglagesDeLApplication(dossier, delai, fournisseur),
+            dossierLisible,
+            delaiLisible,
+            FournisseurLisible: fournisseurLisible);
     }
 
     /// <summary>
@@ -86,6 +101,14 @@ public sealed record ReglagesDeLApplication(string? DossierDesSauvegardes, int? 
 
         return Remplacer(texteDAvant, ProprieteDuDelai, jours is null ? null : JsonValue.Create(jours.Value));
     }
+
+    /// <summary>
+    /// Le texte du fichier où le fournisseur d'IA est désormais <paramref name="fournisseur"/>, écrit même pour
+    /// « aucune IA », qui devient un choix (#43). Le reste du fichier lisible d'avant demeure. L'appelant ne l'écrit pas
+    /// sur un fichier illisible en entier, comme le délai, et efface d'abord la clé d'un autre fournisseur (ADR-0016).
+    /// </summary>
+    public static string AvecLeFournisseurDIA(string? texteDAvant, FournisseurDIA fournisseur) =>
+        Remplacer(texteDAvant, ProprieteDuFournisseur, JsonValue.Create(fournisseur.Nom()));
 
     private static string Remplacer(string? texteDAvant, string propriete, JsonNode? valeur)
     {
@@ -143,6 +166,24 @@ public sealed record ReglagesDeLApplication(string? DossierDesSauvegardes, int? 
         return false;
     }
 
+    // Absent ou nul : jamais choisi, lisible. Sinon, l'un des noms exacts, ou illisible : ni nombre, ni autre casse.
+    private static bool EssayerDeLireLeFournisseur(JsonObject reglages, out FournisseurDIA? fournisseur)
+    {
+        fournisseur = null;
+        if (!reglages.TryGetPropertyValue(ProprieteDuFournisseur, out var valeur) || valeur is null)
+        {
+            return true;
+        }
+
+        if (valeur.GetValueKind() == JsonValueKind.String && FournisseursDIA.EssayerDeLire(valeur.GetValue<string>(), out var lu))
+        {
+            fournisseur = lu;
+            return true;
+        }
+
+        return false;
+    }
+
     private static JsonObject? LireLObjet(string? texte)
     {
         if (texte is null)
@@ -179,4 +220,17 @@ public sealed record ReglagesDeLApplication(string? DossierDesSauvegardes, int? 
 /// <param name="FichierLisible">
 /// Faux si le fichier existait mais ne se lisait pas en entier : seul le choix d'un dossier des sauvegardes le réécrit.
 /// </param>
-public sealed record LectureDesReglages(ReglagesDeLApplication Reglages, bool Lisible, bool DelaiLisible = true, bool FichierLisible = true);
+/// <param name="FournisseurLisible">
+/// Faux si le fournisseur d'IA ne se lisait pas, ou le fichier entier : aucune IA ne s'applique alors.
+/// </param>
+public sealed record LectureDesReglages(
+    ReglagesDeLApplication Reglages,
+    bool Lisible,
+    bool DelaiLisible = true,
+    bool FichierLisible = true,
+    bool FournisseurLisible = true)
+{
+    /// <summary>Un fichier présent qui ne se lit pas en entier : chaque réglage à sa valeur par défaut, et illisible.</summary>
+    public static LectureDesReglages IllisibleEnEntier { get; } =
+        new(ReglagesDeLApplication.ParDefaut, Lisible: false, DelaiLisible: false, FichierLisible: false, FournisseurLisible: false);
+}

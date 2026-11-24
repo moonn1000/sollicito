@@ -7,7 +7,8 @@ namespace Sollicito.Infrastructure.Persistance;
 /// <summary>
 /// Les restes qu'un arrêt brutal laisse dans le dossier de données (#26, ADR-0008) : la copie de travail d'une mise à jour
 /// ou d'une restauration interrompue (#28), de la taille de la base, et ses journaux ; les fichiers provisoires des
-/// réglages et de la dernière copie ; dans le dossier des sauvegardes par défaut, les fichiers provisoires d'une copie
+/// réglages, de la dernière copie et de la clé d'IA chiffrée, et ceux du trousseau (#43) ; dans le dossier des
+/// sauvegardes par défaut, les fichiers provisoires d'une copie
 /// d'avant une mise à jour ou une restauration, et le journal d'une copie brute resté sans elle. Chacun ne vit que le temps
 /// d'une opération, que le processus arrêté n'a pas finie. Ils se reconnaissent à leur nom, avec sa marque tirée au hasard : ni la base, ni ses journaux, ni une copie
 /// finie, ni aucun autre fichier n'y répondent.
@@ -49,6 +50,15 @@ public static partial class RestesDUnArret
             else if (FichierProvisoire().IsMatch(nom))
             {
                 restes.Add(Path.Combine(dossier.Chemin, nom));
+            }
+        }
+
+        // Les fichiers provisoires du trousseau de Data Protection (#43) : une clé du trousseau s'y écrit d'un bloc.
+        foreach (var nom in LireLesNoms(dossier.Trousseau))
+        {
+            if (ProvisoireDuTrousseau().IsMatch(nom))
+            {
+                restes.Add(Path.Combine(dossier.Trousseau, nom));
             }
         }
 
@@ -97,6 +107,9 @@ public static partial class RestesDUnArret
     [GeneratedRegex(@"^(?<copie>sollicito\.db\.[0-9a-f]{32}\.(migration|restauration))(-journal|-wal|-shm)?$", RegexOptions.CultureInvariant)]
     private static partial Regex CopieDeTravail();
 
-    [GeneratedRegex(@"^(reglages|sauvegardes)\.json\.[0-9a-f]{32}\.provisoire$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^(reglages|sauvegardes|cle-ia)\.json\.[0-9a-f]{32}\.provisoire$", RegexOptions.CultureInvariant)]
     private static partial Regex FichierProvisoire();
+
+    [GeneratedRegex(@"^[0-9a-f]{32}\.provisoire$", RegexOptions.CultureInvariant)]
+    private static partial Regex ProvisoireDuTrousseau();
 }
