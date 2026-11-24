@@ -136,6 +136,9 @@ public sealed class ReglageDeLIATests : IDisposable
             }.ToJsonString();
             await File.WriteAllTextAsync(Base.FichierDesReglages, deMain, TestContext.Current.CancellationToken);
             await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest());
+            // L'état des sauvegardes ne dit le dossier choisi qu'après la première vérification du lancement, faite en arrière-plan,
+            // qui lit les réglages : elle s'attend avant d'écrire le fournisseur et avant de lire ce dossier.
+            await api.AttendreLaPremiereVerificationAsync();
 
             Assert.Equal(Etat("Aucun", choisi: false, "SansObjet"), (await api.EtatDeLIAAsync()).ToJsonString());
             await api.ChoisirLIAAvecSuccesAsync("Claude");
