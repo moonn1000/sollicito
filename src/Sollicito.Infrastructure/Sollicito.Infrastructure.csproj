@@ -6,6 +6,14 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
+  <!-- Data Protection, qui chiffre la clé d'IA (ADR-0001, D9 ; ADR-0016), vient du framework partagé d'ASP.NET Core,
+       que l'API et la fenêtre embarquent déjà : aucun paquet de plus. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Sollicito.Infrastructure.Tests" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Sollicito.Application\Sollicito.Application.csproj" />
   </ItemGroup>

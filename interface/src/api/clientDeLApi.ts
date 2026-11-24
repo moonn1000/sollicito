@@ -216,6 +216,35 @@ export interface ReglageDuDelai {
   fichierLisible: boolean;
 }
 
+/** Le fournisseur d'IA (#43, ADR-0016), par son nom exact : aucun, Claude ou OpenAI par la clé de l'utilisateur, ou un modèle local. */
+export type FournisseurDIA = "Aucun" | "Claude" | "OpenAI" | "Ollama";
+
+/** La clé du fournisseur réglé, sans jamais la clé elle-même : sans objet, aucune, enregistrée, ou illisible sur ce poste. */
+export type EtatDeLaCle = "SansObjet" | "Aucune" | "Enregistree" | "Illisible";
+
+/** L'état de l'IA (#43), tel que l'API le rend : jamais la clé. */
+export interface EtatDeLIA {
+  /** Le fournisseur qui s'applique : celui du réglage, ou aucun s'il ne se lit pas. */
+  fournisseur: FournisseurDIA;
+  /** Faux tant qu'aucun choix n'est enregistré : la carte du tableau de bord le propose. */
+  choisi: boolean;
+  /** Faux si le choix de l'IA n'a pas pu être relu : aucune IA s'applique alors. */
+  reglageLisible: boolean;
+  /** Faux si le fichier des réglages n'a pas pu être relu en entier : rien ne s'y écrit. */
+  fichierLisible: boolean;
+  /** La clé du fournisseur qui s'applique. */
+  cle: EtatDeLaCle;
+}
+
+/** Ce que rend un choix de fournisseur, ou le retrait de la clé : l'état à jour, ou le motif d'un refus. */
+export type ResultatDeLIA = { issue: "fait"; etat: EtatDeLIA } | { issue: "refuse"; motif: string };
+
+/** Ce que rend l'enregistrement d'une clé : l'état à jour, le refus du champ, ou le motif d'un refus. */
+export type ResultatDeLaCle =
+  | { issue: "enregistree"; etat: EtatDeLIA }
+  | { issue: "refusee"; refus: string[] }
+  | { issue: "refuse"; motif: string };
+
 /** Ce que rend un changement du délai par défaut : le réglage à jour, le refus du champ, ou le motif d'un refus. */
 export type ResultatDuReglage =
   | { issue: "change"; reglage: ReglageDuDelai }
@@ -551,6 +580,17 @@ export interface ClientDeLApi {
   lireLeReglageDesRelances(): Promise<ReglageDuDelai>;
   /** Change le délai par défaut des relances, ou rend le refus du champ, ou le motif d'un refus. */
   changerLeDelaiParDefaut(jours: number): Promise<ResultatDuReglage>;
+  /** L'état de l'IA (#43) : le fournisseur, s'il a été choisi, ce qui ne se lisait pas, et la clé, sans jamais la clé. */
+  lireLEtatDeLIA(): Promise<EtatDeLIA>;
+  /** Choisit le fournisseur d'IA ; un autre que celui du réglage efface la clé enregistrée (une clé, une adresse). */
+  choisirLeFournisseurDIA(fournisseur: FournisseurDIA): Promise<ResultatDeLIA>;
+  /**
+   * Enregistre la clé du fournisseur réglé, à la place de toute autre. La clé part une fois, dans le corps ; aucune
+   * réponse ne la rend.
+   */
+  enregistrerLaCleDIA(cle: string): Promise<ResultatDeLaCle>;
+  /** Retire la clé enregistrée. */
+  retirerLaCleDIA(): Promise<ResultatDeLIA>;
   /**
    * Colle une offre (#36) : sa fiche, ou les refus de ses champs, ou l'offre déjà enregistrée du même texte, ou ses
    * doublons possibles. Avec `garderLesDeux`, un doublon possible s'enregistre quand même.
@@ -787,6 +827,31 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
 
       throw new ErreurDeLApi(reponse.status);
     },
+    lireLEtatDeLIA: async () => (await lire("/api/reglages/ia")) as EtatDeLIA,
+    choisirLeFournisseurDIA: async (fournisseur) => reglerLIA(await ecrire("/api/reglages/ia", { fournisseur }, "PUT")),
+    enregistrerLaCleDIA: async (cle) => {
+      const reponse = await ecrire("/api/reglages/ia/cle", { cle }, "PUT");
+      if (reponse.status === 200) {
+        return { issue: "enregistree", etat: (await reponse.json()) as EtatDeLIA };
+      }
+
+      if (reponse.status === 400) {
+        const refus = lireLesRefus(await reponse.json().catch(() => undefined), ["cle"] as const);
+        if (refus?.cle !== undefined) {
+          return { issue: "refusee", refus: refus.cle };
+        }
+      }
+
+      if (reponse.status === 409) {
+        const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+        if (motif !== undefined) {
+          return { issue: "refuse", motif };
+        }
+      }
+
+      throw new ErreurDeLApi(reponse.status);
+    },
+    retirerLaCleDIA: async () => reglerLIA(await ecrire("/api/reglages/ia/cle", undefined, "DELETE")),
     collerUneOffre: async (saisie, garderLesDeux = false) =>
       enregistrerLOffre(await ecrire("/api/offres", garderLesDeux ? { ...saisie, garderLesDeux: true } : saisie), 201),
     lireUneOffre: async (offre) => (await lire(adresseDeLOffre(offre))) as FicheDUneOffre,
@@ -975,6 +1040,22 @@ async function enregistrerLeContact(reponse: Response, attendu: 200 | 201): Prom
     const refus = lireLesRefus(await reponse.json().catch(() => undefined), CHAMPS_DU_CONTACT);
     if (refus !== undefined && Object.keys(refus).length > 0) {
       return { issue: "refuse", refus };
+    }
+  }
+
+  throw new ErreurDeLApi(reponse.status);
+}
+
+// L'état de l'IA à jour (200), ou le motif d'un refus (409) : réglages illisibles, clé qui ne s'efface pas.
+async function reglerLIA(reponse: Response): Promise<ResultatDeLIA> {
+  if (reponse.status === 200) {
+    return { issue: "fait", etat: (await reponse.json()) as EtatDeLIA };
+  }
+
+  if (reponse.status === 409) {
+    const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+    if (motif !== undefined) {
+      return { issue: "refuse", motif };
     }
   }
 

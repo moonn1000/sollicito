@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text;
+using Sollicito.Application.IA;
 using Sollicito.Application.Sauvegardes;
 using Sollicito.Infrastructure.Persistance;
 
@@ -9,7 +10,8 @@ namespace Sollicito.Infrastructure.Sauvegardes;
 /// Le fichier des réglages, <c>reglages.json</c>, dans le dossier de données, hors de la base (ADR-0008). Il s'écrit d'un
 /// bloc : un fichier provisoire, puis un renommage, pour qu'un arrêt en pleine écriture ne laisse jamais un fichier à
 /// moitié écrit. Chaque écriture ne change qu'un réglage, et relit le fichier sous un verrou que partagent tous ses
-/// écrivains, sauvegardes (#26) et relances (#14) : aucune n'efface ce qu'une autre vient d'écrire.
+/// écrivains, sauvegardes (#26), relances (#14) et IA (#43) : aucune n'efface ce qu'une autre vient d'écrire. La clé d'IA,
+/// rangée à part dans <c>cle-ia.json</c>, s'écrit et s'efface sous ce même verrou (ADR-0016).
 /// </summary>
 public sealed class FichierDesReglages(DossierDeLaBase dossier)
 {
@@ -20,9 +22,7 @@ public sealed class FichierDesReglages(DossierDeLaBase dossier)
     public LectureDesReglages Lire()
     {
         var texte = LireLeTexte(out var present);
-        return present && texte is null
-            ? new LectureDesReglages(ReglagesDeLApplication.ParDefaut, Lisible: false, DelaiLisible: false, FichierLisible: false)
-            : ReglagesDeLApplication.Lire(texte);
+        return present && texte is null ? LectureDesReglages.IllisibleEnEntier : ReglagesDeLApplication.Lire(texte);
     }
 
     /// <summary>
@@ -41,9 +41,68 @@ public sealed class FichierDesReglages(DossierDeLaBase dossier)
     public Task<bool> EcrireLeDelaiDesRelancesAsync(int? jours) =>
         EcrireAsync(texte => ReglagesDeLApplication.AvecLeDelaiDesRelances(texte, jours), surUnFichierIllisible: false);
 
+    /// <summary>
+    /// Écrit le fournisseur d'IA (#43), en gardant le reste du fichier. « Une clé, une adresse » (ADR-0001, D7 ;
+    /// ADR-0016) : un autre fournisseur que celui du fichier passe d'abord par <paramref name="effacerLaCle"/>, et ne
+    /// s'écrit que si la clé est effacée. Le même fournisseur ne change rien, et la clé reste. Comme le délai, il ne
+    /// s'écrit pas sur un fichier illisible en entier. Une écriture impossible lève son erreur d'entrée-sortie.
+    /// </summary>
+    public async Task<IssueDuFournisseurDIA> EcrireLeFournisseurDIAAsync(FournisseurDIA fournisseur, Func<Task<bool>> effacerLaCle)
+    {
+        ArgumentNullException.ThrowIfNull(effacerLaCle);
+        var verrou = LeVerrou();
+        await verrou.WaitAsync();
+        try
+        {
+            var (avant, present) = await LireAvantDEcrireAsync();
+            var lecture = Relire(avant, present);
+            if (!lecture.FichierLisible)
+            {
+                return IssueDuFournisseurDIA.FichierIllisible;
+            }
+
+            if (lecture.FournisseurLisible && lecture.Reglages.Fournisseur == fournisseur)
+            {
+                return IssueDuFournisseurDIA.Inchange;
+            }
+
+            if (!await effacerLaCle())
+            {
+                return IssueDuFournisseurDIA.CleNonEffacee;
+            }
+
+            await EcrireLeTexteAsync(ReglagesDeLApplication.AvecLeFournisseurDIA(avant, fournisseur));
+            return IssueDuFournisseurDIA.Change;
+        }
+        finally
+        {
+            verrou.Release();
+        }
+    }
+
+    /// <summary>
+    /// Relit les réglages sous le verrou de leurs écrivains, puis lance <paramref name="operation"/>, qu'aucune écriture
+    /// des réglages ne croise : l'enregistrement et le retrait de la clé d'IA (ADR-0016).
+    /// </summary>
+    public async Task<T> SousLeVerrouAsync<T>(Func<LectureDesReglages, Task<T>> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        var verrou = LeVerrou();
+        await verrou.WaitAsync();
+        try
+        {
+            var (avant, present) = await LireAvantDEcrireAsync();
+            return await operation(Relire(avant, present));
+        }
+        finally
+        {
+            verrou.Release();
+        }
+    }
+
     private async Task<bool> EcrireAsync(Func<string?, string> changer, bool surUnFichierIllisible)
     {
-        var verrou = Verrous.GetOrAdd(Path.GetFullPath(dossier.FichierDesReglages), _ => new SemaphoreSlim(1, 1));
+        var verrou = LeVerrou();
         await verrou.WaitAsync();
         try
         {
@@ -53,23 +112,34 @@ public sealed class FichierDesReglages(DossierDeLaBase dossier)
                 return false;
             }
 
-            var texte = changer(avant);
-            var provisoire = $"{dossier.FichierDesReglages}.{Guid.NewGuid():N}.provisoire";
-            try
-            {
-                File.WriteAllText(provisoire, texte, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                await CopiesVerifiees.ReessayerAsync(() => File.Move(provisoire, dossier.FichierDesReglages, overwrite: true));
-            }
-            finally
-            {
-                File.Delete(provisoire);
-            }
-
+            await EcrireLeTexteAsync(changer(avant));
             return true;
         }
         finally
         {
             verrou.Release();
+        }
+    }
+
+    // Le verrou du fichier, commun à toutes les instances qui l'écrivent.
+    private SemaphoreSlim LeVerrou() => Verrous.GetOrAdd(Path.GetFullPath(dossier.FichierDesReglages), _ => new SemaphoreSlim(1, 1));
+
+    // Les réglages d'un texte lu avant une écriture : présent mais illisible, il l'est en entier.
+    private static LectureDesReglages Relire(string? avant, bool present) =>
+        present && avant is null ? LectureDesReglages.IllisibleEnEntier : ReglagesDeLApplication.Lire(avant);
+
+    // D'un bloc : un fichier provisoire, puis un renommage, repris tant qu'un autre programme tient le fichier un instant.
+    private async Task EcrireLeTexteAsync(string texte)
+    {
+        var provisoire = $"{dossier.FichierDesReglages}.{Guid.NewGuid():N}.provisoire";
+        try
+        {
+            File.WriteAllText(provisoire, texte, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            await CopiesVerifiees.ReessayerAsync(() => File.Move(provisoire, dossier.FichierDesReglages, overwrite: true));
+        }
+        finally
+        {
+            File.Delete(provisoire);
         }
     }
 
@@ -127,4 +197,20 @@ public sealed class FichierDesReglages(DossierDeLaBase dossier)
 
         return File.ReadAllText(fichier.FullName, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true));
     }
+}
+
+/// <summary>L'issue de l'écriture du fournisseur d'IA (#43).</summary>
+public enum IssueDuFournisseurDIA
+{
+    /// <summary>Le fournisseur est écrit, et la clé d'un autre fournisseur effacée.</summary>
+    Change,
+
+    /// <summary>C'était déjà le fournisseur du fichier : rien ne change, et la clé reste.</summary>
+    Inchange,
+
+    /// <summary>Le fichier des réglages ne se lit pas en entier : rien n'est écrit.</summary>
+    FichierIllisible,
+
+    /// <summary>La clé enregistrée n'a pas pu être effacée : le fournisseur ne change pas.</summary>
+    CleNonEffacee,
 }

@@ -3,7 +3,7 @@ import { expect, test, vi } from "vitest";
 import { App } from "./App.tsx";
 import { ErreurDeLApi } from "./api/clientDeLApi.ts";
 import { HorsDeLaFenetre } from "./connexion.ts";
-import { candidatureFictive, changementFictif, clientSimule, ficheFictive, offreListeeFictive, sauvegardesFictives } from "./tests/clientSimule.ts";
+import { candidatureFictive, changementFictif, clientSimule, etatDeLIAFictif, ficheFictive, offreListeeFictive, sauvegardesFictives } from "./tests/clientSimule.ts";
 
 test("l'écran d'accueil affiche le nom de l'application", () => {
   render(<App connecter={() => new Promise(() => {})} />);
@@ -284,4 +284,16 @@ test("les filtres de la liste des offres restent quand on ouvre une fiche, puis 
   // Lue à chaque ouverture, toujours sans paramètre : la recherche ne quitte pas la page.
   expect(listerLesOffres).toHaveBeenCalledTimes(2);
   expect(listerLesOffres.mock.calls.every((appel) => appel.length === 0)).toBe(true);
+});
+
+test("la carte « Connecter une IA ? » mène à la section « IA » des réglages, qui prend le focus (#43)", async () => {
+  render(<App connecter={async () => clientSimule({ lireLEtatDeLIA: async () => etatDeLIAFictif({ choisi: false }) })} />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "Choisir une IA" }));
+
+  const section = await screen.findByRole("heading", { level: 3, name: "IA" });
+  await waitFor(() => expect(document.activeElement).toBe(section));
+  expect(screen.getByRole("heading", { level: 2, name: "Réglages" })).toBeDefined();
+  const navigation = screen.getByRole("navigation", { name: "Navigation principale" });
+  expect(within(navigation).getByRole("button", { name: "Réglages" }).getAttribute("aria-current")).toBe("page");
 });

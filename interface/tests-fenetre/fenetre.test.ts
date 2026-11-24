@@ -3,11 +3,12 @@
 // protocole CDP ; les réglages propres à la version publiée se vérifient à la main.
 // Lancement : `pnpm run test:fenetre`, sous Windows. Les tests se suivent dans l'ordre : le dernier ferme la fenêtre.
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, realpath, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, realpath, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Request } from "playwright-core";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { attendre, lancerLaFenetre, type FenetreLancee } from "./outils/fenetre.ts";
+import { fichiersQuiContiennent, profilRelache } from "./outils/fichiers.ts";
 import { demarrerLeTemoin, type Temoin } from "./outils/temoin.ts";
 
 const CONNECTEE = "Connectée à l'API locale.";
@@ -646,24 +647,6 @@ test("fermer la fenêtre arrête l'API, et le jeton n'est écrit dans aucun fich
   expect((await stat(copieChoisie.chemin)).mtimeMs).toBeGreaterThan(copieChoisie.ecriteLe);
 });
 
-// Le navigateur intégré finit de s'arrêter après l'exe, et écrit encore dans le profil. Le dossier du profil ne se
-// renomme qu'une fois tous ses fichiers fermés : c'est le signal que le navigateur l'a relâché.
-async function profilRelache(dossierDeDonnees: string): Promise<string> {
-  const profil = join(dossierDeDonnees, "WebView2");
-  const relache = join(dossierDeDonnees, "WebView2-relache");
-  for (let essai = 1; ; essai++) {
-    try {
-      await rename(profil, relache);
-      return relache;
-    } catch (erreur) {
-      if (essai >= 120) {
-        throw erreur;
-      }
-      await attendre(250);
-    }
-  }
-}
-
 // Les lignes d'un fichier que note la version de test ; aucune si elle n'a rien noté.
 async function lignes(fichier: string): Promise<string[]> {
   return existsSync(fichier) ? (await readFile(fichier, "utf8")).split(/\r?\n/).filter(Boolean) : [];
@@ -680,21 +663,4 @@ function encoderStrictement(texte: string): string {
 async function rechargerLInterface(): Promise<void> {
   await fenetre.page.reload();
   await fenetre.page.getByText(CONNECTEE).waitFor();
-}
-
-// Les fichiers du dossier qui contiennent le texte, en UTF-8 ou en UTF-16.
-async function fichiersQuiContiennent(dossier: string, texte: string): Promise<string[]> {
-  const motifs = [Buffer.from(texte, "utf8"), Buffer.from(texte, "utf16le")];
-  const trouves: string[] = [];
-  for (const entree of await readdir(dossier, { recursive: true, withFileTypes: true })) {
-    if (!entree.isFile()) {
-      continue;
-    }
-    const chemin = join(entree.parentPath, entree.name);
-    const contenu = await readFile(chemin);
-    if (motifs.some((motif) => contenu.includes(motif))) {
-      trouves.push(chemin);
-    }
-  }
-  return trouves;
 }

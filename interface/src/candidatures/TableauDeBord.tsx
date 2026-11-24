@@ -4,6 +4,7 @@ import type { IssueDuBrouillon } from "../hote/canalDeLHote.ts";
 import { RelancesDuTableauDeBord } from "../relances/RelancesDuTableauDeBord.tsx";
 import { AlerteDesSauvegardes } from "../sauvegardes/AlerteDesSauvegardes.tsx";
 import { afficherLInstant, LIBELLES_DES_STATUTS } from "./affichage.ts";
+import { CarteDeLIA } from "../ia/CarteDeLIA.tsx";
 
 type Chargement = { etape: "chargement" } | { etape: "pret"; candidatures: Candidature[] } | { etape: "echec" };
 
@@ -20,6 +21,7 @@ export function TableauDeBord({
   ouvrirLaFiche,
   ouvrirLesReglages,
   ouvrirLeBrouillon,
+  choisirUneIA,
   prendreLeFocus = false,
 }: {
   client: ClientDeLApi;
@@ -32,6 +34,8 @@ export function TableauDeBord({
   ouvrirLesReglages?: () => void;
   /** Demande à la fenêtre hôte d'ouvrir le brouillon d'une relance ; absent hors de la fenêtre. */
   ouvrirLeBrouillon?: (relance: number) => Promise<IssueDuBrouillon>;
+  /** Mène à la section « IA » des réglages, depuis la carte « Connecter une IA ? » (#43). */
+  choisirUneIA?: () => void;
   /** Vrai quand l'utilisateur vient d'y être mené : son titre reçoit alors le focus, pas au premier affichage. */
   prendreLeFocus?: boolean;
 }) {
@@ -75,6 +79,7 @@ export function TableauDeBord({
         </p>
       )}
       <AlerteDesSauvegardes client={client} ouvrirLesReglages={ouvrirLesReglages} />
+      <CarteDeLIA client={client} choisirUneIA={choisirUneIA} />
       <RelancesDuTableauDeBord client={client} ouvrirLaFiche={ouvrirLaFiche} ouvrirLeBrouillon={ouvrirLeBrouillon} />
       {chargement.etape === "chargement" && <p>Chargement des candidatures…</p>}
       {chargement.etape === "echec" && (

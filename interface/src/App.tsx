@@ -131,6 +131,7 @@ export function App({
             ouvrirLaFiche={(candidature) => naviguer({ nom: "fiche", candidature })}
             ouvrirLesReglages={() => naviguer({ nom: "reglages" })}
             ouvrirLeBrouillon={ouvrirLeBrouillon}
+            choisirUneIA={() => naviguer({ nom: "reglages", section: "ia" })}
             prendreLeFocus={navigue}
           />
         );
@@ -143,7 +144,8 @@ export function App({
             choisirLeDossierDesSauvegardes={choisirLeDossierDesSauvegardes}
             restaurerUneSauvegarde={restaurerUneSauvegarde}
             quandRestauree={quandRestauree}
-            prendreLeFocus={navigue}
+            prendreLeFocus={navigue && ecran.section !== "ia"}
+            allerALIA={navigue && ecran.section === "ia"}
           />
         );
       case "fiche":
