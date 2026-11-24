@@ -47,7 +47,7 @@ public sealed class FichierDesReglages(DossierDeLaBase dossier)
         await verrou.WaitAsync();
         try
         {
-            var avant = LireLeTexte(out var present);
+            var (avant, present) = await LireAvantDEcrireAsync();
             if (!surUnFichierIllisible && present && (avant is null || !ReglagesDeLApplication.Lire(avant).FichierLisible))
             {
                 return false;
@@ -76,8 +76,7 @@ public sealed class FichierDesReglages(DossierDeLaBase dossier)
     // Le texte du fichier, ou null s'il est absent, trop gros ou illisible (présent dit alors s'il existe).
     private string? LireLeTexte(out bool present)
     {
-        var fichier = new FileInfo(dossier.FichierDesReglages);
-        present = fichier.Exists;
+        present = new FileInfo(dossier.FichierDesReglages).Exists;
         if (!present)
         {
             return null;
@@ -85,16 +84,47 @@ public sealed class FichierDesReglages(DossierDeLaBase dossier)
 
         try
         {
-            if (fichier.Length > ReglagesDeLApplication.TailleMaximale)
-            {
-                return null;
-            }
-
-            return File.ReadAllText(fichier.FullName, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true));
+            return LireLeTexteOuLever();
         }
         catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException or DecoderFallbackException)
         {
             return null;
         }
+    }
+
+    // La lecture d'une écriture : reprise tant qu'un autre programme, comme un antivirus, tient le fichier un instant, comme
+    // le renommage qui la suit. Sans cela, le fichier tenu vaudrait « illisible », et le choix d'un dossier le réécrirait
+    // sans les autres réglages, le délai des relances compris (#88, point 7). Un fichier qui reste tenu, ou qui ne se lit
+    // pas, vaut « illisible », comme pour toute lecture.
+    private async Task<(string? Texte, bool Present)> LireAvantDEcrireAsync()
+    {
+        if (!new FileInfo(dossier.FichierDesReglages).Exists)
+        {
+            return (null, false);
+        }
+
+        try
+        {
+            string? texte = null;
+            await CopiesVerifiees.ReessayerAsync(() => texte = LireLeTexteOuLever());
+            return (texte, true);
+        }
+        catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException or DecoderFallbackException)
+        {
+            return (null, true);
+        }
+    }
+
+    // Le texte du fichier, ou null s'il est trop gros ; une erreur d'entrée-sortie, ou un texte qui n'est pas de l'UTF-8,
+    // se lève.
+    private string? LireLeTexteOuLever()
+    {
+        var fichier = new FileInfo(dossier.FichierDesReglages);
+        if (fichier.Length > ReglagesDeLApplication.TailleMaximale)
+        {
+            return null;
+        }
+
+        return File.ReadAllText(fichier.FullName, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true));
     }
 }

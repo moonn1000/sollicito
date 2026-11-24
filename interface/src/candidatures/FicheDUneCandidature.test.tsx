@@ -249,7 +249,7 @@ test("une action sur le statut efface l'annonce de la dernière étape ajoutée,
   expect(screen.getAllByRole("status")).toHaveLength(1);
 });
 
-test("une réponse plus ancienne, arrivée après une plus récente, ne remplace pas la fiche montrée", async () => {
+test("pendant l'envoi d'une note, les passages de statut sont inactifs ; une fois la note ajoutée, ils reprennent, et le statut s'annonce seul (#82, point 7)", async () => {
   let repondreALaNote: () => void = () => {};
   const ancienne = ficheFictive({ historique: [etapeFictive({ id: 2 })] });
   const recente = ficheFictive({
@@ -257,22 +257,42 @@ test("une réponse plus ancienne, arrivée après une plus récente, ne remplace
     passagesPermis: [],
     historique: [etapeFictive({ id: 2 }), changementFictif({ id: 3, nouveau: "Refusee" })],
   });
+  const changerLeStatut = vi.fn(async () => ({ faite: true as const, fiche: recente }));
   afficher(
     clientSimule({
       noterUneEtape: () => new Promise((resoudre) => (repondreALaNote = () => resoudre({ notee: true, fiche: ancienne }))),
-      changerLeStatut: async () => ({ faite: true, fiche: recente }),
+      changerLeStatut,
     }),
   );
+  const refusee = () => within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" });
 
   fireEvent.click(await screen.findByRole("button", { name: "Ajouter à l'historique" }));
-  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
-  expect(await screen.findByText("Statut changé : Refusée.")).toBeDefined();
-  repondreALaNote();
+  await waitFor(() => expect(refusee().hasAttribute("disabled")).toBe(true));
+  fireEvent.click(refusee());
+  expect(changerLeStatut).not.toHaveBeenCalled();
 
-  await waitFor(() => expect(screen.getByRole("button", { name: "Ajouter à l'historique" })).toBeDefined());
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  repondreALaNote();
+  expect(await screen.findByText("Étape ajoutée à l'historique : Entretien.")).toBeDefined();
+  await waitFor(() => expect(refusee().hasAttribute("disabled")).toBe(false));
+  fireEvent.click(refusee());
+
+  expect(await screen.findByText("Statut changé : Refusée.")).toBeDefined();
+  expect(screen.queryByText("Étape ajoutée à l'historique : Entretien.")).toBeNull();
+  expect(screen.getAllByRole("status")).toHaveLength(1);
   expect(resume().Statut).toBe("Refusée");
   expect(screen.getByText("La candidature est close : son statut ne change plus.")).toBeDefined();
+});
+
+test("une étape ajoutée efface l'annonce du dernier changement de statut (#82, point 8)", async () => {
+  afficher();
+
+  fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+  expect(await screen.findByText("Statut changé : Refusée.")).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Ajouter à l'historique" }));
+
+  expect(await screen.findByText("Étape ajoutée à l'historique : Entretien.")).toBeDefined();
+  expect(screen.queryByText("Statut changé : Refusée.")).toBeNull();
+  expect(screen.getAllByRole("status")).toHaveLength(1);
 });
 
 test("si la fiche ne peut être relue après un refus, la fiche le dit avec le motif", async () => {
@@ -614,6 +634,172 @@ test("ouvrir la correction d'une étape ferme la confirmation de la suppression"
 
   expect(confirmation()).toBeNull();
   expect(screen.getByRole("group", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" })).toBeDefined();
+});
+
+test("pendant l'envoi d'une correction d'étape, ni la modification, ni la suppression, ni un passage de statut ne se lancent (#85, point 5)", async () => {
+  let repondre: () => void = () => {};
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  const { client } = afficher(
+    clientSimule({
+      lireLaFiche: async () => fiche,
+      corrigerUneEtape: vi.fn(
+        () => new Promise<{ issue: "faite"; fiche: Fiche }>((resoudre) => (repondre = () => resoudre({ issue: "faite", fiche: ficheAvecUneEtapeCorrigee() }))),
+      ),
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  fireEvent.click(within(screen.getByRole("group", { name: /^Corriger l'étape/u })).getByRole("button", { name: "Enregistrer la correction" }));
+
+  const inactif = (bouton: HTMLElement) => bouton.hasAttribute("disabled");
+  await waitFor(() => expect(inactif(screen.getByRole("button", { name: "Supprimer la candidature" }))).toBe(true));
+  expect(inactif(screen.getByRole("button", { name: "Modifier la candidature" }))).toBe(true);
+  expect(inactif(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }))).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Supprimer la candidature" }));
+  expect(confirmation()).toBeNull();
+
+  repondre();
+  expect(await screen.findByText("Étape corrigée : Appel.")).toBeDefined();
+  expect(inactif(screen.getByRole("button", { name: "Supprimer la candidature" }))).toBe(false);
+  expect(client.corrigerUneEtape).toHaveBeenCalledOnce();
+});
+
+test("pendant un changement de statut, l'envoi d'une note est inactif, et un envoi forcé ne part pas (#85, point 5)", async () => {
+  let repondre: () => void = () => {};
+  const { client } = afficher(
+    clientSimule({
+      changerLeStatut: () =>
+        new Promise<{ faite: true; fiche: Fiche }>((resoudre) => (repondre = () => resoudre({ faite: true, fiche: ficheFictive({ statut: "Refusee", passagesPermis: [] }) }))),
+    }),
+  );
+
+  fireEvent.click(within(await screen.findByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+
+  const ajouter = () => screen.getByRole("button", { name: "Ajouter à l'historique" });
+  await waitFor(() => expect(ajouter().hasAttribute("disabled")).toBe(true));
+  // Un envoi que le bouton inactif n'arrête pas, par exemple la touche Entrée dans un champ : la garde le refuse.
+  fireEvent.submit(ajouter().closest("form")!);
+  expect(client.noterUneEtape).not.toHaveBeenCalled();
+
+  repondre();
+  expect(await screen.findByText("Statut changé : Refusée.")).toBeDefined();
+  await waitFor(() => expect(ajouter().hasAttribute("disabled")).toBe(false));
+});
+
+test("pendant un changement de statut, l'envoi d'une correction ouverte est inactif (#85, point 5)", async () => {
+  let repondre: () => void = () => {};
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(
+    clientSimule({
+      lireLaFiche: async () => fiche,
+      changerLeStatut: () =>
+        new Promise<{ faite: true; fiche: Fiche }>((resoudre) => (repondre = () => resoudre({ faite: true, fiche: ficheFictive({ ...fiche, statut: "Refusee", passagesPermis: [] }) }))),
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Passer au statut :" })).getByRole("button", { name: "Refusée" }));
+
+  const enregistrer = () => within(screen.getByRole("group", { name: /^Corriger l'étape/u })).getByRole("button", { name: "Enregistrer la correction" });
+  await waitFor(() => expect(enregistrer().hasAttribute("disabled")).toBe(true));
+
+  repondre();
+  expect(await screen.findByText("Statut changé : Refusée.")).toBeDefined();
+  await waitFor(() => expect(enregistrer().hasAttribute("disabled")).toBe(false));
+});
+
+test("une réponse des relances, arrivée après celle d'une note qui la suit dans l'historique, ne remplace pas la fiche montrée", async () => {
+  // Les relances et les contacts gardent leur garde, hors de celle de la fiche : leurs réponses peuvent arriver dans le
+  // désordre, et la réponse la plus récente est celle qui porte le plus d'événements.
+  let repondreALaRelance: () => void = () => {};
+  const apresLaRelance = ficheFictive({ relances: [relanceFictive({ etat: "Faite" })], historique: [clotureFictive()] });
+  const apresLaNote = ficheFictive({
+    relances: [relanceFictive({ etat: "Faite" })],
+    historique: [clotureFictive(), etapeFictive({ id: 5, type: "Appel", note: "Appel reçu après la relance." })],
+  });
+  afficher(
+    clientSimule({
+      lireLaFiche: async () => ficheFictive({ relances: [relanceFictive()] }),
+      marquerLaRelanceFaite: vi.fn(
+        () => new Promise<{ faite: true; fiche: Fiche }>((resoudre) => (repondreALaRelance = () => resoudre({ faite: true, fiche: apresLaRelance }))),
+      ),
+      noterUneEtape: async () => ({ notee: true as const, fiche: apresLaNote }),
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Marquer faite" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ajouter à l'historique" }));
+  expect(await screen.findByText("Appel reçu après la relance.", { selector: "p.note" })).toBeDefined();
+
+  repondreALaRelance();
+  expect(await screen.findByText("Relance marquée faite : elle entre dans l'historique.")).toBeDefined();
+  expect(screen.getByText("Appel reçu après la relance.", { selector: "p.note" })).toBeDefined();
+});
+
+test("pendant la suppression, « Revenir au tableau de bord » attend la réponse : la suppression ne se termine pas hors de l'écran (#85, point 6)", async () => {
+  let repondre: () => void = () => {};
+  const { revenir, quandSupprimee } = afficher(
+    clientSimule({ supprimerUneCandidature: () => new Promise<undefined>((resoudre) => (repondre = () => resoudre(undefined))) }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.click(within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" }));
+
+  const retour = screen.getByRole("button", { name: "Revenir au tableau de bord" });
+  await waitFor(() => expect(retour.hasAttribute("disabled")).toBe(true));
+  fireEvent.click(retour);
+  expect(revenir).not.toHaveBeenCalled();
+
+  repondre();
+  await waitFor(() => expect(quandSupprimee).toHaveBeenCalledOnce());
+});
+
+test("pendant l'envoi d'une note, la suppression ne se lance pas, même si sa confirmation est ouverte avant elle (#85, point 5)", async () => {
+  let repondre: () => void = () => {};
+  const supprimerUneCandidature = vi.fn(async () => undefined);
+  const { quandSupprimee } = afficher(
+    clientSimule({
+      noterUneEtape: () => new Promise((resoudre) => (repondre = () => resoudre({ notee: true, fiche: ficheFictive({ historique: [etapeFictive({ id: 2 })] }) }))),
+      supprimerUneCandidature,
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Supprimer la candidature" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ajouter à l'historique" }));
+
+  const supprimer = () => within(confirmation()!).getByRole("button", { name: "Supprimer définitivement" });
+  await waitFor(() => expect(supprimer().hasAttribute("disabled")).toBe(true));
+  fireEvent.click(supprimer());
+  expect(supprimerUneCandidature).not.toHaveBeenCalled();
+
+  repondre();
+  expect(await screen.findByText("Étape ajoutée à l'historique : Entretien.")).toBeDefined();
+  expect(quandSupprimee).not.toHaveBeenCalled();
+  // La note a fermé la confirmation, qui portait sur la fiche d'avant : rien ne reste à confirmer.
+  expect(confirmation()).toBeNull();
+});
+
+test("pendant l'envoi d'une correction, « Annuler » attend la réponse : la correction ne s'abandonne pas à moitié (#85, point 6)", async () => {
+  let repondre: () => void = () => {};
+  const fiche = ficheFictive({ historique: [etapeFictive({ id: 2, type: "Appel" })] });
+  afficher(
+    clientSimule({
+      lireLaFiche: async () => fiche,
+      corrigerUneEtape: () => new Promise((resoudre) => (repondre = () => resoudre({ issue: "faite" as const, fiche: ficheAvecUneEtapeCorrigee() }))),
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Corriger l'étape : Appel, 10/11/2026 10:00" }));
+  const formulaire = screen.getByRole("group", { name: /^Corriger l'étape/u });
+  fireEvent.click(within(formulaire).getByRole("button", { name: "Enregistrer la correction" }));
+
+  const annuler = within(formulaire).getByRole("button", { name: "Annuler" });
+  await waitFor(() => expect(annuler.hasAttribute("disabled")).toBe(true));
+  fireEvent.click(annuler);
+  expect(screen.getByRole("group", { name: /^Corriger l'étape/u })).toBeDefined();
+
+  repondre();
+  expect(await screen.findByText("Étape corrigée : Appel.")).toBeDefined();
 });
 
 test("pendant une autre action de la fiche, aucune étape ne s'ouvre à la correction", async () => {

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import { ErreurDeLApi } from "../api/clientDeLApi.ts";
+import { ErreurDeLApi, type FicheDUneCandidature } from "../api/clientDeLApi.ts";
 import { changementFictif, clientSimule, etapeFictive, ficheFictive } from "../tests/clientSimule.ts";
 import { ModificationDUneCandidature } from "./ModificationDUneCandidature.tsx";
 
@@ -42,7 +42,7 @@ test("l'écran est rempli d'avance : l'entreprise enregistrée, le poste, et la 
   await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "Modifier la candidature" })));
 });
 
-test("sans historique, rien sous la date ; avec un historique, l'écran rappelle la date de son premier événement", async () => {
+test("sans historique, rien sous la date (le rappel du premier événement est gardé par les tests suivants)", async () => {
   afficher();
   await screen.findByLabelText("Date et heure d'envoi");
   expect(description("Date et heure d'envoi")).toEqual([]);
@@ -176,6 +176,28 @@ test("un premier événement à venir se rappelle aussi, avec ce qui borne alors
   expect(description("Date et heure d'envoi")).toEqual([
     "Le premier événement de l'historique, le 01/12/2026 09:30, est à venir : l'envoi ne peut pas être dans le futur.",
   ]);
+});
+
+test("pendant l'envoi de la modification, « Annuler » attend la réponse : elle ne s'enregistre pas après qu'on a annulé (#85, point 6)", async () => {
+  let repondre: () => void = () => {};
+  const { revenir, quandModifiee } = afficher(
+    clientSimule({
+      modifierUneCandidature: vi.fn(
+        () => new Promise<{ issue: "modifiee"; fiche: FicheDUneCandidature }>((resoudre) => (repondre = () => resoudre({ issue: "modifiee", fiche: ficheFictive() }))),
+      ),
+    }),
+  );
+
+  fireEvent.click(await screen.findByRole("button", { name: "Enregistrer les modifications" }));
+
+  const annuler = screen.getByRole("button", { name: "Annuler" });
+  await waitFor(() => expect(annuler.hasAttribute("disabled")).toBe(true));
+  fireEvent.click(annuler);
+  expect(revenir).not.toHaveBeenCalled();
+
+  repondre();
+  await waitFor(() => expect(quandModifiee).toHaveBeenCalledOnce());
+  expect(revenir).not.toHaveBeenCalled();
 });
 
 test("deux envois rapprochés, avant le rendu suivant, ne font qu'une modification", async () => {

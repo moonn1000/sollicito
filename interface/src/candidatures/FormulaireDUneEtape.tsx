@@ -25,6 +25,7 @@ export function FormulaireDUneEtape({
   prefixe,
   depart,
   envoyer,
+  occupe = false,
   libelleDuBouton,
   libelleEnCours,
   messageDEchec,
@@ -40,6 +41,8 @@ export function FormulaireDUneEtape({
   depart: SaisieDUneEtape;
   /** Envoie la saisie à l'API ; une erreur levée se signale par `messageDEchec`. */
   envoyer: (saisie: SaisieDUneEtape) => Promise<ReponseALEtape>;
+  /** Vrai tant qu'une autre action tient l'écran : l'envoi est alors inactif (la fiche n'en admet qu'une à la fois). */
+  occupe?: boolean;
   libelleDuBouton: string;
   libelleEnCours: string;
   /** Le message d'un envoi qui échoue. */
@@ -163,11 +166,11 @@ export function FormulaireDUneEtape({
       </Champ>
       <p className="aide">{aide}</p>
       <div className="actions">
-        <button type="submit" disabled={envoi === "en-cours"}>
+        <button type="submit" disabled={envoi === "en-cours" || occupe}>
           {envoi === "en-cours" ? libelleEnCours : libelleDuBouton}
         </button>
         {annuler !== undefined && (
-          <button type="button" className="secondaire" onClick={annuler}>
+          <button type="button" className="secondaire" disabled={envoi === "en-cours"} onClick={annuler}>
             Annuler
           </button>
         )}

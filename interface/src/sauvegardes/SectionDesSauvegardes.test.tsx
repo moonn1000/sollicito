@@ -64,6 +64,8 @@ test("un dossier choisi par l'hôte s'annonce, et la section relit l'état : les
 
   expect(await screen.findByText("Dossier des sauvegardes changé : une copie vient d'y être faite. Les copies de l'ancien dossier y restent.")).toBeDefined();
   expect(screen.getByText(CLE_FICTIVE)).toBeDefined();
+  // L'avertissement est toujours là, quel que soit le dossier : pas seulement avec celui par défaut (#88, point 13).
+  expect(screen.getByText("Les copies ne sont pas chiffrées : toute personne qui accède à leur dossier peut les lire.")).toBeDefined();
   expect(choisirLeDossier).toHaveBeenCalledOnce();
   // Hors du dossier par défaut : on peut y revenir, et l'écran dit où restent les copies d'avant une mise à jour.
   expect(screen.getByRole("button", { name: "Revenir au dossier par défaut" })).toBeDefined();
@@ -275,8 +277,15 @@ test("avant la première vérification du lancement, la section le dit et relit 
   expect(await screen.findByText("Vérification des copies…")).toBeDefined();
   expect(screen.queryByText("Aucune copie gardée pour l'instant.")).toBeNull();
   expect(screen.queryByText("Aucune copie pour l'instant.")).toBeNull();
+  // L'état de départ que l'API rend avant la première vérification porte le dossier par défaut, même quand reglages.json en
+  // désigne un autre : la section ne le montre pas, ni son aide, au lieu de faire croire le choix perdu (#88, point 8).
+  expect(screen.queryByText("Dossier des copies")).toBeNull();
+  expect(screen.queryByText(DOSSIER_PAR_DEFAUT_FICTIF)).toBeNull();
+  expect(screen.queryByText(/C'est le dossier par défaut/u)).toBeNull();
 
   expect(await screen.findByText("18/11/2026 14:30", { selector: "dd time" }, { timeout: 3_000 })).toBeDefined();
+  expect(screen.getByText("Dossier des copies")).toBeDefined();
+  expect(screen.getByText(DOSSIER_PAR_DEFAUT_FICTIF)).toBeDefined();
   expect(screen.getByRole("button", { name: "Restaurer la copie du 18 novembre 2026 à 14:30" })).toBeDefined();
   expect(lireLesSauvegardes).toHaveBeenCalledTimes(2);
 });
