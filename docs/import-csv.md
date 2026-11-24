@@ -32,7 +32,7 @@ La première ligne, l'en-tête, nomme les colonnes, dans l'ordre qu'on veut. Les
 
 - Une colonne absente vaut une cellule vide sur chaque ligne. Une cellule vide, ou faite de blancs, ne fait rien.
 - Un texte d'une ligne refuse les sauts de ligne, les tabulations et les autres caractères de contrôle ou invalides ; le texte admet les sauts de ligne et les tabulations.
-- Rien n'est interprété : une cellule qui commence par `=`, `+`, `-` ou `@` reste du texte, et le HTML s'affiche tel quel, comme du texte.
+- Rien n'est interprété : une cellule qui commence par `=`, `+`, `-`, `@` ou `＠` reste du texte, et le HTML s'affiche tel quel, comme du texte.
 
 ## L'encodage, le séparateur, les guillemets
 
