@@ -220,8 +220,14 @@ function ContenuDesSauvegardes({
         </p>
       )}
       <dl className="resume">
-        <dt>Dossier des copies</dt>
-        <dd className="chemin">{etat.dossier}</dd>
+        {/* Avant la première vérification, l'API rend l'état de départ, dossier par défaut compris, même si un autre dossier
+            est choisi : la section ne le montre pas tant qu'il n'est pas sûr (#88, point 8). */}
+        {etat.verifie && (
+          <>
+            <dt>Dossier des copies</dt>
+            <dd className="chemin">{etat.dossier}</dd>
+          </>
+        )}
         <dt>Dernière copie</dt>
         <dd>
           {!etat.verifie ? (
@@ -233,7 +239,7 @@ function ContenuDesSauvegardes({
           )}
         </dd>
       </dl>
-      {etat.parDefaut ? (
+      {!etat.verifie ? null : etat.parDefaut ? (
         <p className="aide">
           C'est le dossier par défaut, sur le même disque que votre base : il ne vous protège pas d'une panne de ce
           disque. Choisissez de préférence un dossier sur un autre support, comme une clé USB ou un disque externe.

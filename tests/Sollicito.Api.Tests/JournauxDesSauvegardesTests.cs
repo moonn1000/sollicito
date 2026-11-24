@@ -137,6 +137,61 @@ public sealed class JournauxDesSauvegardesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Une_copie_ancienne_un_reglage_ou_un_instant_qui_ne_s_ecrivent_pas_n_ecrivent_que_le_type_de_l_erreur()
+    {
+        // Trois chemins des sauvegardes ont une erreur d'écriture en main, et n'en écrivent que le type (#88, point 14) :
+        // la copie ancienne qu'on ne peut effacer, le réglage qu'on ne peut écrire, l'instant de la dernière copie qu'on
+        // ne peut garder. L'erreur de la première cite son fichier, donc le nom du compte, et `SansCheminNiDonnee` la garde ;
+        // celles des deux autres, un accès refusé, n'en citent aucun : seul le libellé exact des témoins, qui porte le
+        // type, les garde.
+        var donnees = Path.Combine(Profil, "AppData", "Local", "Sollicito");
+        var cle = Path.Combine(Profil, "Cle USB", "Sauvegardes");
+        Directory.CreateDirectory(donnees);
+        Directory.CreateDirectory(cle);
+
+        await using (var api = await LancerSurAsync(donnees, new HorlogeDeTest(), ToutJournaliser))
+        {
+            await api.AttendreLaPremiereVerificationAsync();
+            _installations.Add(api.Sauvegardes().Installation);
+            var parDefaut = new DossierDeLaBase(donnees).DossierDesSauvegardes;
+
+            // Huit copies plus anciennes que celle du jour ; la plus ancienne est tenue : la rotation ne peut pas l'effacer.
+            for (var jour = 1; jour <= 8; jour++)
+            {
+                await File.WriteAllTextAsync(Path.Combine(parDefaut, api.CopieDuJour(new DateOnly(2026, 10, jour))), "fictif", TestContext.Current.CancellationToken);
+            }
+
+            using (new FileStream(Path.Combine(parDefaut, api.CopieDuJour(new DateOnly(2026, 10, 1))), FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                await api.SauvegarderMaintenantAsync();
+            }
+
+            // L'instant de la dernière copie : son fichier est tenu pendant une copie.
+            var instant = Path.Combine(donnees, "sauvegardes.json");
+            Assert.True(File.Exists(instant));
+            using (new FileStream(instant, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                await api.SauvegarderMaintenantAsync();
+            }
+
+            // Le réglage du dossier : son fichier est tenu pendant le choix.
+            var reglages = Path.Combine(donnees, ReglagesDeLApplication.NomDuFichier);
+            await File.WriteAllTextAsync(reglages, "{}", TestContext.Current.CancellationToken);
+            using (new FileStream(reglages, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                Assert.Equal(IssueDuChoix.Refuse, await api.Sauvegardes().ChoisirLeDossierAsync(cle, TestContext.Current.CancellationToken));
+            }
+        }
+
+        var entrees = _capture.Entrees.ToArray();
+        // Témoins : chaque chemin a bien été parcouru, et n'a écrit que le type de l'erreur.
+        Assert.Contains(entrees, entree => entree.Contains("Une copie ancienne n'a pas pu être effacée (IOException)", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Instant de la dernière copie non gardé (UnauthorizedAccessException)", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Réglages non écrits (UnauthorizedAccessException)", StringComparison.Ordinal));
+        SansCheminNiDonnee(entrees);
+    }
+
+    [Fact]
     public async Task Un_dossier_de_donnees_qui_ne_peut_pas_se_creer_n_ecrit_pas_son_chemin_dans_le_journal_de_l_hote()
     {
         // La sonde de #80, point 1 : un fichier qui porte le nom du dossier de données.
