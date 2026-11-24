@@ -100,11 +100,11 @@ public sealed class JournauxDeLImportTests
             // Sans copie possible de la base avant l'import, refusé par 409 : le dossier des sauvegardes par défaut est
             // remplacé par un fichier.
             var parDefaut = api.Services.GetRequiredService<DossierDeLaBase>().DossierDesSauvegardes;
-            Directory.Move(parDefaut, parDefaut + "-de-cote");
+            await AppelsDesSauvegardes.DeplacerOuRetirerAsync(parDefaut, parDefaut + "-de-cote");
             await File.WriteAllBytesAsync(parDefaut, [], TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.Conflict, await StatutAsync(api.ImporterAsync(Fichier)));
-            File.Delete(parDefaut);
-            Directory.Move(parDefaut + "-de-cote", parDefaut);
+            await AppelsDesSauvegardes.DeplacerOuRetirerAsync(parDefaut, null);
+            await AppelsDesSauvegardes.DeplacerOuRetirerAsync(parDefaut + "-de-cote", parDefaut);
         }
 
         Assert.Equal(

@@ -73,6 +73,34 @@ public static class AppelsDesSauvegardes
     /// <summary>Les postes des candidatures d'une copie, relus dans le fichier.</summary>
     public static string[] PostesDe(string copie) => Lire(copie, "SELECT Poste FROM Candidatures ORDER BY Id");
 
+    /// <summary>
+    /// Déplace un dossier, ou retire un fichier si <paramref name="destination"/> est rien, en reprenant tant qu'un autre
+    /// programme tient un fichier un instant (un antivirus qui examine une copie tout juste écrite), quelques fois au plus.
+    /// </summary>
+    public static async Task DeplacerOuRetirerAsync(string source, string? destination)
+    {
+        for (var essai = 1; ; essai++)
+        {
+            try
+            {
+                if (destination is null)
+                {
+                    File.Delete(source);
+                }
+                else
+                {
+                    Directory.Move(source, destination);
+                }
+
+                return;
+            }
+            catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException && essai < 20)
+            {
+                await Task.Delay(100);
+            }
+        }
+    }
+
     /// <summary>Les postes des offres d'une copie, relus dans le fichier (#40).</summary>
     public static string[] OffresDe(string copie) => Lire(copie, "SELECT Poste FROM Offres ORDER BY Id");
 

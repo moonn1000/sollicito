@@ -84,7 +84,7 @@ public sealed class CopieAvantLImportTests : IAsyncLifetime
 
         // Le dossier des sauvegardes par défaut remplacé par un fichier : la copie ne peut pas s'y écrire.
         var deCote = ParDefaut + "-de-cote";
-        Directory.Move(ParDefaut, deCote);
+        await DeplacerOuRetirerAsync(ParDefaut, deCote);
         await File.WriteAllBytesAsync(ParDefaut, [], TestContext.Current.CancellationToken);
 
         using (var reponse = await api.ImporterAsync(Fichier))
@@ -99,8 +99,8 @@ public sealed class CopieAvantLImportTests : IAsyncLifetime
         Assert.Empty(CopiesDAvant(deCote));
 
         // Le dossier revenu, l'import se fait, précédé de sa copie.
-        File.Delete(ParDefaut);
-        Directory.Move(deCote, ParDefaut);
+        await DeplacerOuRetirerAsync(ParDefaut, null);
+        await DeplacerOuRetirerAsync(deCote, ParDefaut);
         await api.ImporterAvecSuccesAsync(Fichier);
         Assert.Single(CopiesDAvant());
     }
