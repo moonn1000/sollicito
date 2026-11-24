@@ -437,7 +437,7 @@ L'IA est facultative, et aucune n'est choisie par défaut (#43, ADR-0016). Chois
 ### Où vit la clé
 
 - **Chiffrée, hors de la base** : dans `cle-ia.json`, à côté de la base, écrite d'un bloc (un fichier provisoire, puis un renommage). Le fichier ne porte que la charge protégée par Data Protection : ni la clé, ni son fournisseur en clair. Une seule clé à la fois.
-- **Le trousseau** de Data Protection vit dans `Trousseau`, dans le même dossier de données. Ses clés sont protégées par DPAPI, en portée utilisateur, jamais machine (ADR-0001, D9). Il ne naît qu'avec la première clé enregistrée ; le lancement ne le lit ni ne l'écrit.
+- **Le trousseau** de Data Protection vit dans `Trousseau`, dans le même dossier de données. Ses clés sont protégées par DPAPI, en portée utilisateur, jamais machine (ADR-0001, D9). Il naît avec la première clé enregistrée ; le lancement ne le lit ni ne l'écrit. Quand une clé est enregistrée mais que le trousseau n'a plus de clé valide (absent, abîmé, ou à son renouvellement de 90 jours), c'est la lecture de l'état par l'écran qui en crée une, comme Data Protection le fait d'office (ADR-0016, « Conséquences ») : sans clé d'IA enregistrée, aucun trousseau ne s'écrit.
 - **Jamais le dossier par défaut de Data Protection**, sous `%LOCALAPPDATA%\ASP.NET`, ni ses services dans l'API : un fournisseur autonome, construit au premier usage, n'a qu'un dépôt, celui du trousseau, déduit du dossier de la base des services (un dossier temporaire dans les tests). Il n'a aucun fournisseur de journaux.
 - **Ni dans la base, ni dans ses copies, ni dans le dossier des copies** : une copie ne prend que la base. Une restauration ne change ni le réglage ni la clé. L'export à venir (#49) n'a rien à en exclure.
 
