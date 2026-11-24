@@ -4,8 +4,8 @@ namespace Sollicito.Domain.Textes;
 
 /// <summary>
 /// Les règles d'un texte libre, facultatif, sur plusieurs lignes, comme la note d'une étape (modèle de domaine,
-/// « Noter une étape ») : les fins de ligne s'écrivent U+000A, quelle que soit leur forme d'origine ; les blancs du
-/// début et de la fin sont retirés ; un texte vide ne fait aucun texte. Sauts de ligne et tabulations sont admis ;
+/// « Noter une étape ») : les fins de ligne s'écrivent U+000A, quelle que soit leur forme d'origine (<see cref="FinsDeLigne"/>) ;
+/// les blancs du début et de la fin sont retirés ; un texte vide ne fait aucun texte. Sauts de ligne et tabulations sont admis ;
 /// les autres règles sont celles d'un texte d'une ligne (<see cref="TexteDUneLigne.EstAdmis"/>).
 /// </summary>
 public static class TexteSurPlusieursLignes
@@ -30,7 +30,7 @@ public static class TexteSurPlusieursLignes
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(longueurMaximale);
         texte = null;
 
-        var lu = (saisie ?? "").Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Trim();
+        var lu = FinsDeLigne.Uniques(saisie ?? "").Trim();
         if (lu.Length > longueurMaximale)
         {
             erreur = $"{sujet} ne doit pas dépasser {longueurMaximale} caractères.";
