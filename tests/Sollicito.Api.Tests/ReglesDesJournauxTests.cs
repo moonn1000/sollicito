@@ -59,6 +59,12 @@ public sealed class ReglesDesJournauxTests
             jeton = api.Jeton;
             racineDuContenu = api.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath.TrimEnd(Path.DirectorySeparatorChar);
             dossierDeDonnees = api.DossierDeDonnees;
+            // La candidature enregistrée, la donnée dans son entreprise et son poste : les listes la relisent, la fiche la
+            // lit et l'écrit. Les identifiants viennent des réponses : une candidature de plus en tête du test, ou une
+            // ligne amorcée par une migration, ne les décale pas (#82, point 13).
+            var id = AppelsDuSuivi.IdDe(await api.EnregistrerAvecSuccesAsync($"{Donnee} SA", $"Poste de {Donnee}", "2026-11-02T10:00"));
+            var fiche = AppelsDuSuivi.AdresseDeLaFiche(id);
+            var inconnue = AppelsDuSuivi.AdresseDeLaFiche(id + 1000);
             HttpStatusCode[] statuts =
             [
                 // L'interface : le jeton dans son en-tête, la donnée dans la chaîne de requête, un en-tête, un cookie, un corps.
@@ -97,8 +103,7 @@ public sealed class ReglesDesJournauxTests
                 await StatutAsync(api, HttpMethod.Get, "/api/etat?nom=" + Donnee, jeton: true, requete => requete.Headers.Host = Donnee + ".invalid"),
                 await StatutAsync(api, HttpMethod.Post, "/api/etat?nom=" + Donnee, jeton: true, requete => requete.Headers.Add("Origin", "http://" + Donnee + ".invalid")),
 
-                // Les candidatures : la donnée dans l'entreprise et le poste enregistrés, puis relus par les deux listes.
-                await EnregistrerAsync(api, $$"""{"entreprise":"{{Donnee}} SA","poste":"Poste de {{Donnee}}","envoyeeLe":"2026-11-02T10:00"}"""),
+                // Les candidatures : la donnée dans l'entreprise et le poste enregistrés plus haut, relus par les deux listes.
                 await StatutAsync(api, HttpMethod.Get, "/api/candidatures", jeton: true),
                 await StatutAsync(api, HttpMethod.Get, "/api/entreprises", jeton: true),
                 // Refusées par la validation, par la lecture du corps (JSON mal formé, champ inconnu, type inattendu),
@@ -111,21 +116,21 @@ public sealed class ReglesDesJournauxTests
                 await StatutAsync(api, HttpMethod.Post, "/api/candidatures", jeton: true, requete =>
                     requete.Content = new StringContent($$"""{"poste":"{{Donnee}}"}""", System.Text.Encoding.UTF8, "application/json")),
 
-                // La fiche de la candidature enregistrée (#12), la première de la base : son statut change, puis la
-                // donnée part dans la note d'une étape admise, relue par la fiche, et dans un statut, une étape et
-                // des corps refusés ; une correction refusée, puis admise ; une candidature inconnue.
-                await StatutAsync(api, HttpMethod.Get, "/api/candidatures/1", jeton: true),
-                await EcrireAsync(api, "/api/candidatures/1/statut", """{"statut":"Entretien"}"""),
-                await EcrireAsync(api, "/api/candidatures/1/statut", $$"""{"statut":"{{Donnee}}"}"""),
-                await EcrireAsync(api, "/api/candidatures/1/statut", """{"statut":"Envoyee"}"""),
-                await EcrireAsync(api, "/api/candidatures/1/etapes", $$"""{"type":"Entretien","survenuLe":"2026-11-10T10:00","note":"Entretien avec {{Donnee}}"}"""),
-                await EcrireAsync(api, "/api/candidatures/1/etapes", $$"""{"type":"{{Donnee}}","survenuLe":"{{Donnee}}","note":"{{new string('x', 2001)}}{{Donnee}}"}"""),
-                await EcrireAsync(api, "/api/candidatures/1/etapes", $$"""{"note":{{Donnee}}"""),
-                await EcrireAsync(api, "/api/candidatures/1/etapes", $$"""{"{{Donnee}}":"x"}"""),
-                await StatutAsync(api, HttpMethod.Get, "/api/candidatures/1", jeton: true),
-                await EcrireAsync(api, "/api/candidatures/1/changements/999/correction", corps: null),
-                await EcrireAsync(api, "/api/candidatures/1/changements/1/correction", corps: null),
-                await EcrireAsync(api, "/api/candidatures/999/statut", """{"statut":"Entretien"}"""),
+                // La fiche de la candidature enregistrée (#12) : son statut change, puis la donnée part dans la note d'une
+                // étape admise, relue par la fiche, et dans un statut, une étape et des corps refusés ; une correction
+                // refusée, puis admise ; une candidature inconnue.
+                await StatutAsync(api, HttpMethod.Get, fiche, jeton: true),
+                await EcrireAsync(api, fiche + "/statut", """{"statut":"Entretien"}"""),
+                await EcrireAsync(api, fiche + "/statut", $$"""{"statut":"{{Donnee}}"}"""),
+                await EcrireAsync(api, fiche + "/statut", """{"statut":"Envoyee"}"""),
+                await EcrireAsync(api, fiche + "/etapes", $$"""{"type":"Entretien","survenuLe":"2026-11-10T10:00","note":"Entretien avec {{Donnee}}"}"""),
+                await EcrireAsync(api, fiche + "/etapes", $$"""{"type":"{{Donnee}}","survenuLe":"{{Donnee}}","note":"{{new string('x', 2001)}}{{Donnee}}"}"""),
+                await EcrireAsync(api, fiche + "/etapes", $$"""{"note":{{Donnee}}"""),
+                await EcrireAsync(api, fiche + "/etapes", $$"""{"{{Donnee}}":"x"}"""),
+                await StatutAsync(api, HttpMethod.Get, fiche, jeton: true),
+                await EcrireAsync(api, fiche + "/changements/" + (await ChangementACorrigerAsync(api, id) + 1000) + "/correction", corps: null),
+                await EcrireAsync(api, fiche + "/changements/" + await ChangementACorrigerAsync(api, id) + "/correction", corps: null),
+                await EcrireAsync(api, inconnue + "/statut", """{"statut":"Entretien"}"""),
             ];
 
             // Mal formées, que Kestrel rejette lui-même : ligne de requête (méthode invalide), ligne d'en-tête sans
@@ -146,7 +151,7 @@ public sealed class ReglesDesJournauxTests
                     HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
                     HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized, HttpStatusCode.Unauthorized,
                     HttpStatusCode.BadRequest, HttpStatusCode.Forbidden,
-                    HttpStatusCode.Created, HttpStatusCode.OK, HttpStatusCode.OK,
+                    HttpStatusCode.OK, HttpStatusCode.OK,
                     HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest,
                     HttpStatusCode.UnsupportedMediaType, HttpStatusCode.Forbidden,
                     HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.BadRequest, HttpStatusCode.Conflict,
@@ -200,9 +205,13 @@ public sealed class ReglesDesJournauxTests
         // viennent des réponses.
         var capture = new CaptureDesJournaux();
         string jeton;
+        string racineDuContenu;
+        string dossierDeDonnees;
         await using (var api = await ApiLancee.LancerAsync(builder => ToutJournaliser(builder, capture)))
         {
             jeton = api.Jeton;
+            racineDuContenu = api.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath.TrimEnd(Path.DirectorySeparatorChar);
+            dossierDeDonnees = api.DossierDeDonnees;
             var id = AppelsDuSuivi.IdDe(await api.EnregistrerAvecSuccesAsync($"{Donnee} SA", $"Poste de {Donnee}", "2026-11-02T10:00"));
             var etape = Assert.Single((await api.NoterUneEtapeAvecSuccesAsync(id, "Appel", "2026-11-10T10:00", null))["historique"]!.AsArray())!["id"]!.GetValue<int>();
             var supprimee = AppelsDuSuivi.IdDe(await api.EnregistrerAvecSuccesAsync($"{Donnee} SA", $"Autre poste de {Donnee}", "2026-11-03T10:00"));
@@ -270,13 +279,21 @@ public sealed class ReglesDesJournauxTests
         Assert.Contains(entrees, entree => entree.StartsWith(nameof(LogLevel.Debug) + " Microsoft.EntityFrameworkCore.Database.Transaction ", StringComparison.Ordinal));
         Assert.DoesNotContain(entrees, entree => entree.Contains(jeton, StringComparison.Ordinal));
         Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
+        // Aucun chemin du poste, comme pour les routes d'enregistrement : la racine du contenu, et le dossier de la base,
+        // que Entity Framework Core écrirait si on lui rendait la parole (#85, point 4).
+        Assert.DoesNotContain(entrees, entree => entree.Contains(racineDuContenu, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(dossierDeDonnees, StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]
+    [InlineData("GET", "/api/candidatures/1")]
+    [InlineData("POST", "/api/candidatures/1/statut")]
+    [InlineData("POST", "/api/candidatures/1/etapes")]
+    [InlineData("POST", "/api/candidatures/1/changements/1/correction")]
     [InlineData("PUT", "/api/candidatures/1")]
     [InlineData("DELETE", "/api/candidatures/1")]
     [InlineData("POST", "/api/candidatures/1/etapes/1/correction")]
-    public async Task Une_exception_pendant_une_modification_une_suppression_ou_une_correction_d_etape_n_ecrit_que_son_type(string methode, string chemin)
+    public async Task Une_exception_pendant_une_lecture_une_ecriture_ou_une_suppression_de_la_fiche_n_ecrit_que_son_type(string methode, string chemin)
     {
         var capture = new CaptureDesJournaux();
         await using (var api = await ApiLancee.LancerAsync(builder =>
@@ -285,14 +302,17 @@ public sealed class ReglesDesJournauxTests
             builder.ConfigureTestServices(services => services.AddScoped<IDepotDesCandidatures>(_ => new DepotEnPanne(Donnee)));
         }))
         {
-            // Le dépôt échoue dès le début de l'écriture : l'identifiant ne désigne aucune candidature de la base.
+            // Le dépôt échoue dès son premier appel, la lecture de la fiche ou le début de l'écriture : l'identifiant ne
+            // désigne aucune candidature de la base.
             using var reponse = await api.EnvoyerAsync(new HttpMethod(methode), chemin, jeton: true, requete =>
             {
                 requete.Headers.Add("Origin", api.Origine);
-                var corps = methode switch
+                var corps = (methode, chemin) switch
                 {
-                    "PUT" => $$"""{"entreprise":"{{Donnee}} SA","poste":"Poste de {{Donnee}}","envoyeeLe":"2026-11-02T10:00"}""",
-                    "POST" => $$"""{"type":"Appel","survenuLe":"2026-11-10T10:00","note":"Note de {{Donnee}}"}""",
+                    ("PUT", _) => $$"""{"entreprise":"{{Donnee}} SA","poste":"Poste de {{Donnee}}","envoyeeLe":"2026-11-02T10:00"}""",
+                    ("POST", _) when chemin.EndsWith("/statut", StringComparison.Ordinal) => """{"statut":"Entretien"}""",
+                    ("POST", _) when chemin.EndsWith("/etapes", StringComparison.Ordinal) || chemin.Contains("/etapes/", StringComparison.Ordinal) =>
+                        $$"""{"type":"Appel","survenuLe":"2026-11-10T10:00","note":"Note de {{Donnee}}"}""",
                     _ => null,
                 };
                 if (corps is not null)
@@ -308,6 +328,141 @@ public sealed class ReglesDesJournauxTests
         Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(entrees, entree => entree.Contains("Panne simulée", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public async Task Les_refus_des_routes_de_la_fiche_n_ecrivent_ni_la_donnee_ni_le_jeton_ni_un_chemin()
+    {
+        var capture = new CaptureDesJournaux();
+        string jeton;
+        string racineDuContenu;
+        string dossierDeDonnees;
+        await using (var api = await ApiLancee.LancerAsync(builder => ToutJournaliser(builder, capture)))
+        {
+            jeton = api.Jeton;
+            racineDuContenu = api.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath.TrimEnd(Path.DirectorySeparatorChar);
+            dossierDeDonnees = api.DossierDeDonnees;
+            var id = AppelsDuSuivi.IdDe(await api.EnregistrerAvecSuccesAsync($"{Donnee} SA", $"Poste de {Donnee}", "2026-11-02T10:00"));
+            await api.ChangerLeStatutAvecSuccesAsync(id, "Entretien");
+            var changement = await ChangementACorrigerAsync(api, id);
+            var fiche = AppelsDuSuivi.AdresseDeLaFiche(id);
+            var inconnue = AppelsDuSuivi.AdresseDeLaFiche(id + 1000);
+            var etape = """{"type":"Appel","survenuLe":"2026-11-10T10:00"}""";
+            var origineRefusee = "http://" + Donnee + ".invalid";
+
+            // Sur les routes de la fiche (#82, point 13) : une origine refusée, un type de corps qui porte la donnée, un
+            // type inattendu dans un champ, une candidature inconnue.
+            HttpStatusCode[] statuts =
+            [
+                await EcrireDepuisAsync(api, fiche + "/statut", """{"statut":"Refusee"}""", origineRefusee),
+                await EcrireDepuisAsync(api, fiche + "/etapes", etape, origineRefusee),
+                await EcrireDepuisAsync(api, fiche + "/changements/" + changement + "/correction", corps: null, origineRefusee),
+                await EcrireDepuisAsync(api, fiche + "/statut", """{"statut":"Refusee"}""", api.Origine, "text/" + Donnee),
+                await EcrireDepuisAsync(api, fiche + "/etapes", etape, api.Origine, "text/" + Donnee),
+                await EcrireDepuisAsync(api, fiche + "/statut", $$"""{"statut":["{{Donnee}}"]}""", api.Origine),
+                await EcrireDepuisAsync(api, fiche + "/etapes", $$"""{"type":["{{Donnee}}"]}""", api.Origine),
+                await StatutAsync(api, HttpMethod.Get, inconnue, jeton: true),
+                await EcrireDepuisAsync(api, inconnue + "/statut", """{"statut":"Refusee"}""", api.Origine),
+                await EcrireDepuisAsync(api, inconnue + "/etapes", $$"""{"type":"Appel","survenuLe":"2026-11-10T10:00","note":"Note de {{Donnee}}"}""", api.Origine),
+                await EcrireDepuisAsync(api, inconnue + "/changements/" + changement + "/correction", corps: null, api.Origine),
+            ];
+
+            Assert.Equal(
+                [
+                    HttpStatusCode.Forbidden, HttpStatusCode.Forbidden, HttpStatusCode.Forbidden,
+                    HttpStatusCode.UnsupportedMediaType, HttpStatusCode.UnsupportedMediaType,
+                    HttpStatusCode.BadRequest, HttpStatusCode.BadRequest,
+                    HttpStatusCode.NotFound, HttpStatusCode.NotFound, HttpStatusCode.NotFound, HttpStatusCode.NotFound,
+                ],
+                statuts);
+        }
+
+        var entrees = capture.Entrees.ToArray();
+        // Témoins : la capture a reçu les niveaux les plus bavards, et le refus de l'origine a bien été écrit.
+        Assert.Contains(entrees, entree => entree.StartsWith(nameof(LogLevel.Trace) + " ", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Requête refusée : en-tête Origin absent ou étranger.", StringComparison.Ordinal));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(jeton, StringComparison.Ordinal));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(racineDuContenu, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(dossierDeDonnees, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Un_echec_de_la_base_pendant_une_ecriture_de_la_fiche_n_ecrit_que_le_type_de_l_erreur()
+    {
+        // Le message que la base donne à ses refus : ni une donnée de la requête, ni un chemin. L'API n'en écrit rien.
+        const string Panne = "Panne-simulee-de-la-base";
+        const string ErreurInattendue = "Error Sollicito.Api.Erreurs.ErreursInattendues : Erreur inattendue pendant une requête";
+        var capture = new CaptureDesJournaux();
+        string jeton;
+        string racineDuContenu;
+        string dossierDeDonnees;
+        await using (var api = await ApiLancee.LancerAsync(builder => ToutJournaliser(builder, capture)))
+        {
+            jeton = api.Jeton;
+            racineDuContenu = api.Services.GetRequiredService<IWebHostEnvironment>().ContentRootPath.TrimEnd(Path.DirectorySeparatorChar);
+            dossierDeDonnees = api.DossierDeDonnees;
+            var id = AppelsDuSuivi.IdDe(await api.EnregistrerAvecSuccesAsync($"{Donnee} SA", $"Poste de {Donnee}", "2026-11-02T10:00"));
+            await api.ChangerLeStatutAvecSuccesAsync(id, "Entretien");
+            var historique = (await api.NoterUneEtapeAvecSuccesAsync(id, "Appel", "2026-11-10T10:00", null))["historique"]!.AsArray();
+            var etape = Assert.Single(historique, evenement => evenement!["sorte"]!.GetValue<string>() == "etape")!["id"]!.GetValue<int>();
+            var changement = await ChangementACorrigerAsync(api, id);
+
+            // Une insertion, une modification et une suppression que la base refuse : l'échec de `SaveChangesAsync`
+            // (statut, étape, corrections, modification) et celui de `ExecuteDeleteAsync` (suppression).
+            await api.ExecuterAsync($"CREATE TRIGGER panne_des_evenements BEFORE INSERT ON EvenementsDeCandidature BEGIN SELECT RAISE(ABORT, '{Panne}'); END");
+            await api.ExecuterAsync($"CREATE TRIGGER panne_des_modifications BEFORE UPDATE ON Candidatures BEGIN SELECT RAISE(ABORT, '{Panne}'); END");
+            await api.ExecuterAsync($"CREATE TRIGGER panne_des_suppressions BEFORE DELETE ON Candidatures BEGIN SELECT RAISE(ABORT, '{Panne}'); END");
+            HttpStatusCode[] statuts;
+            try
+            {
+                statuts =
+                [
+                    await StatutAsync(api.ChangerLeStatutAsync(id, "Refusee")),
+                    await StatutAsync(api.NoterUneEtapeAsync(id, "Appel", "2026-11-12T10:00", $"Note de {Donnee}")),
+                    await StatutAsync(api.CorrigerAsync(id, changement)),
+                    await StatutAsync(api.CorrigerUneEtapeAsync(id, etape, "Entretien", "2026-11-10T10:00", $"Note de {Donnee}")),
+                    await StatutAsync(api.ModifierAsync(id, $"{Donnee} Belgique", $"Poste de {Donnee} senior", "2026-11-02T10:00")),
+                    await StatutAsync(api.SupprimerAsync(id)),
+                ];
+            }
+            finally
+            {
+                // La base de test ne garde aucun déclencheur, même si une requête lève.
+                await api.ExecuterAsync("DROP TRIGGER panne_des_evenements");
+                await api.ExecuterAsync("DROP TRIGGER panne_des_modifications");
+                await api.ExecuterAsync("DROP TRIGGER panne_des_suppressions");
+            }
+
+            Assert.All(statuts, statut => Assert.Equal(HttpStatusCode.InternalServerError, statut));
+        }
+
+        var entrees = capture.Entrees.ToArray();
+        // Témoins : les écritures ont bien échoué dans la base, sur les deux chemins, et la base a écrit son message.
+        Assert.Contains(entrees, entree => entree.StartsWith(ErreurInattendue + " (DbUpdateException).", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.StartsWith(ErreurInattendue + " (SqliteException).", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.StartsWith("Error Microsoft.EntityFrameworkCore.Update : ", StringComparison.Ordinal) && entree.Contains(Panne, StringComparison.Ordinal));
+        // L'API n'écrit que le type de l'erreur : jamais son message, que la base a pu rédiger avec ce qu'elle refuse.
+        Assert.DoesNotContain(entrees, entree => entree.StartsWith("Error Sollicito.Api.Erreurs.ErreursInattendues", StringComparison.Ordinal) && entree.Contains(Panne, StringComparison.Ordinal));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(jeton, StringComparison.Ordinal));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(Donnee, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(racineDuContenu, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(entrees, entree => entree.Contains(dossierDeDonnees, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Le changement de statut que la fiche propose de corriger : son identifiant vient de la réponse, jamais d'une base neuve.
+    private static async Task<int> ChangementACorrigerAsync(ApiLancee api, int id) =>
+        (await api.FicheAsync(id))["correction"]!["changement"]!.GetValue<int>();
+
+    // Une écriture de la fiche, venue de l'origine donnée, avec le type de corps donné.
+    private static Task<HttpStatusCode> EcrireDepuisAsync(ApiLancee api, string chemin, string? corps, string origine, string typeDuCorps = "application/json") =>
+        StatutAsync(api, HttpMethod.Post, chemin, jeton: true, requete =>
+        {
+            requete.Headers.Add("Origin", origine);
+            if (corps is not null)
+            {
+                requete.Content = new StringContent(corps, System.Text.Encoding.UTF8, typeDuCorps);
+            }
+        });
 
     // Chaque catégorie au niveau le plus bavard, réglages des catégories que la règle fait taire compris, vers la capture.
     private static void ToutJournaliser(IWebHostBuilder builder, CaptureDesJournaux capture) =>
