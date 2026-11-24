@@ -1,8 +1,8 @@
 # ADR-0015 : import d'offres d'un fichier CSV, format fermé, aperçu puis import en une transaction, doublon possible gardé ligne à ligne
 
-- **Statut** : acceptée ; la copie avant l'import (« À trancher ») attend la décision du mainteneur
+- **Statut** : acceptée ; la copie avant l'import tranchée par le mainteneur le 2026-11-24
 - **Date** : 2026-11-24
-- **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D6 (le fichier CSV, second adaptateur du connecteur commun ; le geste par lot) et D10 (le format pour schéma, les bornes, l'entrée non fiable) ; [ADR-0005](0005-modele-de-domaine.md), « Dédoublonner les offres » (le sort d'une ligne de CSV) ; [ADR-0013](0013-offres-collees.md), « Le connecteur commun, en forme minimale » (les champs de l'empreinte, le geste par lot) et son alternative « Enregistrer d'abord, puis signaler le doublon possible, comme le fera l'import CSV »
+- **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D6 (le fichier CSV, second adaptateur du connecteur commun ; le geste par lot) et D10 (le format pour schéma, les bornes, l'entrée non fiable) ; [ADR-0005](0005-modele-de-domaine.md), « Dédoublonner les offres » (le sort d'une ligne de CSV) ; [ADR-0013](0013-offres-collees.md), « Le connecteur commun, en forme minimale » (les champs de l'empreinte, le geste par lot) et son alternative « Enregistrer d'abord, puis signaler le doublon possible, comme le fera l'import CSV » ; [ADR-0012](0012-restauration-d-une-sauvegarde.md), la copie d'avant une restauration, faite aussi avant chaque import, et son libellé
 
 ## Contexte
 
@@ -30,7 +30,7 @@ La référence est [`docs/import-csv.md`](../import-csv.md) ; l'écran « Import
 
 ### Les bornes : une borne dépassée refuse tout le fichier
 
-Le fichier fait 2 Mo au plus (2 097 152 octets), et porte 1 000 lignes au plus sous l'en-tête, vides comprises. Chaque cellule a la borne de son champ dans #36, mesurée comme le fait sa règle : 200 caractères pour le poste, l'entreprise et le lieu, 2 000 pour l'adresse, 50 000 pour le texte, fins de ligne ramenées. Au-delà, le fichier est refusé, et rien n'est importé : un guillemet mal fermé qui retrouve un guillemet plus loin avale plusieurs lignes dans une seule cellule, et le reste ne s'importe pas en taisant les lignes avalées. Le corps des deux routes est borné à 3 Mio (413), le fichier en base64 et son enveloppe ; l'écran refuse avant de le lire un fichier de plus de 2 Mo.
+Le fichier fait 2 Mo au plus (2 097 152 octets), et porte 1 000 lignes au plus sous l'en-tête, vides comprises. Chaque cellule a la borne de son champ dans #36, mesurée comme le fait sa règle : 200 caractères pour le poste, l'entreprise et le lieu, 2 000 pour l'adresse, 50 000 pour le texte, fins de ligne ramenées. Au-delà, le fichier est refusé, et rien n'est importé : un guillemet mal fermé qui retrouve un guillemet plus loin avale plusieurs lignes dans une seule cellule, et le reste ne s'importe pas en taisant les lignes avalées. Une ligne qui n'a pas autant de cellules que l'en-tête n'y échappe pas : chacune de ses cellules se juge sous la colonne où un tableur la montrerait. Seules les cellules en trop, au-delà de la dernière colonne de l'en-tête, ne se jugent pas : la ligne est alors invalide. Le corps des deux routes est borné à 3 Mio (413), le fichier en base64 et son enveloppe ; l'écran refuse avant de le lire un fichier de plus de 2 Mo.
 
 ### Le transport : la page lit le fichier, l'API n'en reçoit que les octets
 
@@ -68,7 +68,7 @@ Le connecteur n'annonce plus les valeurs des parties de l'empreinte, mais les ch
 
 ### Une seule transaction
 
-L'examen, les entreprises neuves et les offres d'un import se valident ensemble, dans une seule écriture exclusive (`BEGIN IMMEDIATE`), ou rien ne l'est. Deux lignes de journal, de comptes seulement, marquent le début et la fin de l'écriture.
+L'examen, les entreprises neuves et les offres d'un import se valident ensemble, dans une seule écriture exclusive (`BEGIN IMMEDIATE`), ou rien ne l'est. La copie de la base la précède (ci-dessous). Deux lignes de journal, de comptes seulement, marquent le début et la fin de l'écriture.
 
 ### Le contenu non fiable, et l'export à venir
 
@@ -78,14 +78,15 @@ Rien n'est interprété : une cellule qui commence par `=`, `+`, `-`, `@` ou `�
 
 Ils ne notent que des comptes (lignes lues, vides, importées, écartées par sorte, invalides) et la sorte d'un refus du fichier : jamais le contenu, le nom du fichier, un poste, une entreprise, un lieu, une adresse, un texte, une empreinte ni une forme normalisée.
 
-## À trancher
+### Une copie de la base avant chaque import
 
-**Une copie avant l'import** (ADR-0001, D10, « L'import est une entrée non fiable : validé contre un schéma, borné en taille, précédé d'une sauvegarde ») : la décision revient au mainteneur. Les faits relevés le 2026-11-24 :
+L'import suit le D10 de l'ADR-0001 (« L'import est une entrée non fiable : validé contre un schéma, borné en taille, précédé d'une sauvegarde ») : il est précédé d'une sauvegarde. Le mainteneur l'a tranché le 2026-11-24. La V1 ne supprime aucune offre : un import fait par erreur se défait en restaurant la copie faite juste avant lui (#28).
 
-- la V1 ne supprime aucune offre : un import fait par erreur ne se défait que par une restauration (#28) ;
-- la copie du jour se fait au premier lancement du jour, et se refait à la fermeture et à « Sauvegarder maintenant ». Avant la fermeture de la séance de l'import, elle porte l'état du début de la séance ; après, l'import. Reste alors la copie du jour d'utilisation précédent, gardée six jours d'utilisation de plus. Un import le premier jour, suivi d'une fermeture, ne laisse aucune copie d'avant lui ;
-- la copie d'avant une mise à jour ne peut pas servir : elle est une par migration ;
-- le mécanisme de la copie d'avant une restauration (#94) peut servir tel quel, mais l'écran de restauration la nommerait « Avant une restauration ». Avec son propre libellé, c'est une quatrième sorte de copie, gardée hors de la rotation.
+- **La copie d'avant une restauration** (#94, ADR-0012) sert telle quelle, par le même code : la base copiée, relue par `PRAGMA integrity_check`, forcée sur le disque, sous le nom `sollicito-avant-restauration-<instant>.db`, l'instant pris libre pour ne remplacer aucune copie gardée, dans le dossier des sauvegardes par défaut, sur le disque de la base. Elle reste hors de la rotation, et Sollicito ne l'efface jamais.
+- **Son moment** : à l'import seulement, une fois le fichier et les lignes gardées admis, juste avant l'écriture exclusive. L'aperçu, un fichier refusé et un accord mal formé n'en font aucune.
+- **Le sémaphore des copies** ne se tient que pour la copie et la relecture de la liste, où elle paraît aussitôt, restaurable ; pas pendant l'écriture en base. L'import, déjà entré dans la porte de la base, ne l'attend que 5 secondes : une restauration qui le tient attend que la porte se vide, 10 secondes au plus, et l'import refusé la laisse passer.
+- **Sans copie, rien n'est importé** : place qui manque, dossier inaccessible, base qui ne se relit pas saine, ou une autre opération sur les copies qui ne laisse pas la place. L'API refuse l'import (409), sans rien écrire, et l'écran le dit. Le journal n'en note que le type de l'erreur.
+- **Le libellé** de cette sorte de copie devient « Avant une restauration ou un import », dans la liste des sauvegardes et dans l'annonce d'une restauration. Le nom du fichier ne change pas.
 
 ## Alternatives écartées
 
@@ -100,16 +101,20 @@ Ils ne notent que des comptes (lignes lues, vides, importées, écartées par so
 - **Un seul accord pour tous les doublons possibles du fichier** : il couvrirait des lignes que l'utilisateur n'a pas regardées.
 - **Les valeurs des parties de l'empreinte données par le connecteur**, la date telle que reçue : la même ligne, datée sous ses deux formes, ferait deux offres ; et le cœur devrait valider des parties qu'il n'a pas lues.
 - **Un lot fait d'imports unitaires** : une transaction par offre, et un arrêt au milieu laisserait la moitié du fichier.
+- **Aucune copie avant l'import**, la clause du D10 ne visant que le rechargement d'un export (V2), qui remplace les données : un import fait par erreur ne se déferait qu'en restaurant la copie du jour, qui défait aussi le reste de la séance, et un import le premier jour, suivi d'une fermeture, ne laisserait aucune copie d'avant lui.
+- **La copie du jour refaite avant l'import** : la fermeture la refait, et elle porte alors l'import.
+- **Une quatrième sorte de copie, « Avant un import »**, avec son propre nom de fichier : le code de #26 et #28 (noms, liste, rotation) changerait, pour un retour en arrière qui se fait de la même façon.
 
 ## Conséquences
 
-- **Positives** : une liste tenue dans un tableur entre en une fois, après un aperçu qui n'écrit rien ; un fichier réimporté n'importe que ses lignes nouvelles ; un doublon possible ne s'importe qu'avec l'accord, ligne par ligne ; un arrêt brutal ne laisse jamais la moitié d'un fichier ; aucune migration ; le banc de contrat et le cœur gardent désormais ce qu'ils nomment.
+- **Positives** : une liste tenue dans un tableur entre en une fois, après un aperçu qui n'écrit rien ; un import fait par erreur se défait en restaurant la copie faite juste avant lui ; un fichier réimporté n'importe que ses lignes nouvelles ; un doublon possible ne s'importe qu'avec l'accord, ligne par ligne ; un arrêt brutal ne laisse jamais la moitié d'un fichier ; aucune migration ; le banc de contrat et le cœur gardent désormais ce qu'ils nomment.
 - **Négatives** :
   - un fichier hors du format, ou une seule cellule trop longue, est refusé en entier : l'utilisateur le corrige dans son tableur ;
   - les noms de colonnes de l'API (`publieeLe`) ne sont pas ceux d'un tableur ;
   - un fichier Windows-1252 accentué est refusé, et se réenregistre en « CSV UTF-8 » ;
   - le fichier voyage deux fois sur 127.0.0.1, à l'aperçu puis à l'import ;
-  - sans copie avant l'import, un import fait par erreur ne se défait que par une restauration, qui défait aussi le reste de la séance.
+  - chaque import ajoute une copie entière de la base, sans rotation : la place prise grandit d'une copie à chaque import, et Sollicito n'en efface aucune ;
+  - un import dont la copie ne se fait pas est refusé, même si le fichier est bon.
 
 ## À vérifier
 

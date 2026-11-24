@@ -180,7 +180,7 @@ public sealed class ProtectionsDesOffresTests
             ("/api/offres/{id}", "put", "CorrigerUneOffre", ["200", "400", "404", "409"]),
             ("/api/offres/{id}/candidature", "post", "PostulerAUneOffre", ["201", "400", "404", "409", "413"]),
             ("/api/offres/import/apercu", "post", "ExaminerUnFichierCsv", ["200", "400", "413"]),
-            ("/api/offres/import", "post", "ImporterUnFichierCsv", ["200", "400", "413"]),
+            ("/api/offres/import", "post", "ImporterUnFichierCsv", ["200", "400", "409", "413"]),
         })
         {
             var route = chemins[chemin]![methode]!.AsObject();

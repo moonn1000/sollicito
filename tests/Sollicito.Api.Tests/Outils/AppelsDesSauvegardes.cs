@@ -73,6 +73,9 @@ public static class AppelsDesSauvegardes
     /// <summary>Les postes des candidatures d'une copie, relus dans le fichier.</summary>
     public static string[] PostesDe(string copie) => Lire(copie, "SELECT Poste FROM Candidatures ORDER BY Id");
 
+    /// <summary>Les postes des offres d'une copie, relus dans le fichier (#40).</summary>
+    public static string[] OffresDe(string copie) => Lire(copie, "SELECT Poste FROM Offres ORDER BY Id");
+
     /// <summary>Les noms des entreprises d'une copie, relus dans le fichier.</summary>
     public static string[] EntreprisesDe(string copie) => Lire(copie, "SELECT Nom FROM Entreprises ORDER BY Id");
 

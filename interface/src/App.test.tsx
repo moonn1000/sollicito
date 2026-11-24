@@ -214,7 +214,7 @@ test("une copie restaurée ramène au tableau de bord, qui relit la base et anno
 
   expect(
     await screen.findByText(
-      "Base restaurée : vous retrouvez la copie du 18 novembre 2026 à 14:30. Votre base d'avant est gardée dans la copie « Avant une restauration ».",
+      "Base restaurée : vous retrouvez la copie du 18 novembre 2026 à 14:30. Votre base d'avant est gardée dans la copie « Avant une restauration ou un import ».",
     ),
   ).toBeDefined();
   expect(screen.getByRole("heading", { level: 2, name: "Tableau de bord" })).toBeDefined();

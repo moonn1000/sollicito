@@ -253,7 +253,7 @@ export type ResultatDeLaCorrectionDEtape =
 
 /**
  * La sorte d'une copie de la base : celle d'un jour d'utilisation, de ce poste ou d'une autre installation qui partage le
- * dossier (#28), celle d'avant une mise à jour (#26), ou celle d'avant une restauration (#28).
+ * dossier (#28), celle d'avant une mise à jour (#26), ou celle d'avant une restauration (#28) ou un import (#40).
  */
 export type SorteDeCopie = "DuJour" | "AvantMiseAJour" | "DuJourDUneAutreInstallation" | "AvantRestauration";
 
@@ -470,6 +470,9 @@ export const TAILLE_MAXIMALE_DU_FICHIER = 2 * 1024 * 1024;
 
 /** Le refus d'un fichier trop gros, celui de l'API (#40). */
 export const FICHIER_TROP_GROS = "Le fichier dépasse 2 Mo : découpez-le en plusieurs fichiers.";
+
+/** Le refus d'un import que la copie de la base, faite avant lui, n'a pas pu précéder (#40, ADR-0015). */
+export const COPIE_AVANT_L_IMPORT_IMPOSSIBLE = "Sollicito n'a pas pu copier votre base avant l'import : vérifiez la place libre sur le disque, puis réessayez.";
 
 /** Une réponse de l'API en erreur : jeton refusé, origine refusée, route inconnue… */
 export class ErreurDeLApi extends Error {
@@ -797,8 +800,9 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
   };
 }
 
-// Le compte rendu (200), le refus du fichier (400, sur « contenu »), ou un corps trop gros (413), refusé avant d'être
-// lu : le fichier dépasse 2 Mo. Toute autre réponse lève une erreur.
+// Le compte rendu (200), le refus du fichier (400, sur « contenu »), un corps trop gros (413), refusé avant d'être lu :
+// le fichier dépasse 2 Mo, ou, à l'import, la copie de la base avant lui qui n'a pas pu se faire (409). Toute autre
+// réponse lève une erreur.
 async function lireLeCompteRendu(reponse: Response): Promise<ResultatDuFichier> {
   if (reponse.status === 200) {
     return { issue: "lu", compteRendu: (await reponse.json()) as CompteRenduDUnFichier };
@@ -813,6 +817,10 @@ async function lireLeCompteRendu(reponse: Response): Promise<ResultatDuFichier> 
 
   if (reponse.status === 413) {
     return { issue: "refuse", motif: FICHIER_TROP_GROS };
+  }
+
+  if (reponse.status === 409) {
+    return { issue: "refuse", motif: COPIE_AVANT_L_IMPORT_IMPOSSIBLE };
   }
 
   throw new ErreurDeLApi(reponse.status);

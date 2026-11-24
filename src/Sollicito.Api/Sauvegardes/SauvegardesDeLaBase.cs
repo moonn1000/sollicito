@@ -357,6 +357,81 @@ public sealed partial class SauvegardesDeLaBase
     }
 
     /// <summary>
+    /// Fait la copie d'avant un import (#40, ADR-0015, D10 de l'ADR-0001) : la copie d'avant une restauration, faite par
+    /// le même code (<see cref="EcrireUneCopieDAvantAsync"/>), seule sous le sémaphore des copies, puis l'état republié :
+    /// elle paraît aussitôt dans la liste, et se restaure comme les autres. L'import ne l'attend que
+    /// <paramref name="attente"/> : il est déjà entré dans la porte de la base, et une restauration qui tient le sémaphore
+    /// attend que la porte se vide (<see cref="RestaurationDeLaBase.DelaiDesRequetesEnCours"/>) ; une attente plus courte
+    /// laisse passer la restauration. Rend rien si la copie est faite ; sinon le motif, pour le journal : « Occupee », ou
+    /// le type de l'erreur. L'import ne se fait alors pas. Ne lève que l'annulation.
+    /// </summary>
+    public async Task<string?> FaireLaCopieDAvantLImportAsync(TimeSpan attente, CancellationToken annulation)
+    {
+        if (!await _uneALaFois.WaitAsync(attente, annulation))
+        {
+            return "Occupee";
+        }
+
+        try
+        {
+            Charger();
+            try
+            {
+                await EcrireUneCopieDAvantAsync(InstantLibreDUneCopieDAvant(), verifier: null, annulation);
+                return null;
+            }
+            catch (Exception erreur) when (erreur is not OperationCanceledException)
+            {
+                return erreur.GetType().Name;
+            }
+        }
+        finally
+        {
+            try
+            {
+                await PublierAsync();
+            }
+            finally
+            {
+                _uneALaFois.Release();
+            }
+        }
+    }
+
+    /// <summary>
+    /// L'instant qui nomme une copie d'avant, sans jamais reprendre le nom d'une autre : une horloge qui recule, ou deux
+    /// copies d'avant dans la même milliseconde, ne remplacent pas une copie d'avant gardée. À n'appeler que sous le
+    /// sémaphore des copies (<see cref="RestaurerSeuleAsync"/>, <see cref="FaireLaCopieDAvantLImportAsync"/>) : personne
+    /// d'autre n'écrit alors une copie d'avant.
+    /// </summary>
+    internal DateTimeOffset InstantLibreDUneCopieDAvant()
+    {
+        var instant = _horloge.GetUtcNow();
+        while (File.Exists(Path.Combine(_base.DossierDesSauvegardes, NomsDesCopies.AvantRestauration(instant)))
+            || File.Exists(Path.Combine(_base.DossierDesSauvegardes, NomsDesCopies.AvantRestaurationBrute(instant))))
+        {
+            instant = instant.AddMilliseconds(1);
+        }
+
+        return instant;
+    }
+
+    /// <summary>
+    /// Écrit la copie d'avant une restauration ou un import, nommée par cet instant, dans le dossier des sauvegardes par
+    /// défaut, sur le disque de la base, quel que soit le dossier choisi : vérifiée par <paramref name="verifier"/>
+    /// (<see cref="CopieDeLaBase.EstSaineAsync"/> par défaut), puis forcée sur le disque. Lève l'erreur d'une copie
+    /// manquée : écrite ou vérifiée à moitié, elle ne laisse aucun fichier ; seule une copie déjà renommée, que le disque
+    /// n'a pas pu forcer, reste sous son nom. À n'appeler que sous le sémaphore des copies.
+    /// </summary>
+    internal async Task EcrireUneCopieDAvantAsync(DateTimeOffset instant, Func<string, CancellationToken, Task<bool>>? verifier, CancellationToken annulation)
+    {
+        var copie = Path.Combine(_base.DossierDesSauvegardes, NomsDesCopies.AvantRestauration(instant));
+        Directory.CreateDirectory(_base.DossierDesSauvegardes);
+        await CopiesVerifiees.EcrireAsync(_base.Fichier, copie, annulation, verifier);
+        await CopiesBrutes.ForcerSurLeDisqueAsync(copie, annulation);
+    }
+
+    /// <summary>
     /// Le chemin de la copie que l'utilisateur a choisie, relue sur le disque : elle doit porter encore le nom et l'instant
     /// que la liste montrait, donc le même identifiant. Sinon, le motif du refus : introuvable, ou changée. À n'appeler
     /// que pendant <see cref="RestaurerSeuleAsync"/>.

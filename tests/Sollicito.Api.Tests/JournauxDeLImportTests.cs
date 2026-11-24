@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Tests.Outils;
 using Sollicito.Application.Offres;
+using Sollicito.Infrastructure.Persistance;
 using static Sollicito.Api.Tests.Outils.AppelsDeLImport;
 using static Sollicito.Api.Tests.Outils.AppelsDesOffres;
 using static Sollicito.Api.Tests.Outils.AppelsDesRelances;
@@ -95,6 +96,15 @@ public sealed class JournauxDeLImportTests
             Assert.Equal(HttpStatusCode.ServiceUnavailable, await StatutAsync(api.ImporterAsync(Fichier)));
             Assert.Equal(HttpStatusCode.ServiceUnavailable, await StatutAsync(api.ExaminerAsync(Fichier)));
             porte.Ouvrir();
+
+            // Sans copie possible de la base avant l'import, refusé par 409 : le dossier des sauvegardes par défaut est
+            // remplacé par un fichier.
+            var parDefaut = api.Services.GetRequiredService<DossierDeLaBase>().DossierDesSauvegardes;
+            Directory.Move(parDefaut, parDefaut + "-de-cote");
+            await File.WriteAllBytesAsync(parDefaut, [], TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.Conflict, await StatutAsync(api.ImporterAsync(Fichier)));
+            File.Delete(parDefaut);
+            Directory.Move(parDefaut + "-de-cote", parDefaut);
         }
 
         Assert.Equal(
@@ -112,6 +122,8 @@ public sealed class JournauxDeLImportTests
         Assert.Contains(entrees, entree => entree.StartsWith(nameof(LogLevel.Trace) + " ", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("Import d'un fichier CSV : écriture commencée (5 offres reçues).", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("Import d'un fichier CSV : écriture validée (2 offres importées).", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Import d'un fichier CSV : copie de la base faite avant lui.", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Import refusé : la copie de la base avant lui n'a pas pu se faire (IOException).", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("Fichier CSV examiné : 6 lignes d'offres, 1 à importer, 2 doublons possibles, 1 écartées, 2 invalides, 1 lignes vides.", StringComparison.Ordinal));
         foreach (var sorte in new[] { "EnTete", "Borne", "Structure", "Encodage", "Lignes" })
         {

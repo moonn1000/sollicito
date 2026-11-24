@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
+using Sollicito.Api.Sauvegardes;
 using Sollicito.Application.Offres;
 
 namespace Sollicito.Api.Offres;
@@ -11,8 +12,9 @@ namespace Sollicito.Api.Offres;
 /// dans le corps : jamais un chemin, un nom de fichier ni une adresse, et l'adresse des routes ne porte aucune donnée.
 /// <list type="bullet">
 /// <item><c>POST /api/offres/import/apercu</c> n'écrit rien : il dit ce que l'import ferait de chaque ligne.</item>
-/// <item><c>POST /api/offres/import</c> reçoit le même fichier et les lignes gardées : l'examen se refait dans l'écriture
-/// exclusive, puis les lignes admises s'importent en une seule transaction.</item>
+/// <item><c>POST /api/offres/import</c> reçoit le même fichier et les lignes gardées : la base se copie d'abord, comme
+/// avant une restauration, puis l'examen se refait dans l'écriture exclusive, et les lignes admises s'importent en une
+/// seule transaction. Sans la copie, rien n'est importé.</item>
 /// </list>
 /// Les journaux n'en notent que des comptes, et la sorte d'un refus : jamais une cellule, ni rien qui en soit tiré.
 /// </summary>
@@ -26,6 +28,16 @@ internal static class RoutesDeLImport
 
     /// <summary>Le titre d'un accord mal formé ; le motif suit, sur <c>garder</c>.</summary>
     public const string TitreDeLAccordRefuse = "L'import n'est pas fait : les lignes gardées sont mal désignées.";
+
+    /// <summary>Le titre d'un import refusé faute de copie de la base avant lui (ADR-0015, D10 de l'ADR-0001).</summary>
+    public const string TitreDeLaCopieImpossible = "L'import n'est pas fait : la copie de la base, avant lui, n'a pas pu se faire.";
+
+    /// <summary>
+    /// Le temps qu'un import attend le sémaphore des copies pour faire sa copie d'avant : moins que le temps qu'une
+    /// restauration laisse aux requêtes en cours (<see cref="RestaurationDeLaBase.DelaiDesRequetesEnCours"/>), pour ne
+    /// jamais la retenir.
+    /// </summary>
+    public static readonly TimeSpan AttenteDeLaCopie = TimeSpan.FromSeconds(5);
 
     /// <summary>Le motif d'un accord mal formé.</summary>
     public const string AccordMalForme = "Les lignes gardées doivent être des lignes d'offres du fichier, chacune une fois.";
@@ -59,8 +71,10 @@ internal static class RoutesDeLImport
             .WithSummary("Importer un fichier CSV d'offres, en une seule transaction")
             .WithDescription(
                 "Le corps porte le même fichier (contenu) et les numéros des lignes dont l'utilisateur garde le doublon possible (garder). "
-                + "Une ligne déjà enregistrée ou en double est écartée ; un doublon possible non gardé aussi. Corps de 3 Mio au plus.")
+                + "Une ligne déjà enregistrée ou en double est écartée ; un doublon possible non gardé aussi. Corps de 3 Mio au plus. "
+                + "La base se copie d'abord, comme avant une restauration : si la copie ne se fait pas, rien n'est importé (409).")
             .WithMetadata(new RequestSizeLimitAttribute(BorneDuCorps))
+            .ProducesProblem(StatusCodes.Status409Conflict)
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
             .WithTags("Offres");
     }
@@ -84,10 +98,11 @@ internal static class RoutesDeLImport
         return TypedResults.Ok(compteRendu);
     }
 
-    private static async Task<Results<Ok<CompteRenduDUnFichier>, ValidationProblem>> ImporterAsync(
+    private static async Task<Results<Ok<CompteRenduDUnFichier>, ValidationProblem, ProblemHttpResult>> ImporterAsync(
         FichierAImporter corps,
         ConnecteurDuFichierCsv connecteur,
         IImportDesOffres import,
+        SauvegardesDeLaBase sauvegardes,
         ILogger<JournalDeLImport> journal,
         CancellationToken annulation)
     {
@@ -116,6 +131,15 @@ internal static class RoutesDeLImport
             }
         }
 
+        // D10 de l'ADR-0001 : l'import est précédé d'une sauvegarde, la copie d'avant une restauration, faite juste avant
+        // l'écriture exclusive. Sans elle, rien n'est importé.
+        if (await sauvegardes.FaireLaCopieDAvantLImportAsync(AttenteDeLaCopie, annulation) is { } motif)
+        {
+            JournalDeLImport.CopieImpossible(journal, motif);
+            return TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: TitreDeLaCopieImpossible);
+        }
+
+        JournalDeLImport.CopieFaite(journal);
         var sorts = await import.ImporterUnLotAsync([.. lignes.Select(ligne => ligne.Offre)], rangsGardes, annulation);
         var compteRendu = CompteRendu(fichier, lignes, sorts);
         JournalDeLImport.FichierImporte(journal, compteRendu.Comptes.Importees, compteRendu.Comptes.DejaEnregistrees + compteRendu.Comptes.EnDouble + compteRendu.Comptes.DoublonsPossibles, compteRendu.Comptes.Invalides);
@@ -216,6 +240,12 @@ internal sealed partial class JournalDeLImport(ILogger<JournalDeLImport> journal
 
     [LoggerMessage(EventId = 73, Level = LogLevel.Information, Message = "Import refusé : lignes gardées mal désignées.")]
     internal static partial void AccordRefuse(ILogger journal);
+
+    [LoggerMessage(EventId = 76, Level = LogLevel.Information, Message = "Import d'un fichier CSV : copie de la base faite avant lui.")]
+    internal static partial void CopieFaite(ILogger journal);
+
+    [LoggerMessage(EventId = 77, Level = LogLevel.Warning, Message = "Import refusé : la copie de la base avant lui n'a pas pu se faire ({Motif}).")]
+    internal static partial void CopieImpossible(ILogger journal, string motif);
 
     public void EcritureCommencee(int offres) => Commencee(journal, offres);
 

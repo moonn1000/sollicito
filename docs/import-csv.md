@@ -53,7 +53,7 @@ Au-delà d'une borne, le fichier est refusé en entier, et rien n'est importé :
 
 - 2 Mo au plus (2 097 152 octets) ;
 - 1 000 lignes au plus sous l'en-tête, lignes vides comprises ;
-- pour chaque cellule, la borne de son champ : 200 caractères pour le poste, l'entreprise et le lieu, 2 000 pour l'adresse, 50 000 pour le texte.
+- pour chaque cellule, la borne de son champ : 200 caractères pour le poste, l'entreprise et le lieu, 2 000 pour l'adresse, 50 000 pour le texte. Une ligne qui n'a pas autant de cellules que l'en-tête n'y échappe pas : chaque cellule s'y mesure sous la colonne où un tableur la montrerait ; seules les cellules en trop, au-delà de la dernière colonne de l'en-tête, ne se mesurent pas.
 
 Un fichier mal formé (un guillemet mal placé, ou jamais fermé), un en-tête qui ne nomme pas les colonnes du format, ou un fichier qui ne porte aucune offre, sont refusés de même.
 
@@ -64,6 +64,10 @@ L'aperçu dit le sort de chaque ligne ; l'import le refait, et fait foi si la ba
 - **Déjà enregistrée** : une offre importée d'un fichier a les mêmes champs, aux blancs, aux majuscules et à la forme de la date près. La ligne est écartée. Réimporter un fichier complété n'importe donc que ses lignes nouvelles.
 - **En double** : une ligne précédente du fichier a les mêmes champs. La ligne est écartée.
 - **Doublon possible** : une offre enregistrée, ou une ligne précédente du fichier, a la même entreprise et le même poste, d'où qu'elle vienne. La ligne ne s'importe que si l'utilisateur la garde, dans l'aperçu. Jamais de fusion.
+
+## Une copie de la base avant chaque import
+
+Avant d'importer, Sollicito copie la base, comme avant une restauration ; l'aperçu n'en fait aucune. La copie paraît dans la liste des sauvegardes, sous « Avant une restauration ou un import », et se restaure comme les autres : c'est le retour en arrière d'un import fait par erreur. Si elle ne peut pas se faire, rien n'est importé. Ces copies ne s'effacent pas d'elles-mêmes : chaque import en ajoute une, de la taille de la base.
 
 ## Ce qui ne sort pas de la machine
 

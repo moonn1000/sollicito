@@ -120,7 +120,7 @@ test("une copie se restaure après le oui du dialogue de l'hôte, qui montre sa 
 
     await writeFile(join(dossier, "restauration-a-confirmer.txt"), "restaurer", "utf8");
     await demanderLaRestauration(page, "Copie du jour d'une autre installation");
-    await page.getByText(/^Base restaurée : vous retrouvez la copie du .+\. Votre base d'avant est gardée dans la copie « Avant une restauration »\.$/u).waitFor();
+    await page.getByText(/^Base restaurée : vous retrouvez la copie du .+\. Votre base d'avant est gardée dans la copie « Avant une restauration ou un import »\.$/u).waitFor();
     expect(await postes(page)).toEqual(["Comptable A"]);
 
     // Le dialogue a montré la date de la copie et ce qui serait perdu, deux fois.
@@ -133,7 +133,7 @@ test("une copie se restaure après le oui du dialogue de l'hôte, qui montre sa 
     const avant = (await fichiers(join(dossier, "Sauvegardes"))).filter((nom) => nom.startsWith("sollicito-avant-restauration-"));
     expect(avant).toHaveLength(1);
     await page.getByRole("button", { name: "Réglages" }).click();
-    await page.getByRole("row").filter({ hasText: "Avant une restauration" }).first().waitFor();
+    await page.getByRole("row").filter({ hasText: "Avant une restauration ou un import" }).first().waitFor();
     expect(await fenetre.fermer()).toBe(0);
     expect(relire(join(dossier, "Sauvegardes", avant[0]!)).postes).toEqual(["Chauffeur B", "Comptable A"]);
   } finally {

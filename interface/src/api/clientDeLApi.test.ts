@@ -454,7 +454,7 @@ test("un fichier de 2 Mo passe en base64 sans dépasser la pile", async () => {
   expect(contenu.slice(0, 8)).toBe(btoa(String.fromCharCode(...octets.subarray(0, 6))));
 });
 
-test("un fichier refusé rend son motif ; un corps trop gros, celui de la taille ; une autre réponse lève une erreur (#40)", async () => {
+test("un fichier refusé rend son motif ; un corps trop gros, celui de la taille ; une copie d'avant manquée, le sien ; une autre réponse lève une erreur (#40)", async () => {
   const refuse = Response.json({ errors: { contenu: ["Le fichier est vide."] } }, { status: 400 });
   expect(await creerClientDeLApi(JETON_FICTIF, apiQuiRepond(refuse)).examinerUnFichierCsv(new ArrayBuffer(0))).toEqual({
     issue: "refuse",
@@ -463,6 +463,11 @@ test("un fichier refusé rend son motif ; un corps trop gros, celui de la taille
   expect(await creerClientDeLApi(JETON_FICTIF, apiQuiRepond(new Response(null, { status: 413 }))).importerUnFichierCsv(new ArrayBuffer(1), [])).toEqual({
     issue: "refuse",
     motif: "Le fichier dépasse 2 Mo : découpez-le en plusieurs fichiers.",
+  });
+  const copieManquee = Response.json({ title: "L'import n'est pas fait : la copie de la base, avant lui, n'a pas pu se faire.", status: 409 }, { status: 409 });
+  expect(await creerClientDeLApi(JETON_FICTIF, apiQuiRepond(copieManquee)).importerUnFichierCsv(new ArrayBuffer(1), [])).toEqual({
+    issue: "refuse",
+    motif: "Sollicito n'a pas pu copier votre base avant l'import : vérifiez la place libre sur le disque, puis réessayez.",
   });
   const accordRefuse = Response.json({ errors: { garder: ["Les lignes gardées doivent être des lignes d'offres du fichier, chacune une fois."] } }, { status: 400 });
   await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(accordRefuse)).importerUnFichierCsv(new ArrayBuffer(1), [99])).rejects.toBeInstanceOf(ErreurDeLApi);

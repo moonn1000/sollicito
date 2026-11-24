@@ -182,7 +182,7 @@ test("dans la fenêtre, toutes les copies se listent des plus récentes aux plus
   const tableau = await screen.findByRole("table", { name: "Les copies gardées, des plus récentes aux plus anciennes." });
   const lignes = within(tableau).getAllByRole("row").slice(1);
   expect(lignes.map((ligne) => within(ligne).getAllByRole("cell").slice(0, 2).map((cellule) => cellule.textContent))).toEqual([
-    ["20/11/2026 11:15", "Avant une restauration"],
+    ["20/11/2026 11:15", "Avant une restauration ou un import"],
     ["19/11/2026 08:05", "Copie du jour d'une autre installation"],
     ["18/11/2026 14:30", "Copie du jour"],
     ["16/11/2026 09:00", "Avant une mise à jour"],
