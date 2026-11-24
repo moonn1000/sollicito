@@ -186,7 +186,7 @@ export function FormulaireDUneCandidature({
           {envoi === "en-cours" ? libelleEnCours : libelleDuBouton}
         </button>
         {annuler !== undefined && (
-          <button type="button" className="secondaire" onClick={annuler}>
+          <button type="button" className="secondaire" disabled={envoi === "en-cours"} onClick={annuler}>
             Annuler
           </button>
         )}
