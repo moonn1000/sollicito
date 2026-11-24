@@ -39,6 +39,11 @@ jobs:
         with:
           global-json-file: global.json
 
+      # Les machines de la CI sont en UTC : l'API et la page y liraient l'heure saisie dans le même fuseau, et aucun
+      # test ne verrait une API qui la lirait en UTC (#80, point 2). Bruxelles : UTC+1 l'hiver, UTC+2 l'été.
+      - name: Régler le fuseau du poste sur Bruxelles
+        run: tzutil /s "Romance Standard Time"
+
       # Restauration en mode verrouillé (CI=true, voir Directory.Build.props), construction, tests.
       - name: Construire et tester
         run: dotnet test --solution Sollicito.slnx
@@ -98,6 +103,10 @@ jobs:
 
       - name: Installer les dépendances du fichier de verrouillage
         run: pnpm install --frozen-lockfile
+
+      # Le même fuseau que dans le job .NET : la page et l'API doivent le partager, hors UTC (#80, point 2).
+      - name: Régler le fuseau du poste sur Bruxelles
+        run: tzutil /s "Romance Standard Time"
 
       - name: Piloter la vraie fenêtre
         run: pnpm run test:fenetre
