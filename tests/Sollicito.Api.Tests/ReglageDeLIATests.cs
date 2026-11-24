@@ -57,6 +57,7 @@ public sealed class ReglageDeLIATests : IDisposable
     public async Task Choisir_Claude_puis_enregistrer_sa_cle_qui_ne_revient_jamais()
     {
         await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest());
+        await api.AttendreLaPremiereVerificationAsync();
 
         Assert.Equal(Etat("Claude", choisi: true, "Aucune"), (await api.ChoisirLIAAvecSuccesAsync("Claude")).ToJsonString());
         using var reponse = await api.EnregistrerLaCleAsync("  " + CleDeClaude + "\n");
@@ -354,6 +355,7 @@ public sealed class ReglageDeLIATests : IDisposable
         // Un fichier à la place du dossier du trousseau : Data Protection ne peut pas y écrire sa première clé.
         await File.WriteAllTextAsync(Base.Trousseau, "pas un dossier", TestContext.Current.CancellationToken);
         await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest());
+        await api.AttendreLaPremiereVerificationAsync();
         await api.ChoisirLIAAvecSuccesAsync("Claude");
 
         await AttendreUnConflitAsync(api.EnregistrerLaCleAsync(CleDeClaude), RoutesDeLIA.TitreDeLaCleNonChiffree);

@@ -88,11 +88,18 @@ public static class AppelsDeLIA
             }
 
             byte[] octets;
-            using (var flux = new FileStream(fichier, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            using (var copie = new MemoryStream())
+            try
             {
+                using var flux = new FileStream(fichier, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var copie = new MemoryStream();
                 flux.CopyTo(copie);
                 octets = copie.ToArray();
+            }
+            catch (FileNotFoundException)
+            {
+                // Un fichier provisoire que l'API renomme pendant le parcours (la vérification du lancement écrit ainsi la date
+                // de la dernière copie) : il n'est plus là, et son contenu est dans le fichier qui le remplace.
+                continue;
             }
 
             foreach (var forme in formes)
