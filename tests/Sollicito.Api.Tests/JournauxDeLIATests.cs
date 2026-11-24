@@ -127,6 +127,15 @@ public sealed class JournauxDeLIATests : IDisposable
             Assert.Equal(HttpStatusCode.Conflict, await StatutAsync(api.EnregistrerLaCleAsync(CleDeClaude)));
         }
 
+        // Un fichier des réglages tenu par un autre programme : il se relit, mais le choix ne peut pas s'y écrire.
+        await using (var api = await LancerSurAsync(Dossier, new HorlogeDeTest(), builder => ToutJournaliser(builder, capture)))
+        {
+            using (new FileStream(base_.FichierDesReglages, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                Assert.Equal(HttpStatusCode.Conflict, await StatutAsync(api.ChoisirLIAAsync("OpenAI")));
+            }
+        }
+
         var entrees = capture.Entrees.ToArray();
         // Témoins : la capture a reçu les niveaux les plus bavards, et chaque chemin a été parcouru.
         Assert.Contains(entrees, entree => entree.StartsWith(nameof(LogLevel.Trace) + " ", StringComparison.Ordinal));
@@ -145,6 +154,7 @@ public sealed class JournauxDeLIATests : IDisposable
             "Clé d'IA retirée.",
             "Clé d'IA refusée (fournisseur sans clé).",
             "La clé d'IA n'a pas pu être chiffrée ni écrite (",
+            "Le choix de l'IA n'a pas pu s'écrire (",
             "Requête refusée : corps illisible (400).",
         })
         {

@@ -327,6 +327,28 @@ public sealed class ReglageDeLIATests : IDisposable
     }
 
     [Fact]
+    public async Task Un_reglage_qui_ne_s_ecrit_pas_fait_refuser_le_choix_sans_rien_changer()
+    {
+        const string Avant = """{ "delaiDesRelances": 14 }""";
+        await File.WriteAllTextAsync(Base.FichierDesReglages, Avant, TestContext.Current.CancellationToken);
+        await using var api = await LancerSurAsync(_dossier, new HorlogeDeTest());
+        await api.AttendreLaPremiereVerificationAsync();
+
+        // Un autre programme tient le fichier : il se relit, mais ne se remplace pas.
+        using (new FileStream(Base.FichierDesReglages, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            await AttendreUnConflitAsync(api.ChoisirLIAAsync("Claude"), RoutesDeLIA.TitreDuChoixNonEcrit);
+        }
+
+        // Rien n'a changé : le fichier, aucun fichier provisoire, et le choix, jamais fait.
+        Assert.Equal(Avant, await File.ReadAllTextAsync(Base.FichierDesReglages, TestContext.Current.CancellationToken));
+        Assert.Empty(Directory.GetFiles(_dossier, "*.provisoire"));
+        Assert.Equal(Etat("Aucun", choisi: false, "SansObjet"), (await api.EtatDeLIAAsync()).ToJsonString());
+        // Le fichier lâché, le même choix passe.
+        Assert.Equal(Etat("Claude", choisi: true, "Aucune"), (await api.ChoisirLIAAvecSuccesAsync("Claude")).ToJsonString());
+    }
+
+    [Fact]
     public async Task Un_trousseau_ou_l_on_ne_peut_pas_ecrire_fait_refuser_la_cle_sans_rien_casser()
     {
         // Un fichier à la place du dossier du trousseau : Data Protection ne peut pas y écrire sa première clé.
