@@ -94,6 +94,25 @@ public sealed class CandidaturesTests
     }
 
     [Fact]
+    public async Task A_instant_d_envoi_egal_la_derniere_enregistree_vient_d_abord_sans_que_l_index_de_la_date_y_soit_pour_rien()
+    {
+        await using var api = await LancerAsync();
+        // L'index de la date, parcouru à rebours, rend déjà les identifiants décroissants à instant égal : le test
+        // précédent reste vert sans le départage de la liste (#80, point 8). Sans cet index, seul ce départage tient l'ordre.
+        await api.ExecuterAsync("DROP INDEX IX_Candidatures_EnvoyeeLe");
+        await api.EnregistrerAvecSuccesAsync("Brasserie Lune Rousse", "Brasseuse", "2026-06-15T16:45");
+        await api.EnregistrerAvecSuccesAsync("Les Amis du Parc ASBL", "Animateur", "2026-06-15T16:45");
+        await api.EnregistrerAvecSuccesAsync("L’Atelier d’Ondine", "Couturière", "2026-06-15T16:45");
+        await api.EnregistrerAvecSuccesAsync("Lumière Verte SA", "Comptable", "2026-06-14T09:00");
+
+        var liste = await api.ListerAsync();
+
+        Assert.Equal(
+            ["Couturière", "Animateur", "Brasseuse", "Comptable"],
+            liste.Select(candidature => candidature!["poste"]!.GetValue<string>()));
+    }
+
+    [Fact]
     public async Task Une_entreprise_deja_enregistree_est_reprise_sans_doublon()
     {
         await using var api = await LancerAsync();
@@ -131,6 +150,22 @@ public sealed class CandidaturesTests
         {
             reponse.Dispose();
         }
+    }
+
+    [Fact]
+    public async Task La_base_refuse_elle_meme_une_seconde_entreprise_de_meme_cle()
+    {
+        await using var api = await LancerAsync();
+        await api.ExecuterAsync("INSERT INTO Entreprises (Nom, Cle) VALUES ('Lumière Verte SA', 'lumiere verte')");
+
+        // Le domaine ne crée jamais deux fois une entreprise, et la transaction des enregistrements les met en file : seul
+        // l'index unique de la clé fait refuser, par la base, une insertion qui passerait outre (#80, point 7).
+        var erreur = await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(
+            () => api.ExecuterAsync("INSERT INTO Entreprises (Nom, Cle) VALUES ('LUMIÈRE VERTE S.A.', 'lumiere verte')"));
+
+        Assert.Contains("UNIQUE", erreur.Message, StringComparison.Ordinal);
+        Assert.Contains("Entreprises.Cle", erreur.Message, StringComparison.Ordinal);
+        Assert.Equal(["Lumière Verte SA"], await api.EntreprisesEnBaseAsync());
     }
 
     public static TheoryData<string, string?, string> SaisiesRefusees => new()
