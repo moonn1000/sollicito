@@ -70,6 +70,16 @@ public static class TexteDUneOffre
         return true;
     }
 
+    /// <summary>
+    /// La longueur que la borne du texte mesure, en unités UTF-16 : fins de ligne ramenées à U+000A, blancs de bord
+    /// retirés. L'import d'un fichier CSV (#40) la compare à <see cref="LongueurMaximale"/> avant de lire ses lignes.
+    /// </summary>
+    public static int LongueurMesuree(string texte)
+    {
+        ArgumentNullException.ThrowIfNull(texte);
+        return AvecDesFinsDeLigneUniques(texte).Trim().Length;
+    }
+
     /// <summary>Le texte, chaque fin de ligne écrite U+000A : CRLF en compte une seule.</summary>
     internal static string AvecDesFinsDeLigneUniques(string texte)
     {

@@ -9,7 +9,7 @@ using static Sollicito.Api.Tests.Outils.AppelsDesOffres;
 namespace Sollicito.Api.Tests;
 
 /// <summary>
-/// Les routes des offres (#36), leur liste et « Postuler » (#38) passent par les protections de #10 (ADR-0001, D9 ;
+/// Les routes des offres (#36), leur liste et « Postuler » (#38), l'aperçu et l'import d'un fichier CSV (#40) passent par les protections de #10 (ADR-0001, D9 ;
 /// ADR-0003) : <c>Host</c> (400), jeton (401), <c>Origin</c> (403) ; elles figurent dans la documentation OpenAPI, et la
 /// porte de la base (#28) les garde d'office (503). Une requête refusée n'enregistre ni ne change rien.
 /// </summary>
@@ -23,6 +23,9 @@ public sealed class ProtectionsDesOffresTests
         ("GET", "/api/offres/{offre}", null, HttpStatusCode.OK),
         ("PUT", "/api/offres/{offre}", """{"poste":"Chauffeur"}""", HttpStatusCode.OK),
         ("POST", "/api/offres/{offre}/candidature", """{"envoyeeLe":"2026-11-18T10:00"}""", HttpStatusCode.Created),
+        // L'import d'un fichier CSV (#40) : « poste », puis « Chauffeur », en base64.
+        ("POST", "/api/offres/import/apercu", """{"contenu":"cG9zdGUKQ2hhdWZmZXVyCg=="}""", HttpStatusCode.OK),
+        ("POST", "/api/offres/import", """{"contenu":"cG9zdGUKQ2hhdWZmZXVyCg=="}""", HttpStatusCode.OK),
     ];
 
     public static TheoryData<string, string, string?> Routes
@@ -176,6 +179,8 @@ public sealed class ProtectionsDesOffresTests
             ("/api/offres/{id}", "get", "LireUneOffre", ["200", "404"]),
             ("/api/offres/{id}", "put", "CorrigerUneOffre", ["200", "400", "404", "409"]),
             ("/api/offres/{id}/candidature", "post", "PostulerAUneOffre", ["201", "400", "404", "409", "413"]),
+            ("/api/offres/import/apercu", "post", "ExaminerUnFichierCsv", ["200", "400", "413"]),
+            ("/api/offres/import", "post", "ImporterUnFichierCsv", ["200", "400", "413"]),
         })
         {
             var route = chemins[chemin]![methode]!.AsObject();

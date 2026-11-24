@@ -46,6 +46,9 @@ public interface IEcritureDesOffres : IAsyncDisposable
     /// <summary>Ajoute une offre, qui reçoit aussitôt son identifiant.</summary>
     Task AjouterAsync(Offre offre, CancellationToken annulation);
 
+    /// <summary>Ajoute les offres d'un lot (#40), d'un bloc : chacune reçoit aussitôt son identifiant.</summary>
+    Task AjouterAsync(IReadOnlyList<Offre> offres, CancellationToken annulation);
+
     /// <summary>Garde tout ce que l'écriture a ajouté, et ce qui a changé dans les offres qu'elle a trouvées.</summary>
     Task ValiderAsync(CancellationToken annulation);
 }

@@ -22,7 +22,7 @@ public sealed class OffresEnregistrees(IDepotDesOffres depot, TimeProvider horlo
         ArgumentNullException.ThrowIfNull(correction);
 
         var refus = new Dictionary<string, string[]>(StringComparer.Ordinal);
-        var lus = ImportDesOffres.LireLesChamps(
+        var lus = LectureDUneOffre.LireLesChamps(
             correction.Entreprise,
             correction.Poste,
             correction.Lieu,

@@ -126,8 +126,11 @@ public static class ApiLocale
         builder.Services.AddScoped<RelancesDesCandidatures>();
         builder.Services.AddSingleton<ReglageDesRelances>();
         builder.Services.AddSingleton<BrouillonsDesRelances>();
-        // Les offres collées (#36) : le connecteur du texte collé, le cœur qui dédoublonne et enregistre, et leurs fiches.
+        // Les offres collées (#36) et importées d'un fichier CSV (#40) : les deux connecteurs, le cœur qui dédoublonne et
+        // enregistre, son témoin dans le journal, et leurs fiches.
         builder.Services.AddSingleton<ConnecteurDuTexteColle>();
+        builder.Services.AddSingleton<ConnecteurDuFichierCsv>();
+        builder.Services.AddSingleton<ITemoinDeLImport, JournalDeLImport>();
         builder.Services.AddScoped<IImportDesOffres, ImportDesOffres>();
         builder.Services.AddScoped<OffresEnregistrees>();
 
@@ -173,6 +176,7 @@ public static class ApiLocale
         RoutesDesContacts.Declarer(app);
         RoutesDesRelances.Declarer(app);
         RoutesDesOffres.Declarer(app);
+        RoutesDeLImport.Declarer(app);
 
         return app;
     }
