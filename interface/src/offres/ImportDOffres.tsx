@@ -72,9 +72,11 @@ export function ImportDOffres({
       return;
     }
 
+    // Le même fichier, corrigé, peut se choisir de nouveau, même si sa lecture échoue.
+    evenement.target.value = "";
+
     // Refusé avant d'être lu : un fichier trop gros ne passe pas en mémoire pour rien.
     if (fichier.size > TAILLE_MAXIMALE_DU_FICHIER) {
-      evenement.target.value = "";
       setEtat({ etape: "refuse", motif: FICHIER_TROP_GROS, pendantLImport: false });
       return;
     }
@@ -82,8 +84,6 @@ export function ImportDOffres({
     setEtat({ etape: "examen" });
     try {
       const contenu = await fichier.arrayBuffer();
-      // Le même fichier, corrigé, peut se choisir de nouveau.
-      evenement.target.value = "";
       const resultat = await client.examinerUnFichierCsv(contenu);
       if (numero !== choix.current) {
         return;
@@ -180,11 +180,14 @@ export function ImportDOffres({
 
       {etat.etape === "examen" && <p role="status">Examen du fichier…</p>}
 
-      {etat.etape === "refuse" && (
+      {(etat.etape === "refuse" || etat.etape === "echec") && (
         <>
           <p className="alerte" role="alert">
-            {etat.motif}
-            {etat.pendantLImport ? " Rien n'a été importé." : ""}
+            {etat.etape === "refuse"
+              ? `${etat.motif}${etat.pendantLImport ? " Rien n'a été importé." : ""}`
+              : etat.pendantLImport
+                ? ECHEC_DE_L_IMPORT
+                : ECHEC_DE_L_EXAMEN}
           </p>
           <div className="actions">
             <button type="button" onClick={() => champ.current?.click()}>
@@ -195,12 +198,6 @@ export function ImportDOffres({
             </button>
           </div>
         </>
-      )}
-
-      {etat.etape === "echec" && (
-        <p className="alerte" role="alert">
-          {etat.pendantLImport ? ECHEC_DE_L_IMPORT : ECHEC_DE_L_EXAMEN}
-        </p>
       )}
 
       {(etat.etape === "apercu" || etat.etape === "import") && (
@@ -342,12 +339,19 @@ function SortDUneLigne({
         <>
           <span>{moment === "apercu" ? " de :" : " Semblable à :"}</span>
           <ul className="doublons-d-une-ligne">
-            {doublons.map((doublon) => (
-              <li key={doublon}>{doublon}</li>
+            {doublons.map((doublon, rang) => (
+              // Deux offres d'un même lot peuvent se décrire de même : même poste, même lieu, même instant d'ajout.
+              <li key={rang}>{doublon}</li>
             ))}
           </ul>
-          {(ligne.doublons ?? []).map((enBase) => (
-            <button key={enBase.id} type="button" className="lien" aria-label={`Voir l'offre ${enBase.poste}, chez ${enBase.entreprise.nom}`} onClick={() => voir(enBase.id)}>
+          {(ligne.doublons ?? []).map((enBase, rang, enBases) => (
+            <button
+              key={enBase.id}
+              type="button"
+              className="lien"
+              aria-label={`Voir l'offre ${enBase.poste}, chez ${enBase.entreprise.nom}${enBases.length > 1 ? ` (${rang + 1} sur ${enBases.length})` : ""}`}
+              onClick={() => voir(enBase.id)}
+            >
               Voir cette offre
             </button>
           ))}

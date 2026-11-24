@@ -198,6 +198,23 @@ public sealed class LectureDUnFichierCsvTests
     }
 
     [Fact]
+    public void Une_ligne_qui_n_a_pas_autant_de_cellules_que_l_en_tete_n_echappe_pas_a_la_borne()
+    {
+        // Un guillemet mal fermé avale 300 lignes dans le poste, puis la ligne s'arrête à deux cellules sur trois : le
+        // fichier est refusé, et non la seule ligne.
+        var avalees = string.Concat(Enumerable.Repeat("Chauffeur;Huy\n", 300));
+        AssertRefus(
+            LectureDUnFichierCsv.Lire(Octets($"poste;lieu;texte\nComptable;Liège;x\n\"Magasinier;{avalees}Fin\";Namur\nCaissier;Huy;x\n")),
+            SorteDeRefusDuFichier.Borne,
+            LectureDUnFichierCsv.MessageBorne(3, ColonneDuFichier.Poste));
+
+        // Sous la borne, la ligne reste seulement invalide.
+        var fichier = Lu("poste;lieu;texte\nComptable;Liège\nCaissier;Huy;x\n");
+        Assert.Null(fichier.Lignes[0].Cellules);
+        Assert.NotNull(fichier.Lignes[1].Cellules);
+    }
+
+    [Fact]
     public void Le_texte_se_mesure_fins_de_ligne_ramenees_comme_le_fait_sa_regle()
     {
         // Chaque CRLF compte un caractère, comme dans la règle du texte : 49 999 en tout, sous la borne, quand le fichier en

@@ -22,7 +22,7 @@ public abstract class ContratDUnConnecteurDOffres<TEntree>
         "  <h1>Offre</h1>\r\n<script>alert('fictif')</script>\n&amp; « Œuvres » \t",
         " <img src=x onerror=alert(1)> SA ",
         "Développeur <b>.NET</b> (H/F)",
-        "Liège & Namur",
+        "Liège & Namur",
         "2026-11-18",
         "javascript:alert('fictif')");
 

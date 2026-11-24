@@ -227,6 +227,16 @@ public static class LectureDUnFichierCsv
                 continue;
             }
 
+            // La borne se juge aussi sur une ligne qui n'a pas autant de cellules que l'en-tête, chaque cellule sous la
+            // colonne où un tableur la montrerait : un guillemet mal fermé qui avale des lignes refuse le fichier.
+            for (var i = 0; i < Math.Min(cellules.Count, colonnes.Count); i++)
+            {
+                if (Borne(colonnes[i]) is { } borne && Mesurer(colonnes[i], cellules[i]) > borne.Valeur)
+                {
+                    return new LectureDuFichier.Refuse(SorteDeRefusDuFichier.Borne, MessageBorne(numero, colonnes[i]));
+                }
+            }
+
             if (cellules.Count != colonnes.Count)
             {
                 lignes.Add(new LigneDuFichier(numero, null));
@@ -237,10 +247,6 @@ public static class LectureDUnFichierCsv
             for (var i = 0; i < colonnes.Count; i++)
             {
                 parColonne[colonnes[i]] = cellules[i];
-                if (Borne(colonnes[i]) is { } borne && Mesurer(colonnes[i], cellules[i]) > borne.Valeur)
-                {
-                    return new LectureDuFichier.Refuse(SorteDeRefusDuFichier.Borne, MessageBorne(numero, colonnes[i]));
-                }
             }
 
             lignes.Add(new LigneDuFichier(numero, parColonne));

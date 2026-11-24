@@ -208,6 +208,66 @@ test("une API injoignable se dit, à l'examen comme à l'import", async () => {
   );
 });
 
+test("après un échec de l'import, on peut choisir un autre fichier ou revenir aux offres", async () => {
+  const { revenir } = afficher(
+    clientSimule({
+      examinerUnFichierCsv: vi.fn(async () => ({ issue: "lu" as const, compteRendu: compteRenduFictif() })),
+      importerUnFichierCsv: vi.fn(async () => Promise.reject(new Error("injoignable"))),
+    }),
+  );
+  choisir(fichier());
+  fireEvent.click(await screen.findByRole("button", { name: "Importer 1 offre" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "L'import n'a pas pu se faire : rien n'a été importé. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.",
+  );
+  expect(screen.getByRole("button", { name: "Choisir un autre fichier" })).toBeDefined();
+  fireEvent.click(screen.getByRole("button", { name: "Annuler" }));
+  expect(revenir).toHaveBeenCalledOnce();
+});
+
+test("le champ se vide dès le choix : le même fichier se choisit de nouveau, même si sa lecture a échoué", async () => {
+  const { client } = afficher();
+  const illisible = fichier();
+  illisible.arrayBuffer = () => Promise.reject(new Error("fichier déplacé"));
+  const champ = screen.getByLabelText<HTMLInputElement>("Fichier CSV");
+  const vider = vi.spyOn(champ, "value", "set");
+
+  choisir(illisible);
+
+  await screen.findByRole("alert");
+  expect(vider).toHaveBeenCalledWith("");
+  expect(client.examinerUnFichierCsv).not.toHaveBeenCalled();
+});
+
+test("deux offres trouvées décrites de même gardent chacune leur bouton, distinct pour un lecteur d'écran", async () => {
+  const jumelles = { poste: "Comptable", lieu: "Huy", ajouteeLe: "2026-11-18T09:00:00Z" };
+  const client = clientSimule({
+    examinerUnFichierCsv: vi.fn(async () => ({
+      issue: "lu" as const,
+      compteRendu: compteRenduFictif({
+        lignes: [
+          ligneDuCompteRenduFictive({
+            sort: "doublonPossible",
+            poste: "Comptable",
+            doublons: [offreSignaleeFictive({ id: 7, ...jumelles }), offreSignaleeFictive({ id: 8, ...jumelles })],
+            lignesDuFichier: [],
+          }),
+        ],
+        comptes: comptesFictifs({ aImporter: 0, doublonsPossibles: 1 }),
+      }),
+    })),
+  });
+  afficher(client);
+  choisir(fichier());
+
+  fireEvent.click(await screen.findByRole("button", { name: /\(2 sur 2\)$/ }));
+  expect(document.querySelectorAll(".doublons-d-une-ligne li")).toHaveLength(2);
+
+  await waitFor(() => expect(client.lireUneOffre).toHaveBeenCalledWith(8));
+  expect(screen.getByRole("button", { name: /\(1 sur 2\)$/ })).toBeDefined();
+});
+
 test("sans offre à importer, l'import ne se propose pas", async () => {
   afficher(
     clientSimule({

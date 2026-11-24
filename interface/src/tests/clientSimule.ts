@@ -197,7 +197,6 @@ export const ENTREPRISES_FICTIVES: EntrepriseConnue[] = [
   { id: 3, nom: "Les Amis du Parc ASBL" },
 ];
 
-/** Le client de l'API, simulé : chaque appel est un espion qui répond ce que le test veut. */
 /** Une ligne de compte rendu d'un fichier CSV (#40), à importer : la ligne 2, « Comptable », chez Lumière Verte. */
 export function ligneDuCompteRenduFictive(modifications: Partial<LigneDuCompteRendu> = {}): LigneDuCompteRendu {
   return {
@@ -226,6 +225,7 @@ export function compteRenduFictif(modifications: Partial<CompteRenduDUnFichier> 
   return { lignes: [ligneDuCompteRenduFictive()], comptes: comptesFictifs(), ...modifications };
 }
 
+/** Le client de l'API, simulé : chaque appel est un espion qui répond ce que le test veut. */
 export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
   return {
     lireEtat: vi.fn<ClientDeLApi["lireEtat"]>(async () => ({ statut: "pret" })),
