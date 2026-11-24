@@ -90,7 +90,8 @@ public abstract record LectureDuFichier
 /// octets reçus, l'en-tête et les lignes numérotées, ou le refus du fichier entier. Rien n'y est interprété : une cellule
 /// reste le texte qu'elle porte, formule comprise.
 /// <list type="bullet">
-/// <item>UTF-8, avec ou sans BOM, décodé strictement ; tout autre encodage est refusé, BOM UTF-16 compris.</item>
+/// <item>UTF-8, avec ou sans BOM, décodé strictement ; tout autre encodage est refusé, BOM UTF-16 compris, comme un octet
+/// nul, que porte un fichier UTF-16 ou UTF-32 sans BOM.</item>
 /// <item>L'en-tête, la première ligne, nomme les colonnes du format, sans tenir compte de la casse ni des blancs de bord,
 /// dans l'ordre qu'on veut ; <c>poste</c> y est obligatoire.</item>
 /// <item>Le séparateur, <c>;</c> ou <c>,</c>, se lit sur l'en-tête, dont les noms n'en contiennent aucun.</item>
@@ -174,7 +175,9 @@ public static class LectureDUnFichierCsv
             return new LectureDuFichier.Refuse(SorteDeRefusDuFichier.Taille, MessageTaille);
         }
 
-        if (contenu.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]) || contenu.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]))
+        // Un octet nul n'est dans aucun texte d'un tableur : c'est la marque d'un fichier UTF-16 ou UTF-32 sans BOM, dont les
+        // octets passeraient sinon pour de l'UTF-8 valide, refusé ensuite sur son en-tête ou sa structure.
+        if (contenu.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xFE]) || contenu.StartsWith((ReadOnlySpan<byte>)[0xFE, 0xFF]) || contenu.Contains((byte)0x00))
         {
             return new LectureDuFichier.Refuse(SorteDeRefusDuFichier.Encodage, MessageEncodage);
         }

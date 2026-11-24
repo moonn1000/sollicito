@@ -36,7 +36,7 @@ La première ligne, l'en-tête, nomme les colonnes, dans l'ordre qu'on veut. Les
 
 ## L'encodage, le séparateur, les guillemets
 
-- **UTF-8**, avec ou sans BOM. Dans Excel : « Enregistrer sous », au format « CSV UTF-8 ». Tout autre encodage est refusé ; un fichier sans aucun accent passe toujours.
+- **UTF-8**, avec ou sans BOM. Dans Excel : « Enregistrer sous », au format « CSV UTF-8 ». Tout autre encodage est refusé, UTF-16 et UTF-32 compris, avec ou sans BOM, comme tout fichier qui porte un octet nul ; un fichier Windows-1252 sans aucun accent passe toujours, ses octets étant aussi de l'UTF-8.
 - **Le séparateur** : `;` ou `,`, lu sur l'en-tête. L'en-tête n'en porte qu'un des deux.
 - **Les guillemets** droits (`"`) entourent une cellule qui contient le séparateur, un guillemet ou un saut de ligne ; un guillemet s'y écrit `""`. Hors d'une cellule entre guillemets, un guillemet est une erreur.
 - **Les fins de ligne** : CRLF, LF ou CR seul ; la dernière est facultative.
@@ -64,6 +64,7 @@ L'aperçu dit le sort de chaque ligne ; l'import le refait, et fait foi si la ba
 - **Déjà enregistrée** : une offre importée d'un fichier a les mêmes champs, aux blancs, aux majuscules et à la forme de la date près. La ligne est écartée. Réimporter un fichier complété n'importe donc que ses lignes nouvelles.
 - **En double** : une ligne précédente du fichier a les mêmes champs. La ligne est écartée.
 - **Doublon possible** : une offre enregistrée, ou une ligne précédente du fichier, a la même entreprise et le même poste, d'où qu'elle vienne. La ligne ne s'importe que si l'utilisateur la garde, dans l'aperçu. Jamais de fusion.
+- **Une offre importée puis corrigée** garde l'empreinte de sa ligne d'origine : le fichier d'origine, réimporté, la reconnaît encore comme déjà enregistrée. Une ligne corrigée dans le fichier n'a plus les mêmes champs : elle ne passe plus que par le doublon possible.
 
 ## Une copie de la base avant chaque import
 

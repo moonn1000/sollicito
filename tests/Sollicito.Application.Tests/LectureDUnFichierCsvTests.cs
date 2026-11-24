@@ -38,6 +38,23 @@ public sealed class LectureDUnFichierCsvTests
         AssertRefus(LectureDUnFichierCsv.Lire(Encoding.BigEndianUnicode.GetPreamble().Concat(Encoding.BigEndianUnicode.GetBytes("poste\nComptable\n")).ToArray()), SorteDeRefusDuFichier.Encodage, LectureDUnFichierCsv.MessageEncodage);
     }
 
+    [Theory]
+    [InlineData("poste\nComptable\n")]
+    [InlineData("\"poste\"\n\"Comptable\"\n")]
+    [InlineData("poste;lieu\nComptable;Liège\n")]
+    public void Un_fichier_utf16_ou_utf32_sans_bom_est_refuse_comme_un_autre_encodage(string texte)
+    {
+        // Sans BOM, leurs octets nuls sont de l'UTF-8 valide : le refus vient de l'octet nul, qu'aucun texte d'un tableur
+        // ne porte, et non de l'en-tête ou de la structure qu'on lirait de travers.
+        foreach (var encodage in new Encoding[] { Encoding.Unicode, Encoding.BigEndianUnicode, Encoding.UTF32, new UTF32Encoding(bigEndian: true, byteOrderMark: false) })
+        {
+            AssertRefus(LectureDUnFichierCsv.Lire(encodage.GetBytes(texte)), SorteDeRefusDuFichier.Encodage, LectureDUnFichierCsv.MessageEncodage);
+        }
+
+        // Un octet nul seul, au milieu d'un fichier UTF-8 par ailleurs juste, le refuse de même.
+        AssertRefus(LectureDUnFichierCsv.Lire([.. Encoding.UTF8.GetBytes("poste\nCompta"), 0x00, .. Encoding.UTF8.GetBytes("ble\n")]), SorteDeRefusDuFichier.Encodage, LectureDUnFichierCsv.MessageEncodage);
+    }
+
     [Fact]
     public void Un_fichier_windows_1252_sans_accent_passe_ses_octets_etant_de_l_utf8()
     {
