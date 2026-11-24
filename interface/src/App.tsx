@@ -9,6 +9,7 @@ import type { IssueDeLaRestauration, IssueDuBrouillon, IssueDuChoixDuDossier } f
 import { MiseEnPage, type Ecran } from "./miseEnPage/MiseEnPage.tsx";
 import { ANNONCE_DU_RENONCEMENT, annonceDeLaPostulation, annonceDeLOffre, AUCUN_FILTRE, type FiltresDesOffres } from "./offres/affichage.ts";
 import { FicheDUneOffre } from "./offres/FicheDUneOffre.tsx";
+import { ImportDOffres } from "./offres/ImportDOffres.tsx";
 import { ListeDesOffres } from "./offres/ListeDesOffres.tsx";
 import { ModificationDUneOffre } from "./offres/ModificationDUneOffre.tsx";
 import { PostulerAUneOffre } from "./offres/PostulerAUneOffre.tsx";
@@ -177,6 +178,7 @@ export function App({
             filtres={filtresDesOffres}
             changerLesFiltres={setFiltresDesOffres}
             collerUneOffre={() => naviguer({ nom: "saisieDUneOffre" })}
+            importerUnFichier={() => naviguer({ nom: "importDOffres" })}
             ouvrirLOffre={ouvrirUneOffre}
             ouvrirLaCandidature={ouvrirLaCandidature}
             prendreLeFocus={navigue}
@@ -190,6 +192,8 @@ export function App({
             renoncer={() => annoncer(ANNONCE_DU_RENONCEMENT, { nom: "tableau" })}
           />
         );
+      case "importDOffres":
+        return <ImportDOffres client={connexion.client} revenir={() => naviguer({ nom: "offres" })} ouvrirLOffre={ouvrirUneOffre} />;
       case "offre":
         return (
           <FicheDUneOffre

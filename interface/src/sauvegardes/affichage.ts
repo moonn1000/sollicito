@@ -6,7 +6,7 @@ import { afficherLInstant } from "../candidatures/affichage.ts";
 export const LIBELLES_DES_SORTES: Record<SorteDeCopie, string> = {
   DuJour: "Copie du jour",
   DuJourDUneAutreInstallation: "Copie du jour d'une autre installation",
-  AvantRestauration: "Avant une restauration",
+  AvantRestauration: "Avant une restauration ou un import",
   AvantMiseAJour: "Avant une mise à jour",
 };
 
@@ -31,7 +31,7 @@ export const RESTAURATION_EN_COURS = "Restauration en cours : ne fermez pas Soll
 export function annonceDeLaRestauration(issue: "restauree" | "restaureeDepuisUneBaseAbimee", faiteLe: string): string {
   const retrouvee = `Base restaurée : vous retrouvez la copie du ${afficherLaDateDUneCopie(faiteLe)}.`;
   return issue === "restauree"
-    ? `${retrouvee} Votre base d'avant est gardée dans la copie « Avant une restauration ».`
+    ? `${retrouvee} Votre base d'avant est gardée dans la copie « Avant une restauration ou un import ».`
     : `${retrouvee} Les fichiers de votre base abîmée sont gardés tels quels dans le dossier des sauvegardes par défaut.`;
 }
 

@@ -5,6 +5,7 @@ import { afficherLeJour, jourDeLEnvoi } from "../relances/affichage.ts";
 /** Les sources d'une offre, en toutes lettres. */
 export const LIBELLES_DES_SOURCES: Record<SourceDOffre, string> = {
   TexteColle: "Texte collé",
+  FichierCsv: "Fichier CSV",
 };
 
 /** L'aide du texte collé. */

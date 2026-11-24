@@ -194,19 +194,19 @@ public sealed partial class RestaurationDeLaBase(
             return Refuser(IssueDeLaRestauration.BaseChangee);
         }
 
-        var instant = InstantLibre(horloge.GetUtcNow());
+        // Porte fermée et sous le sémaphore des copies : personne d'autre n'écrit une copie d'avant, ni un import.
+        var instant = sauvegardes.InstantLibreDUneCopieDAvant();
         try
         {
             Directory.CreateDirectory(dossier.DossierDesSauvegardes);
             if (saine)
             {
-                var copieDAvant = Path.Combine(dossier.DossierDesSauvegardes, NomsDesCopies.AvantRestauration(instant));
-                await CopiesVerifiees.EcrireAsync(dossier.Fichier, copieDAvant, annulation, async (fichier, jeton) =>
+                // La copie d'avant un import (#40) se fait par le même code.
+                await sauvegardes.EcrireUneCopieDAvantAsync(instant, async (fichier, jeton) =>
                 {
                     etapes.Atteinte(EtapeDeLaRestauration.CopieDAvantEcrite);
                     return await CopieDeLaBase.EstSaineAsync(fichier, jeton);
-                });
-                await CopiesBrutes.ForcerSurLeDisqueAsync(copieDAvant, annulation);
+                }, annulation);
             }
             else
             {
@@ -246,20 +246,6 @@ public sealed partial class RestaurationDeLaBase(
         etapes.Atteinte(EtapeDeLaRestauration.BaseRemplacee);
         RestaurationFaite(journal, demande.Sorte, verdict.MigrationsAppliquees);
         return saine ? IssueDeLaRestauration.Restauree : IssueDeLaRestauration.RestaureeDepuisUneBaseAbimee;
-    }
-
-    // L'instant qui nomme la copie d'avant, sans jamais reprendre le nom d'une autre : une horloge qui recule, ou deux
-    // restaurations dans la même milliseconde, ne remplacent pas une copie d'avant gardée. Porte fermée et sous le
-    // sémaphore des copies, personne d'autre n'en écrit.
-    private DateTimeOffset InstantLibre(DateTimeOffset instant)
-    {
-        while (File.Exists(Path.Combine(dossier.DossierDesSauvegardes, NomsDesCopies.AvantRestauration(instant)))
-            || File.Exists(Path.Combine(dossier.DossierDesSauvegardes, NomsDesCopies.AvantRestaurationBrute(instant))))
-        {
-            instant = instant.AddMilliseconds(1);
-        }
-
-        return instant;
     }
 
     // L'API de sauvegarde garde le mode WAL de la base ; s'il manquait, le lancement suivant l'y remettrait.

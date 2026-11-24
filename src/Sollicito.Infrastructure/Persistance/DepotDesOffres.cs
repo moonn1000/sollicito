@@ -138,6 +138,13 @@ internal sealed class DepotDesOffres(BaseDeSollicito baseDeSollicito) : IDepotDe
             await baseDeSollicito.SaveChangesAsync(annulation);
         }
 
+        // D'un bloc : un seul passage d'Entity Framework Core pour tout le lot, dans la transaction de l'écriture.
+        public async Task AjouterAsync(IReadOnlyList<Offre> offres, CancellationToken annulation)
+        {
+            baseDeSollicito.Offres.AddRange(offres);
+            await baseDeSollicito.SaveChangesAsync(annulation);
+        }
+
         public async Task ValiderAsync(CancellationToken annulation)
         {
             await baseDeSollicito.SaveChangesAsync(annulation);

@@ -57,6 +57,16 @@ test("une offre anonyme, sans lieu, date ni annonce, le dit sans rien inventer",
   expect(screen.queryByRole("link")).toBeNull();
 });
 
+test("une offre importée d'un fichier CSV dit sa source, et sans texte n'en montre aucun (#40)", async () => {
+  afficher(offreFictive({ source: "FichierCsv", texte: null }));
+
+  await screen.findByRole("heading", { level: 2 });
+  const sources = Array.from(document.querySelectorAll("dt")).findIndex((dt) => dt.textContent === "Source");
+  expect(document.querySelectorAll("dd")[sources]?.textContent).toBe("Fichier CSV");
+  expect(screen.queryByRole("heading", { name: "Texte de l'offre" })).toBeNull();
+  expect(document.querySelector(".texte-de-l-offre")).toBeNull();
+});
+
 test.each([
   ["des balises et un script", `${PIEGE}\n${PIEGE}`],
   ["des accents et des sauts de ligne", "Développeuse « senior »\n\n\tCœur de métier : l'été, à Liège.\r\nFin."],

@@ -253,7 +253,7 @@ export type ResultatDeLaCorrectionDEtape =
 
 /**
  * La sorte d'une copie de la base : celle d'un jour d'utilisation, de ce poste ou d'une autre installation qui partage le
- * dossier (#28), celle d'avant une mise à jour (#26), ou celle d'avant une restauration (#28).
+ * dossier (#28), celle d'avant une mise à jour (#26), ou celle d'avant une restauration (#28) ou un import (#40).
  */
 export type SorteDeCopie = "DuJour" | "AvantMiseAJour" | "DuJourDUneAutreInstallation" | "AvantRestauration";
 
@@ -306,8 +306,8 @@ const CHAMPS_DU_CONTACT: readonly ChampDuContact[] = ["nom", "email"];
 
 const CHAMPS_DE_LA_RELANCE: readonly ChampDeLaRelance[] = ["delai", "destinataire"];
 
-/** La source d'une offre : le connecteur qui l'a fait entrer (#36 ; l'import CSV de #40 ajoutera la sienne). */
-export type SourceDOffre = "TexteColle";
+/** La source d'une offre : le connecteur qui l'a fait entrer, le texte collé (#36) ou le fichier CSV (#40). */
+export type SourceDOffre = "TexteColle" | "FichierCsv";
 
 /** La candidature d'une offre (#38) : de quoi la reconnaître, et l'ouvrir. */
 export interface CandidatureDeLOffre {
@@ -410,6 +410,73 @@ export type ResultatDeLOffre =
   | { issue: "dejaEnregistree"; offre: { id: number; ajouteeLe: string } }
   | { issue: "doublonPossible"; doublons: OffreSignalee[] };
 
+/**
+ * Le sort d'une ligne d'un fichier CSV (#40) : à l'aperçu, elle s'importera, ou attend l'accord (doublon possible) ; à
+ * l'import, elle est importée, ou un doublon possible non gardé est écarté ; à l'un comme à l'autre, déjà enregistrée,
+ * en double dans le fichier, ou invalide.
+ */
+export type SortDUneLigne = "aImporter" | "importee" | "dejaEnregistree" | "enDouble" | "doublonPossible" | "invalide";
+
+/**
+ * Une ligne d'offre d'un fichier, telle que l'API en rend compte. Une ligne invalide ne porte que son numéro et ses
+ * motifs, jamais son contenu ; une ligne admise, son poste, son entreprise et son lieu tels que l'API les a lus.
+ */
+export interface LigneDuCompteRendu {
+  /** Son numéro, celui d'un tableur : l'en-tête est la ligne 1. */
+  ligne: number;
+  sort: SortDUneLigne;
+  poste: string | null;
+  entreprise: string | null;
+  lieu: string | null;
+  /** L'identifiant de l'offre importée. */
+  offre: number | null;
+  /** L'offre déjà enregistrée, de même empreinte (règle 2). */
+  trouvee: { id: number; ajouteeLe: string } | null;
+  /** La ligne d'avant du fichier, de même empreinte (règle 2). */
+  ligneDOrigine: number | null;
+  /** Les offres en base de même entreprise et de même poste (règle 3). */
+  doublons: OffreSignalee[] | null;
+  /** Les lignes d'avant du fichier, de même entreprise et de même poste (règle 3). */
+  lignesDuFichier: number[] | null;
+  /** Les motifs d'une ligne invalide, par colonne, ou sous « ligne ». */
+  refus: Record<string, string[]> | null;
+}
+
+/** Les comptes d'un fichier (#40). */
+export interface ComptesDuFichier {
+  /** Les lignes d'offres, en-tête et lignes vides non comprises. */
+  lignes: number;
+  lignesVides: number;
+  aImporter: number;
+  importees: number;
+  dejaEnregistrees: number;
+  enDouble: number;
+  /** À l'aperçu, en attente de l'accord ; à l'import, écartés. */
+  doublonsPossibles: number;
+  invalides: number;
+}
+
+/** Le compte rendu d'un fichier, à l'aperçu comme à l'import : chaque ligne, dans l'ordre du fichier, puis les comptes. */
+export interface CompteRenduDUnFichier {
+  lignes: LigneDuCompteRendu[];
+  comptes: ComptesDuFichier;
+}
+
+/**
+ * Ce que rendent l'aperçu et l'import d'un fichier CSV (#40) : le compte rendu, le motif du refus du fichier entier, ou, à
+ * l'import seulement, la copie de la base avant lui qui n'a pas pu se faire (ADR-0015) : rien n'est importé.
+ */
+export type ResultatDuFichier =
+  | { issue: "lu"; compteRendu: CompteRenduDUnFichier }
+  | { issue: "refuse"; motif: string }
+  | { issue: "copieImpossible" };
+
+/** La taille la plus grande d'un fichier CSV d'offres, en octets : 2 Mo (#40). */
+export const TAILLE_MAXIMALE_DU_FICHIER = 2 * 1024 * 1024;
+
+/** Le refus d'un fichier trop gros, celui de l'API (#40). */
+export const FICHIER_TROP_GROS = "Le fichier dépasse 2 Mo : découpez-le en plusieurs fichiers.";
+
 /** Une réponse de l'API en erreur : jeton refusé, origine refusée, route inconnue… */
 export class ErreurDeLApi extends Error {
   readonly statut: number;
@@ -503,6 +570,16 @@ export interface ClientDeLApi {
    * saisies, sans décalage. Une `ErreurDeLApi` 404 si l'offre n'existe pas.
    */
   postuler(offre: number, envoyeeLe: string): Promise<ResultatDeLaPostulation>;
+  /**
+   * L'aperçu de l'import d'un fichier CSV d'offres (#40) : ce que l'import ferait de chaque ligne, sans rien écrire.
+   * L'API ne reçoit que les octets du fichier, en base64 : ni son chemin, ni son nom.
+   */
+  examinerUnFichierCsv(contenu: ArrayBuffer): Promise<ResultatDuFichier>;
+  /**
+   * Importe un fichier CSV d'offres (#40), en une seule transaction : l'API refait l'examen, et ne garde un doublon
+   * possible que si sa ligne est dans `garder`.
+   */
+  importerUnFichierCsv(contenu: ArrayBuffer, garder: readonly number[]): Promise<ResultatDuFichier>;
 }
 
 /**
@@ -720,7 +797,47 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
       ),
     listerLesOffres: async () => (await lire("/api/offres")) as OffreListee[],
     postuler: async (offre, envoyeeLe) => postulerALOffre(await ecrire(`${adresseDeLOffre(offre)}/candidature`, { envoyeeLe })),
+    examinerUnFichierCsv: async (contenu) => lireLeCompteRendu(await ecrire("/api/offres/import/apercu", { contenu: enBase64(contenu) })),
+    importerUnFichierCsv: async (contenu, garder) =>
+      lireLeCompteRendu(await ecrire("/api/offres/import", { contenu: enBase64(contenu), garder: [...garder] })),
   };
+}
+
+// Le compte rendu (200), le refus du fichier (400, sur « contenu »), un corps trop gros (413), refusé avant d'être lu :
+// le fichier dépasse 2 Mo, ou, à l'import, la copie de la base avant lui qui n'a pas pu se faire (409). Toute autre
+// réponse lève une erreur.
+async function lireLeCompteRendu(reponse: Response): Promise<ResultatDuFichier> {
+  if (reponse.status === 200) {
+    return { issue: "lu", compteRendu: (await reponse.json()) as CompteRenduDUnFichier };
+  }
+
+  if (reponse.status === 400) {
+    const motif = lireLesRefus(await reponse.json().catch(() => undefined), ["contenu"] as const)?.contenu?.[0];
+    if (motif !== undefined) {
+      return { issue: "refuse", motif };
+    }
+  }
+
+  if (reponse.status === 413) {
+    return { issue: "refuse", motif: FICHIER_TROP_GROS };
+  }
+
+  if (reponse.status === 409) {
+    return { issue: "copieImpossible" };
+  }
+
+  throw new ErreurDeLApi(reponse.status);
+}
+
+// Les octets en base64, par tranches : un seul appel à String.fromCharCode dépasserait la pile sur 2 Mo.
+function enBase64(contenu: ArrayBuffer): string {
+  const octets = new Uint8Array(contenu);
+  let binaire = "";
+  for (let debut = 0; debut < octets.length; debut += 0x8000) {
+    binaire += String.fromCharCode(...octets.subarray(debut, debut + 0x8000));
+  }
+
+  return btoa(binaire);
 }
 
 /** Le refus d'un texte d'offre trop long, celui de l'API (ADR-0013). */

@@ -30,6 +30,7 @@ export function ListeDesOffres({
   filtres,
   changerLesFiltres,
   collerUneOffre,
+  importerUnFichier,
   ouvrirLOffre,
   ouvrirLaCandidature,
   prendreLeFocus = false,
@@ -43,6 +44,8 @@ export function ListeDesOffres({
   changerLesFiltres: (filtres: FiltresDesOffres) => void;
   /** Ouvre l'écran « Coller une offre ». */
   collerUneOffre: () => void;
+  /** Ouvre l'écran « Importer des offres » (#40). */
+  importerUnFichier: () => void;
   /** Ouvre la fiche de l'offre de cet identifiant. */
   ouvrirLOffre: (offre: number) => void;
   /** Ouvre la fiche de la candidature de cet identifiant. */
@@ -98,6 +101,9 @@ export function ListeDesOffres({
       <div className="actions">
         <button type="button" onClick={collerUneOffre}>
           Coller une offre
+        </button>
+        <button type="button" onClick={importerUnFichier}>
+          Importer un fichier CSV
         </button>
       </div>
       {chargement.etape === "chargement" && <p>Chargement des offres…</p>}

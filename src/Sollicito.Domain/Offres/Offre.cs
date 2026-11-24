@@ -216,12 +216,28 @@ public sealed class ChampsDUneOffre
         string? adresse,
         DateOnly aujourdhui,
         [NotNullWhen(true)] out ChampsDUneOffre? champs,
+        out RefusDesChamps refus) =>
+        EssayerDeLire(poste, lieu, publieeLe, adresse, aujourdhui, dateJourEnPremierAdmise: false, out champs, out refus);
+
+    /// <summary>
+    /// Lit les champs saisis, comme <see cref="EssayerDeLire(string?, string?, string?, string?, DateOnly, out ChampsDUneOffre?, out RefusDesChamps)"/> ;
+    /// la date de publication peut en plus s'écrire <c>JJ/MM/AAAA</c> si <paramref name="dateJourEnPremierAdmise"/>,
+    /// pour une ligne d'un fichier CSV (#40).
+    /// </summary>
+    public static bool EssayerDeLire(
+        string? poste,
+        string? lieu,
+        string? publieeLe,
+        string? adresse,
+        DateOnly aujourdhui,
+        bool dateJourEnPremierAdmise,
+        [NotNullWhen(true)] out ChampsDUneOffre? champs,
         out RefusDesChamps refus)
     {
         refus = new RefusDesChamps(
             Offre.EssayerDeLireLePoste(poste, out var posteLu, out var refusDuPoste) ? null : refusDuPoste,
             Offre.EssayerDeLireLeLieu(lieu, out var lieuLu, out var refusDuLieu) ? null : refusDuLieu,
-            DateDePublication.EssayerDeLire(publieeLe, aujourdhui, out var dateLue, out var refusDeLaDate) ? null : refusDeLaDate,
+            DateDePublication.EssayerDeLire(publieeLe, aujourdhui, dateJourEnPremierAdmise, out var dateLue, out var refusDeLaDate) ? null : refusDeLaDate,
             AdresseDUneAnnonce.EssayerDeLire(adresse, out var adresseLue, out var refusDeLAdresse) ? null : refusDeLAdresse);
         champs = posteLu is not null && refus.Aucun ? new ChampsDUneOffre(posteLu, lieuLu, dateLue, adresseLue) : null;
         return champs is not null;
