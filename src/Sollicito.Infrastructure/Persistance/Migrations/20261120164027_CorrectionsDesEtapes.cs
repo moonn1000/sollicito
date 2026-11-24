@@ -33,6 +33,13 @@ namespace Sollicito.Infrastructure.Persistance.Migrations
         }
 
         /// <inheritdoc />
+        /// <remarks>
+        /// Sollicito ne lance jamais <c>Down()</c> : revenir à une version précédente passe par la copie d'avant la mise à
+        /// jour (ADR-0008). Seul <c>dotnet ef database update</c> vers une migration antérieure le jouerait, et il n'est pas
+        /// pris en charge (#85, point 1) : sous SQLite, Entity Framework Core reconstruit alors la table en trois
+        /// transactions, un arrêt au milieu laisse une table temporaire, et chaque correction d'étape perd son lien : elle
+        /// redevient une étape en vigueur, à côté de celle qu'elle corrigeait.
+        /// </remarks>
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
