@@ -12,7 +12,7 @@ export type Ecran =
   | { nom: "offres" }
   | { nom: "saisieDUneOffre" }
   | { nom: "importDOffres" }
-  | { nom: "reglages" }
+  | { nom: "reglages"; section?: "ia" }
   | { nom: "fiche"; candidature: number }
   | { nom: "modification"; candidature: number }
   | { nom: "offre"; offre: number }

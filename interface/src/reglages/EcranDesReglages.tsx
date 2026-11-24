@@ -1,13 +1,14 @@
 import { useEffect, useRef } from "react";
 import type { ClientDeLApi, CopieGardee } from "../api/clientDeLApi.ts";
 import type { IssueDeLaRestauration, IssueDuChoixDuDossier } from "../hote/canalDeLHote.ts";
+import { SectionDeLIA } from "../ia/SectionDeLIA.tsx";
 import { SectionDesRelances } from "../relances/SectionDesRelances.tsx";
 import { SectionDesSauvegardes } from "../sauvegardes/SectionDesSauvegardes.tsx";
 
 /**
- * L'écran des réglages (#26) : la section « Sauvegardes », puis celle des relances et de leur délai par défaut (#14). Le
- * fournisseur d'IA (#43) y ajoutera la sienne. Les réglages vivent hors de la base, dans le dossier de données
- * (ADR-0008).
+ * L'écran des réglages (#26) : la section « Sauvegardes », puis celle des relances et de leur délai par défaut (#14),
+ * puis celle de l'IA (#43). Les réglages vivent hors de la base, dans le dossier de données (ADR-0008) ; la clé d'IA,
+ * chiffrée, aussi, à part d'eux (ADR-0016).
  */
 export function EcranDesReglages({
   client,
@@ -15,6 +16,7 @@ export function EcranDesReglages({
   restaurerUneSauvegarde,
   quandRestauree,
   prendreLeFocus = false,
+  allerALIA = false,
 }: {
   client: ClientDeLApi;
   /** Ouvre le dialogue de dossier de la fenêtre hôte ; absent hors de la fenêtre. */
@@ -25,6 +27,8 @@ export function EcranDesReglages({
   quandRestauree?: (issue: "restauree" | "restaureeDepuisUneBaseAbimee", copie: CopieGardee) => void;
   /** Vrai quand l'utilisateur vient d'y être mené : son titre reçoit alors le focus. */
   prendreLeFocus?: boolean;
+  /** Vrai quand l'utilisateur y vient par la carte « Connecter une IA ? » : la section « IA » reçoit le focus. */
+  allerALIA?: boolean;
 }) {
   const titre = useRef<HTMLHeadingElement>(null);
 
@@ -47,6 +51,7 @@ export function EcranDesReglages({
         quandRestauree={quandRestauree}
       />
       <SectionDesRelances client={client} />
+      <SectionDeLIA client={client} prendreLeFocus={allerALIA} />
     </section>
   );
 }

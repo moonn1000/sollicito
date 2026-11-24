@@ -16,8 +16,9 @@ namespace Sollicito.Api.IA;
 /// <item><c>PUT /api/reglages/ia/cle</c> : la clé du fournisseur réglé, à la place de toute autre.</item>
 /// <item><c>DELETE /api/reglages/ia/cle</c> : la clé retirée.</item>
 /// </list>
+/// Ses titres sont publics : les tests et l'écran les comparent mot pour mot.
 /// </summary>
-internal static class RoutesDeLIA
+public static class RoutesDeLIA
 {
     /// <summary>Le corps le plus gros qu'une écriture de l'IA lit : une clé de 512 caractères y tient largement.</summary>
     public const int BorneDuCorps = 4 * 1024;

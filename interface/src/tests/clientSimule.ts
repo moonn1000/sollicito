@@ -11,6 +11,7 @@ import type {
   CopieGardee,
   EntrepriseConnue,
   EtapeLue,
+  EtatDeLIA,
   EtatDesSauvegardes,
   FicheDUneCandidature,
   FicheDUneOffre,
@@ -20,6 +21,18 @@ import type {
   RelanceLue,
   RelanceSignalee,
 } from "../api/clientDeLApi.ts";
+
+/** L'état fictif de l'IA : aucune, déjà choisie, sans clé. */
+export function etatDeLIAFictif(modifications: Partial<EtatDeLIA> = {}): EtatDeLIA {
+  return {
+    fournisseur: "Aucun",
+    choisi: true,
+    reglageLisible: true,
+    fichierLisible: true,
+    cle: "SansObjet",
+    ...modifications,
+  };
+}
 
 /** Un dossier de données fictif, sous un compte fictif. */
 export const DOSSIER_PAR_DEFAUT_FICTIF = "C:\\Users\\Compte.Fictif\\AppData\\Local\\Sollicito\\Sauvegardes";
@@ -295,6 +308,23 @@ export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
     changerLeDelaiParDefaut: vi.fn<ClientDeLApi["changerLeDelaiParDefaut"]>(async (jours) => ({
       issue: "change",
       reglage: { delaiParDefaut: jours, delaiLisible: true, fichierLisible: true },
+    })),
+    // Aucune IA, déjà choisie : la carte du tableau de bord ne se montre que dans les tests qui le veulent.
+    lireLEtatDeLIA: vi.fn<ClientDeLApi["lireLEtatDeLIA"]>(async () => etatDeLIAFictif()),
+    choisirLeFournisseurDIA: vi.fn<ClientDeLApi["choisirLeFournisseurDIA"]>(async (fournisseur) => ({
+      issue: "fait",
+      etat: etatDeLIAFictif({
+        fournisseur,
+        cle: fournisseur === "Claude" || fournisseur === "OpenAI" ? "Aucune" : "SansObjet",
+      }),
+    })),
+    enregistrerLaCleDIA: vi.fn<ClientDeLApi["enregistrerLaCleDIA"]>(async () => ({
+      issue: "enregistree",
+      etat: etatDeLIAFictif({ fournisseur: "Claude", cle: "Enregistree" }),
+    })),
+    retirerLaCleDIA: vi.fn<ClientDeLApi["retirerLaCleDIA"]>(async () => ({
+      issue: "fait",
+      etat: etatDeLIAFictif({ fournisseur: "Claude", cle: "Aucune" }),
     })),
     collerUneOffre: vi.fn<ClientDeLApi["collerUneOffre"]>(async (saisie) => ({
       issue: "enregistree",
