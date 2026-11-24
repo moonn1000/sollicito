@@ -114,6 +114,29 @@ public sealed class MiseAJourDeLaBaseTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task La_copie_d_avant_va_toujours_au_dossier_par_defaut_meme_quand_un_autre_dossier_est_choisi_et_absent()
+    {
+        await BaseDe12.PeuplerAsync(DossierDeLaBase);
+        // Un dossier choisi sur une clé débranchée : une mise à jour n'attend jamais un support amovible, et ne le crée pas
+        // (#88, point 4).
+        var absent = Path.Combine(_dossier, "cle-debranchee", "Sauvegardes");
+        await File.WriteAllTextAsync(
+            DossierDeLaBase.FichierDesReglages,
+            System.Text.Json.JsonSerializer.Serialize(new { dossierDesSauvegardes = absent }),
+            TestContext.Current.CancellationToken);
+
+        await using (var api = await LancerSurAsync(_dossier, new HorlogeDeTest()))
+        {
+            await api.AttendreLaPremiereVerificationAsync();
+        }
+
+        Assert.Equal(BaseDe12.DerniereMigration, MigrationsDe(DossierDeLaBase.Fichier)[^1]);
+        Assert.True(EstSaine(CopieDAvant));
+        Assert.Equal(BaseDe12.Migration, MigrationsDe(CopieDAvant)[^1]);
+        Assert.False(Directory.Exists(absent));
+    }
+
+    [Fact]
     public async Task Les_restes_d_une_copie_d_avant_interrompue_se_retirent_a_la_mise_a_jour_suivante()
     {
         await BaseDe12.PeuplerAsync(DossierDeLaBase);
