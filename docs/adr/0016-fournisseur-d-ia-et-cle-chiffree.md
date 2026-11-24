@@ -103,7 +103,8 @@ L'API écrit le fournisseur choisi (une valeur d'une liste fermée), la clé enr
   - DPAPI ne protège pas d'un programme lancé sous le compte de l'utilisateur (D9) : il déchiffre le trousseau comme Sollicito ;
   - la clé est à ressaisir sur un autre poste, sous un autre compte, ou après la réinitialisation d'un mot de passe Windows ;
   - le trousseau, une fois né, reste dans le dossier de données, même sans clé : il ne protège plus rien ;
-  - le trousseau se garde en mémoire : un trousseau abîmé pendant une séance ne se voit qu'au lancement suivant.
+  - le trousseau se garde en mémoire : un trousseau abîmé pendant une séance ne se voit qu'au lancement suivant ;
+  - quand une clé est enregistrée mais que le trousseau n'a plus de clé valide (absent, abîmé, ou à son renouvellement de 90 jours), la simple lecture de l'état en crée une, comme Data Protection le fait d'office : seule l'absence de toute clé d'IA garantit qu'aucun trousseau ne s'écrit.
 
 ## À vérifier
 

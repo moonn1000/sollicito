@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import type { EtatDeLIA } from "../api/clientDeLApi.ts";
+import type { EtatDeLIA, ResultatDeLIA } from "../api/clientDeLApi.ts";
 import { clientSimule, etatDeLIAFictif } from "../tests/clientSimule.ts";
 import { SectionDeLIA } from "./SectionDeLIA.tsx";
 
@@ -211,7 +211,7 @@ test("deux clics dans le même rendu n'envoient qu'une fois", async () => {
     lireLEtatDeLIA: async () => etatDeLIAFictif(),
     choisirLeFournisseurDIA: vi.fn(
       () =>
-        new Promise((resolution) => {
+        new Promise<ResultatDeLIA>((resolution) => {
           rendre = () => resolution({ issue: "fait" as const, etat: etatDeLIAFictif() });
         }),
     ),

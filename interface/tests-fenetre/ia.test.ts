@@ -18,18 +18,16 @@ const AU_PLUS_BAVARD = { Logging__LogLevel__Default: "Trace" };
 
 let dossier = "";
 let fenetre: FenetreLancee;
-// Ce que l'API a rendu à la page, toutes réponses confondues.
-const reponses: string[] = [];
+// Ce que l'API a rendu à la page, toutes réponses confondues : lues jusqu'au bout avant chaque vérification.
+const lectures: Promise<string>[] = [];
+const reponses = async () => (await Promise.all(lectures)).join(" | ");
 
 beforeAll(async () => {
   dossier = await mkdtemp(join(tmpdir(), "sollicito-ia-"));
   fenetre = await lancerLaFenetre({ dossierDeDonnees: dossier, environnement: AU_PLUS_BAVARD });
   fenetre.page.on("response", (reponse) => {
     if (new URL(reponse.url()).pathname.startsWith("/api/")) {
-      void reponse.text().then(
-        (texte) => reponses.push(texte),
-        () => undefined,
-      );
+      lectures.push(reponse.text().catch(() => ""));
     }
   });
 });
@@ -73,7 +71,8 @@ test("sur un dossier neuf, la carte propose une IA ; la clé saisie s'enregistre
   expect(traces).toMatchObject({ local: 0, session: 0, cookies: "", bases: 0, caches: 0 });
   expect(traces.document).not.toContain(PARTIE);
   expect(traces.champs).not.toContain(PARTIE);
-  expect(reponses.join("\n")).not.toContain(PARTIE);
+  expect(lectures.length).toBeGreaterThan(0);
+  expect(await reponses()).not.toContain(PARTIE);
 
   // La clé chiffrée et le trousseau sont nés dans le dossier de données ; la carte ne revient plus.
   expect(existsSync(join(dossier, "cle-ia.json"))).toBe(true);
@@ -100,7 +99,7 @@ test("changer de fournisseur, après une confirmation dans la page, efface la cl
   await page.getByLabel("Clé d'API d'OpenAI").fill(CLE_D_OPENAI);
   await page.getByRole("button", { name: "Enregistrer la clé", exact: true }).click();
   await page.getByText("Une clé est enregistrée.", { exact: true }).waitFor();
-  expect(reponses.join("\n")).not.toContain(PARTIE);
+  expect(await reponses()).not.toContain(PARTIE);
 });
 
 test("fermée, la fenêtre ne laisse la clé dans aucun fichier, profil compris, ni dans les journaux au niveau Trace", async () => {

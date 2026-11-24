@@ -129,6 +129,11 @@ export function SectionDeLIA({ client, prendreLeFocus = false }: { client: Clien
           setMessage({ sorte: "annonce", texte: "Choix enregistré." });
         } else {
           setMessage({ sorte: "alerte", texte: resultat.motif });
+          // Un refus peut suivre un effacement de la clé : l'état se relit.
+          client.lireLEtatDeLIA().then(
+            (etat) => affichee.current && adopter(etat),
+            () => undefined,
+          );
         }
       },
       ECHEC_DU_CHOIX,

@@ -127,7 +127,13 @@ public sealed class GardeDeLaCle : IDisposable
         var provisoire = $"{_dossier.FichierDeLaCle}.{Guid.NewGuid():N}.provisoire";
         try
         {
-            await File.WriteAllTextAsync(provisoire, texte, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            // Poussé sur le disque avant le renommage : un arrêt brutal ne laisse jamais une clé à moitié écrite.
+            await using (var flux = new FileStream(provisoire, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            {
+                await flux.WriteAsync(new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(texte));
+                flux.Flush(flushToDisk: true);
+            }
+
             await CopiesVerifiees.ReessayerAsync(() => File.Move(provisoire, _dossier.FichierDeLaCle, overwrite: true));
         }
         finally
@@ -176,7 +182,7 @@ public sealed class GardeDeLaCle : IDisposable
             return null;
         }
 
-        using var document = JsonDocument.Parse(File.ReadAllBytes(fichier.FullName));
+        using var document = JsonDocument.Parse(LireEnReprenant(fichier.FullName));
         var racine = document.RootElement;
         if (racine.ValueKind != JsonValueKind.Object
             || racine.EnumerateObject().Count() != 1
@@ -187,6 +193,23 @@ public sealed class GardeDeLaCle : IDisposable
         }
 
         return Convert.FromBase64String(charge.GetString()!);
+    }
+
+    // Les octets du fichier, en reprenant quelques fois tant qu'un autre programme, ou l'enregistrement d'une clé en cours,
+    // le tient un instant ; au-delà, l'erreur se lève, et la clé est dite illisible.
+    private static byte[] LireEnReprenant(string chemin)
+    {
+        for (var essai = 1; ; essai++)
+        {
+            try
+            {
+                return File.ReadAllBytes(chemin);
+            }
+            catch (IOException) when (essai < 10)
+            {
+                Thread.Sleep(50);
+            }
+        }
     }
 
     // La clé déchiffrée, si elle est bien celle du fournisseur attendu et garde sa forme.

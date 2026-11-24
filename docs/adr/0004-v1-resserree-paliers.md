@@ -1,6 +1,6 @@
 # ADR-0004 : V1 resserrée, livrée en paliers
 
-- **Statut** : acceptée
+- **Statut** : acceptée ; « Contexte », le premier écran qui propose de connecter une IA, précisé par l'[ADR-0016](0016-fournisseur-d-ia-et-cle-chiffree.md) (une carte au tableau de bord tant qu'aucun choix n'est fait)
 - **Date** : 2026-11-18
 - **Remplace en partie** : [ADR-0001](0001-cadrage-architecture-v1.md), D4 (modules livrés), D5 (entités en base), D6 (sources d'offres), D7 (fournisseurs d'IA), D10 (rechargement d'un export et désinstallation), D13 (distribution) et D15 (méthode) ; [ADR-0002](0002-budget-nul.md), pour la V1, ses mentions de l'installeur, d'Inno Setup, du Forem et du guide d'installation ; [ADR-0003](0003-hote-interface-webview2.md), l'installeur de « Runtime et tests » et de « Conséquences », repoussé en V2
 - **Tranche** : [ADR-0003](0003-hote-interface-webview2.md), deux points de sa section « À vérifier » : le mode de publication, et la télémétrie et les mises à jour du runtime

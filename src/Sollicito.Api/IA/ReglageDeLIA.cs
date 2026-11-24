@@ -48,25 +48,24 @@ public sealed partial class ReglageDeLIA(DossierDeLaBase dossier, GardeDeLaCle g
     /// </summary>
     public async Task<IssueDuChoixDeLIA> ChoisirAsync(FournisseurDIA fournisseur)
     {
-        var cleEffacee = false;
         try
         {
             var issue = await _fichier.EcrireLeFournisseurDIAAsync(fournisseur, async () =>
             {
                 var presente = garde.EstPresente;
                 var effacee = await garde.EffacerAsync();
-                cleEffacee = presente && effacee;
+                // Dit dès qu'il a lieu : l'écriture du réglage qui suit peut encore échouer.
+                if (presente && effacee)
+                {
+                    CleEffaceeAuChangement();
+                }
+
                 return effacee;
             });
             switch (issue)
             {
                 case IssueDuFournisseurDIA.Change:
                     FournisseurChoisi(fournisseur);
-                    if (cleEffacee)
-                    {
-                        CleEffaceeAuChangement();
-                    }
-
                     return IssueDuChoixDeLIA.Change;
                 case IssueDuFournisseurDIA.Inchange:
                     return IssueDuChoixDeLIA.Inchange;
@@ -152,7 +151,8 @@ public sealed partial class ReglageDeLIA(DossierDeLaBase dossier, GardeDeLaCle g
             return effacee;
         });
 
-    // L'état de la clé du fournisseur réglé : déchiffrée pour savoir si elle se relit, puis oubliée.
+    // L'état de la clé du fournisseur réglé : déchiffrée pour savoir si elle se relit, puis oubliée. Chaque affichage de la
+    // carte ou de la section relit l'état : une clé illisible ne s'écrit qu'au niveau Debug.
     private EtatDeLaCle LireLaCle(FournisseurDIA fournisseur)
     {
         if (!fournisseur.PrendUneCle())
@@ -199,7 +199,7 @@ public sealed partial class ReglageDeLIA(DossierDeLaBase dossier, GardeDeLaCle g
     [LoggerMessage(EventId = 89, Level = LogLevel.Error, Message = "La clé d'IA n'a pas pu être retirée : son fichier n'a pas pu être effacé.")]
     private partial void CleNonRetiree();
 
-    [LoggerMessage(EventId = 90, Level = LogLevel.Warning, Message = "Clé d'IA illisible ({Cause}) : Sollicito continue sans IA.")]
+    [LoggerMessage(EventId = 90, Level = LogLevel.Debug, Message = "Clé d'IA illisible ({Cause}) : Sollicito continue sans IA.")]
     private partial void CleIllisible(string cause);
 }
 
