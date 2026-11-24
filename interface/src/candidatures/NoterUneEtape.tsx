@@ -15,6 +15,8 @@ export function NoterUneEtape({
   candidature,
   quandNotee,
   autresActions = 0,
+  prendreLaGarde,
+  occupe = false,
   maintenant = () => new Date(),
 }: {
   client: ClientDeLApi;
@@ -23,6 +25,13 @@ export function NoterUneEtape({
   quandNotee: (fiche: FicheDUneCandidature) => void;
   /** Compte les autres actions de la fiche : chacune efface l'annonce de la dernière étape ajoutée, qui serait périmée. */
   autresActions?: number;
+  /**
+   * Prend la garde de la fiche, qui n'admet qu'une action à la fois, pour la durée d'un envoi ; rend de quoi la lâcher,
+   * ou rien si une autre action la tient (#85, point 5). Sans elle, l'envoi ne tient aucune garde.
+   */
+  prendreLaGarde?: () => (() => void) | undefined;
+  /** Vrai tant qu'une action de la fiche est en cours : l'envoi est alors inactif. */
+  occupe?: boolean;
   /** L'heure présente, qui remplit d'avance la date et l'heure. */
   maintenant?: () => Date;
 }) {
@@ -37,17 +46,28 @@ export function NoterUneEtape({
       <FormulaireDUneEtape
         prefixe="etape"
         depart={depart}
+        occupe={occupe}
         envoyer={async (saisie) => {
-          setAnnonce(undefined);
-          const resultat = await client.noterUneEtape(candidature, saisie);
-          if (resultat.notee) {
-            setAnnonce({ texte: `Étape ajoutée à l'historique : ${LIBELLES_DES_TYPES_D_ETAPE[saisie.type]}.`, apres: autresActions });
-            quandNotee(resultat.fiche);
-            // Le type reste ; la date repart de l'heure présente, et la note se vide.
-            return { acceptee: true, repartirDe: { type: saisie.type, survenuLe: heureSaisieDe(maintenant()), note: "" } };
+          const lacher = prendreLaGarde === undefined ? () => undefined : prendreLaGarde();
+          if (lacher === undefined) {
+            // Une autre action tient la fiche : rien ne part, la saisie reste.
+            return { acceptee: false, refus: {} };
           }
 
-          return { acceptee: false, refus: resultat.refus };
+          try {
+            setAnnonce(undefined);
+            const resultat = await client.noterUneEtape(candidature, saisie);
+            if (resultat.notee) {
+              setAnnonce({ texte: `Étape ajoutée à l'historique : ${LIBELLES_DES_TYPES_D_ETAPE[saisie.type]}.`, apres: autresActions });
+              quandNotee(resultat.fiche);
+              // Le type reste ; la date repart de l'heure présente, et la note se vide.
+              return { acceptee: true, repartirDe: { type: saisie.type, survenuLe: heureSaisieDe(maintenant()), note: "" } };
+            }
+
+            return { acceptee: false, refus: resultat.refus };
+          } finally {
+            lacher();
+          }
         }}
         libelleDuBouton="Ajouter à l'historique"
         libelleEnCours="Ajout…"

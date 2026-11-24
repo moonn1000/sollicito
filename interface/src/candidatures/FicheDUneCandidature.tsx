@@ -127,8 +127,9 @@ export function FicheDUneCandidature({
   }, [confirmation]);
 
   // Une fiche reçue ne remplace la fiche montrée que si elle n'est pas plus ancienne. L'historique se fait par ajouts
-  // seulement : une note et un changement de statut lancés ensemble peuvent répondre dans le désordre, et la réponse la
-  // plus récente est celle qui porte le plus d'événements.
+  // seulement, et la réponse la plus récente est celle qui porte le plus d'événements. Une note, un changement de statut
+  // ou une correction ne se lancent plus ensemble (`prendreLaGarde`), mais les relances et la relecture passent aussi par
+  // ici, hors de cette garde : leurs réponses peuvent arriver dans le désordre.
   const montrer = (recue: Fiche) =>
     setChargement((avant) =>
       avant.etape === "prete" && avant.fiche.historique.length > recue.historique.length ? avant : { etape: "prete", fiche: recue },
@@ -153,13 +154,31 @@ export function FicheDUneCandidature({
     };
   }, [client, candidature]);
 
-  async function agir(faire: () => Promise<ResultatDUneAction>, annonce: (fiche: Fiche) => string, echec: string) {
+  // Une seule action à la fois sur la fiche : un changement de statut, la correction du dernier changement, une note, la
+  // correction d'une étape, la suppression. Rend de quoi la lâcher, ou rien si une autre la tient : la fiche ne montre
+  // alors qu'une réponse à la fois, et aucune n'arrive après la suppression (#85, point 5). Les relances et les contacts
+  // gardent la leur.
+  function prendreLaGarde(): (() => void) | undefined {
     if (enCoursDAction.current) {
-      return;
+      return undefined;
     }
 
     enCoursDAction.current = true;
     setEnCours(true);
+    return () => {
+      enCoursDAction.current = false;
+      if (affichee.current) {
+        setEnCours(false);
+      }
+    };
+  }
+
+  async function agir(faire: () => Promise<ResultatDUneAction>, annonce: (fiche: Fiche) => string, echec: string) {
+    const lacher = prendreLaGarde();
+    if (lacher === undefined) {
+      return;
+    }
+
     setMessage(undefined);
     setAnnonceDeDepart(undefined);
     setAnnonceDeLHistorique(undefined);
@@ -190,9 +209,8 @@ export function FicheDUneCandidature({
         setMessage({ sorte: "alerte", texte: `${echec} ${REESSAYER}` });
       }
     } finally {
-      enCoursDAction.current = false;
+      lacher();
       if (affichee.current) {
-        setEnCours(false);
         setActionsTerminees((nombre) => nombre + 1);
       }
     }
@@ -245,12 +263,11 @@ export function FicheDUneCandidature({
 
   // Supprime la candidature, une fois la suppression confirmée : la fiche passe la main au tableau de bord.
   async function supprimer(supprimee: Fiche) {
-    if (enCoursDAction.current) {
+    const lacher = prendreLaGarde();
+    if (lacher === undefined) {
       return;
     }
 
-    enCoursDAction.current = true;
-    setEnCours(true);
     setSuppression("en-cours");
     try {
       await client.supprimerUneCandidature(candidature);
@@ -268,10 +285,7 @@ export function FicheDUneCandidature({
         setSuppression("echec");
       }
     } finally {
-      enCoursDAction.current = false;
-      if (affichee.current) {
-        setEnCours(false);
-      }
+      lacher();
     }
   }
 
@@ -280,6 +294,12 @@ export function FicheDUneCandidature({
   const corrigerLEtape =
     (etape: EtapeLue) =>
     async (saisie: Parameters<ClientDeLApi["corrigerUneEtape"]>[2]): Promise<ReponseALEtape> => {
+      const lacher = prendreLaGarde();
+      if (lacher === undefined) {
+        // Une autre action tient la fiche : le formulaire reste ouvert, rien ne part.
+        return { acceptee: false, refus: {} };
+      }
+
       setMessage(undefined);
       setAnnonceDeDepart(undefined);
       setAnnonceDeLHistorique(undefined);
@@ -308,6 +328,8 @@ export function FicheDUneCandidature({
         }
 
         throw erreur;
+      } finally {
+        lacher();
       }
     };
 
@@ -351,7 +373,7 @@ export function FicheDUneCandidature({
         </p>
       )}
       <p>
-        <button type="button" className="lien" onClick={revenir}>
+        <button type="button" className="lien" disabled={suppression === "en-cours"} onClick={revenir}>
           Revenir au tableau de bord
         </button>
       </p>
@@ -500,6 +522,8 @@ export function FicheDUneCandidature({
             candidature={candidature}
             maintenant={maintenant}
             autresActions={actionsTerminees + correctionsTerminees}
+            prendreLaGarde={prendreLaGarde}
+            occupe={enCours}
             quandNotee={(fiche) => {
               setMessage(undefined);
               setAnnonceDeDepart(undefined);
@@ -532,6 +556,7 @@ export function FicheDUneCandidature({
                 prefixe={`correction-${etape.id}`}
                 depart={{ type: etape.type, survenuLe: heureSaisieDe(new Date(etape.survenuLe)), note: etape.note ?? "" }}
                 envoyer={corrigerLEtape(etape)}
+                occupe={enCours}
                 libelleDuBouton="Enregistrer la correction"
                 libelleEnCours="Enregistrement…"
                 messageDEchec={`La correction n'a pas pu être enregistrée. ${REESSAYER}`}
