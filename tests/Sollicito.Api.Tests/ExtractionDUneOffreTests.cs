@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
@@ -194,6 +195,42 @@ public sealed class ExtractionDUneOffreTests
             resultat.ToJsonString());
     }
 
+    // La minuterie de 60 secondes ne se joue pas ici : le faux lève l'annulation que lève un transport quand elle part, que
+    // l'envoi borné range en délai dépassé. La vraie minuterie se joue au transport (TransportDeLIATests) et dans la
+    // fenêtre de test (60 s, essais de #46).
+    [Theory]
+    [InlineData("Claude", CleDeClaude, "Claude n'a pas répondu à temps. Réessayez plus tard.")]
+    [InlineData("OpenAI", CleDOpenAI, "OpenAI n'a pas répondu à temps. Réessayez plus tard.")]
+    public async Task Un_delai_depasse_se_dit_avec_le_texte_de_48_et_la_saisie_a_la_main_reste_possible(string fournisseur, string cle, string message)
+    {
+        await using var api = await PreparerAsync(fournisseur, cle);
+        api.FauxFournisseur.Repondre((_, _) => throw new TaskCanceledException("Faux délai dépassé."));
+
+        using var envoi = await api.ExtraireAsync(Texte);
+
+        Assert.Equal(HttpStatusCode.OK, envoi.StatusCode);
+        var texte = await envoi.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(EnEchec("DelaiDepasse", message + " Vous pouvez remplir les champs vous-même."), JsonNode.Parse(texte)!.ToJsonString());
+        Assert.DoesNotContain("Faux délai", texte, StringComparison.Ordinal);
+        Assert.Single(api.FauxFournisseur.Recues);
+    }
+
+    [Theory]
+    [InlineData("Claude", CleDeClaude, """{"type":"message","content":[""", "La réponse de Claude n'a pas pu être lue. Réessayez plus tard.")]
+    [InlineData("OpenAI", CleDOpenAI, """{"status":"completed","output":[""", "La réponse d'OpenAI n'a pas pu être lue. Réessayez plus tard.")]
+    public async Task Une_reponse_mal_formee_se_dit_avec_le_texte_de_48_et_la_saisie_a_la_main_reste_possible(string fournisseur, string cle, string corps, string message)
+    {
+        await using var api = await PreparerAsync(fournisseur, cle);
+        api.FauxFournisseur.Repondre(HttpStatusCode.OK, corps);
+
+        using var envoi = await api.ExtraireAsync(Texte);
+
+        Assert.Equal(HttpStatusCode.OK, envoi.StatusCode);
+        var texte = await envoi.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(EnEchec("ReponseIllisible", message + " Vous pouvez remplir les champs vous-même."), JsonNode.Parse(texte)!.ToJsonString());
+        Assert.Single(api.FauxFournisseur.Recues);
+    }
+
     [Fact]
     public async Task Une_reponse_au_dela_de_sa_borne_n_est_pas_lue()
     {
@@ -340,12 +377,16 @@ public sealed class ExtractionDUneOffreTests
     public async Task Rien_ne_s_enregistre_et_ni_la_cle_ni_le_texte_ne_paraissent_dans_une_reponse()
     {
         await using var api = await PreparerAsync("Claude", CleDeClaude);
+        // La base et son journal (WAL), tels qu'ils sont sur le disque avant la première extraction.
+        var baseAvant = EmpreinteDeLaBase(api);
         var textes = new List<string>();
         foreach (var repondre in new Action[]
         {
             () => api.FauxFournisseur.RepondreTexte(ReponseDeLIA),
             () => api.FauxFournisseur.RepondreTexte("""{"poste":"SOLLICITO-TEXTE-46","inconnu":1}"""),
             () => api.FauxFournisseur.RepondreErreur(HttpStatusCode.Unauthorized),
+            () => api.FauxFournisseur.Repondre((_, _) => throw new TaskCanceledException("Faux délai dépassé.")),
+            () => api.FauxFournisseur.Repondre(HttpStatusCode.OK, """{"type":"message","content":["""),
         })
         {
             repondre();
@@ -363,9 +404,37 @@ public sealed class ExtractionDUneOffreTests
             Assert.DoesNotContain(Marque, texte, StringComparison.Ordinal);
             Assert.DoesNotContain(PartieReconnaissable, texte, StringComparison.Ordinal);
         });
+        // Rien n'est écrit : le fichier de la base reste le même, octet pour octet, comme les comptes des offres et des entreprises.
+        Assert.Equal(baseAvant, EmpreinteDeLaBase(api));
         Assert.Empty(await api.ListerLesOffresAsync());
         Assert.Empty(await api.ListerLesEntreprisesAsync());
+        Assert.Equal(baseAvant, EmpreinteDeLaBase(api));
         AucunFichierNeContientDeCle(api.DossierDeDonnees);
+    }
+
+    // Le témoin du précédent : l'empreinte change bien quand une offre s'enregistre, elle n'est pas vide de sens.
+    [Fact]
+    public async Task L_empreinte_de_la_base_change_quand_une_offre_s_enregistre()
+    {
+        await using var api = await PreparerAsync("Claude", CleDeClaude);
+        var avant = EmpreinteDeLaBase(api);
+
+        await api.CollerAvecSuccesAsync(Texte, "Comptable");
+
+        Assert.NotEqual(avant, EmpreinteDeLaBase(api));
+    }
+
+    // L'empreinte de la base et de son journal : un octet écrit, dans l'un ou dans l'autre, la change.
+    private static string EmpreinteDeLaBase(ApiLancee api)
+    {
+        var fichier = new DossierDeLaBase(api.DossierDeDonnees).Fichier;
+        var octets = new List<byte>(AppelsDesSauvegardes.Octets(fichier));
+        if (File.Exists(fichier + "-wal"))
+        {
+            octets.AddRange(AppelsDesSauvegardes.Octets(fichier + "-wal"));
+        }
+
+        return Convert.ToHexString(SHA256.HashData([.. octets]));
     }
 
     private static async Task<ApiLancee> PreparerAsync(string fournisseur, string cle)
