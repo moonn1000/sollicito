@@ -39,6 +39,7 @@ export function App({
   connecter,
   choisirLeDossierDesSauvegardes,
   ouvrirLeBrouillon,
+  ouvrirLeBrouillonRelu,
   restaurerUneSauvegarde,
 }: {
   connecter: () => Promise<ClientDeLApi>;
@@ -46,6 +47,8 @@ export function App({
   choisirLeDossierDesSauvegardes?: () => Promise<IssueDuChoixDuDossier>;
   /** Demande à la fenêtre hôte d'ouvrir le brouillon d'une relance dans la messagerie ; absent hors de la fenêtre (#14). */
   ouvrirLeBrouillon?: (relance: number) => Promise<IssueDuBrouillon>;
+  /** Demande à la fenêtre hôte d'ouvrir le brouillon relu d'un premier jet ; absent hors de la fenêtre (#47). */
+  ouvrirLeBrouillonRelu?: (relance: number) => Promise<IssueDuBrouillon>;
   /** Demande à la fenêtre hôte de restaurer une copie gardée ; absent hors de la fenêtre (#28). */
   restaurerUneSauvegarde?: (copie: string, quandEnCours: () => void) => Promise<IssueDeLaRestauration>;
 }) {
@@ -159,6 +162,7 @@ export function App({
             modifier={() => naviguer({ nom: "modification", candidature: ecran.candidature })}
             quandSupprimee={quandSupprimee}
             ouvrirLeBrouillon={ouvrirLeBrouillon}
+            ouvrirLeBrouillonRelu={ouvrirLeBrouillonRelu}
             ouvrirLOffre={ouvrirUneOffre}
           />
         );

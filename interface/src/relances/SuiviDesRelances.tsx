@@ -11,6 +11,7 @@ import {
 import { Champ, sansLeChamp } from "../formulaires/Champ.tsx";
 import type { IssueDuBrouillon } from "../hote/canalDeLHote.ts";
 import { afficherLeJour, decrireLeDestinataire, DELAI_MAXIMUM, DELAI_MINIMUM, delaiDe, delaiPropose, echeancePour } from "./affichage.ts";
+import { PremierJetParLIA } from "./PremierJetParLIA.tsx";
 import { PreparerLeBrouillon } from "./PreparerLeBrouillon.tsx";
 
 /** Le délai d'usine, quand le réglage ne se lit pas. */
@@ -35,6 +36,7 @@ export function SuiviDesRelances({
   fiche,
   contacts,
   ouvrirLeBrouillon,
+  ouvrirLeBrouillonRelu,
   montrer,
   relire,
 }: {
@@ -44,6 +46,8 @@ export function SuiviDesRelances({
   contacts: ContactConnu[] | undefined;
   /** Demande à la fenêtre hôte d'ouvrir un brouillon ; absent hors de la fenêtre. */
   ouvrirLeBrouillon?: (relance: number) => Promise<IssueDuBrouillon>;
+  /** Demande à la fenêtre hôte d'ouvrir le brouillon relu d'un premier jet (#47) ; absent hors de la fenêtre. */
+  ouvrirLeBrouillonRelu?: (relance: number) => Promise<IssueDuBrouillon>;
   /** Montre la fiche à jour que l'API vient de rendre. */
   montrer: (fiche: FicheDUneCandidature) => void;
   /** Relit la fiche ; rend faux si elle n'a pas pu être relue. */
@@ -186,6 +190,17 @@ export function SuiviDesRelances({
           <p className="aide">
             Le brouillon s'ouvre dans votre messagerie : c'est vous qui l'envoyez. Faite ou abandonnée, une relance l'est pour de bon.
           </p>
+          {ouvrirLeBrouillonRelu !== undefined && (
+            <PremierJetParLIA
+              key={aFaire.id}
+              client={client}
+              candidature={fiche.id}
+              relance={aFaire.id}
+              ouvrirLeBrouillonRelu={ouvrirLeBrouillonRelu}
+              desactive={enCours}
+              apres={() => void relire()}
+            />
+          )}
         </>
       )}
       {aFaire === undefined && close && <p>La candidature est close : elle ne reçoit plus de relance.</p>}

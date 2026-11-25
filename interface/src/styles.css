@@ -607,6 +607,25 @@ button {
   margin: 0;
 }
 
+/* Le premier jet d'une relance par l'IA (#47) : un bloc sous les actions de la relance, séparé d'elles, son texte dans un
+   champ modifiable. */
+.premier-jet {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--bordure);
+}
+
+.premier-jet h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.premier-jet p {
+  margin: 0;
+}
+
 .historique li.cloture {
   border-left-color: var(--accent);
 }

@@ -46,6 +46,7 @@ export function FicheDUneCandidature({
   annonce,
   maintenant,
   ouvrirLeBrouillon,
+  ouvrirLeBrouillonRelu,
   ouvrirLOffre,
 }: {
   client: ClientDeLApi;
@@ -62,6 +63,8 @@ export function FicheDUneCandidature({
   maintenant?: () => Date;
   /** Demande à la fenêtre hôte d'ouvrir le brouillon d'une relance ; absent hors de la fenêtre (#14). */
   ouvrirLeBrouillon?: (relance: number) => Promise<IssueDuBrouillon>;
+  /** Demande à la fenêtre hôte d'ouvrir le brouillon relu d'un premier jet ; absent hors de la fenêtre (#47). */
+  ouvrirLeBrouillonRelu?: (relance: number) => Promise<IssueDuBrouillon>;
   /** Ouvre la fiche de l'offre d'où vient la candidature (#38). */
   ouvrirLOffre?: (offre: number) => void;
 }) {
@@ -502,6 +505,7 @@ export function FicheDUneCandidature({
             fiche={fiche}
             contacts={Array.isArray(contactsDeLEntreprise) ? contactsDeLEntreprise : undefined}
             ouvrirLeBrouillon={ouvrirLeBrouillon}
+            ouvrirLeBrouillonRelu={ouvrirLeBrouillonRelu}
             montrer={(recue) => {
               setMessage(undefined);
               setAnnonceDeDepart(undefined);
