@@ -170,20 +170,58 @@ test("au-delà de 1 500 caractères, aucun texte ; chaque échec se dit, et le b
   expect(await page.getByRole("button", { name: `Préparer le brouillon de la ${RELANCE}` }).isEnabled()).toBe(true);
 });
 
-test("un message à l'hôte qui porterait le texte n'ouvre rien", async () => {
+test("un message à l'hôte qui porterait le texte, ou d'une autre forme, n'ouvre rien, même avec un texte déposé ; réduit à sa forme, il l'ouvre", async () => {
   const { page } = fenetre;
-  const avant = (await lignes(join(dossier, "brouillons-ouverts.txt"))).length;
+  const brouillons = join(dossier, "brouillons-ouverts.txt");
+  const avant = (await lignes(brouillons)).length;
+  const depose = "Bonjour,\n\nUn texte déposé par le test. MARQUE-RELU-47\n\nBien cordialement,";
 
+  // Le jeton que la page remet à l'API, lu sur une requête de la page, pour déposer le texte comme elle le fait.
+  const jetonLu = new Promise<string>((resoudre) =>
+    page.on("request", (requete) => {
+      const jeton = requete.headers()["sollicito-jeton"];
+      if (jeton !== undefined) {
+        resoudre(jeton);
+      }
+    }),
+  );
+  await page.getByRole("button", { name: "Réglages", exact: true }).click();
+  const jeton = await jetonLu;
+  const statut = await page.evaluate(
+    async ({ jeton, texte }) =>
+      (
+        await fetch("/api/candidatures/1/relances/1/brouillon-relu", {
+          method: "PUT",
+          headers: { "Sollicito-Jeton": jeton, "Content-Type": "application/json" },
+          body: JSON.stringify({ texte }),
+          cache: "no-store",
+        })
+      ).status,
+    { jeton, texte: depose },
+  );
+  expect(statut).toBe(204);
+
+  // Un texte déposé attend : un champ de plus, ou un identifiant d'une autre forme, n'en ouvre rien.
   await page.evaluate(() => {
     const canal = (window as unknown as { chrome: { webview: { postMessage(message: unknown): void } } }).chrome.webview;
     canal.postMessage({ type: "ouvrirLeBrouillonRelu", relance: 1, texte: "Un autre texte." });
     canal.postMessage({ type: "ouvrirLeBrouillonRelu", relance: "1" });
-    // Réduit à sa forme, il ne trouve aucun texte déposé : le dépôt a été pris à l'ouverture.
-    canal.postMessage({ type: "ouvrirLeBrouillonRelu", relance: 1 });
   });
   await attendre(1_500);
+  expect(await lignes(brouillons)).toHaveLength(avant);
 
-  expect(await lignes(join(dossier, "brouillons-ouverts.txt"))).toHaveLength(avant);
+  // Le même message, réduit à sa forme, ouvre le texte déposé : les refus venaient de la forme, non d'un dépôt vide.
+  await page.evaluate(() => {
+    (window as unknown as { chrome: { webview: { postMessage(message: unknown): void } } }).chrome.webview.postMessage({ type: "ouvrirLeBrouillonRelu", relance: 1 });
+  });
+  for (let essai = 1; (await lignes(brouillons)).length <= avant; essai++) {
+    expect(essai).toBeLessThan(80);
+    await attendre(250);
+  }
+
+  expect((await lignes(brouillons)).at(-1)).toBe(
+    `mailto:${ADRESSE}?subject=${encoderStrictement(`Candidature au poste de ${POSTE}`)}&body=${encoderStrictement(depose.replaceAll("\n", "\r\n"))}`,
+  );
 });
 
 test("fermée, la fenêtre ne laisse ni la clé ni les données dans les journaux au niveau Trace, ni la clé dans un fichier", async () => {

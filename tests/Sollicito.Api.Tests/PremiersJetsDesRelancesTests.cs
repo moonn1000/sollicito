@@ -438,6 +438,29 @@ public sealed class PremiersJetsDesRelancesTests
     }
 
     [Fact]
+    public async Task Porte_fermee_la_fenetre_ne_prend_aucun_texte_relu()
+    {
+        var preparation = await PreparerAsync("Claude");
+        await using var api = preparation.Api;
+        using (var depose = await api.DeposerLeBrouillonReluAsync(preparation.Candidature, preparation.Relance, "Texte relu."))
+        {
+            Assert.Equal(HttpStatusCode.NoContent, depose.StatusCode);
+        }
+
+        // Comme pour le brouillon de #14, la fenêtre ne lit pas la base pendant une restauration.
+        var porte = api.Services.GetRequiredService<PorteDeLaBase>();
+        Assert.True(await porte.FermerAsync(TimeSpan.FromSeconds(10), TimeProvider.System, TestContext.Current.CancellationToken));
+        try
+        {
+            Assert.Null(await Brouillons(api).PreparerLeBrouillonReluAsync(preparation.Relance, TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            porte.Ouvrir();
+        }
+    }
+
+    [Fact]
     public async Task Aucune_demande_ne_part_a_l_affichage_a_la_planification_ni_au_brouillon_de_14()
     {
         var preparation = await PreparerAsync("Claude");

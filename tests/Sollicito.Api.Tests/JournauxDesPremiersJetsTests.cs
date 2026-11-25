@@ -7,8 +7,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Sollicito.Api.Relances;
+using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Tests.Outils;
 using Sollicito.Application.Candidatures;
+using Sollicito.Application.Relances;
 using static Sollicito.Api.Tests.Outils.AppelsDeLIA;
 using static Sollicito.Api.Tests.Outils.AppelsDesPremiersJets;
 using static Sollicito.Api.Tests.Outils.AppelsDesRelances;
@@ -73,6 +75,34 @@ public sealed class JournauxDesPremiersJetsTests
             await ErreurAsync(erreurs, api.DemanderUnPremierJetAsync(id + 1_000, relance), HttpStatusCode.NotFound);
             await ErreurAsync(erreurs, api.DemanderUnPremierJetAsync(id, relance + 1_000), HttpStatusCode.Conflict);
 
+            // Porte fermée, comme pendant une restauration : les deux routes répondent 503, sans requête.
+            var porte = api.Services.GetRequiredService<PorteDeLaBase>();
+            Assert.True(await porte.FermerAsync(TimeSpan.FromSeconds(10), TimeProvider.System, TestContext.Current.CancellationToken));
+            try
+            {
+                await ErreurAsync(erreurs, api.DemanderUnPremierJetAsync(id, relance), HttpStatusCode.ServiceUnavailable);
+                await ErreurAsync(erreurs, api.DeposerLeBrouillonReluAsync(id, relance, $"Texte relu {Marque}."), HttpStatusCode.ServiceUnavailable);
+            }
+            finally
+            {
+                porte.Ouvrir();
+            }
+
+            // Une demande en cours : une seconde est refusée sans requête.
+            var entree = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var relache = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            api.FauxFournisseur.Repondre(async (_, annulation) =>
+            {
+                entree.TrySetResult();
+                await relache.Task.WaitAsync(annulation);
+                throw new HttpRequestException($"Faux réseau absent {Marque}.");
+            });
+            var premiere = api.DemanderUnPremierJetAsync(id, relance);
+            await entree.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+            await ErreurAsync(erreurs, api.DemanderUnPremierJetAsync(id, relance), HttpStatusCode.Conflict);
+            relache.TrySetResult();
+            (await premiere).Dispose();
+
             // Le dépôt : admis, puis refusé par sa règle, par la lecture du corps, par la relance.
             using (var depose = await api.DeposerLeBrouillonReluAsync(id, relance, $"Texte relu {Marque}."))
             {
@@ -82,6 +112,7 @@ public sealed class JournauxDesPremiersJetsTests
             await ErreurAsync(erreurs, api.DeposerLeBrouillonReluAsync(id, relance, $"Texte relu {Marque}" + (char)0x07), HttpStatusCode.BadRequest);
             await ErreurAsync(erreurs, api.DeposerLeBrouillonReluAsync(id, relance, Marque + new string('a', 2_000)), HttpStatusCode.BadRequest);
             await ErreurAsync(erreurs, api.DeposerLeBrouillonReluAsync(id, relance, new string('é', 1_900) + Marque), HttpStatusCode.BadRequest);
+            await ErreurAsync(erreurs, api.DeposerLeBrouillonReluAsync(id, relance, Marque + new string('a', 17 * 1_024)), HttpStatusCode.RequestEntityTooLarge);
             await ErreurAsync(erreurs, api.EcrireAsync(HttpMethod.Put, AdresseDuBrouillonRelu(id, relance), $$"""{"texte":"{{Marque}}","{{Marque}}":1}"""), HttpStatusCode.BadRequest);
             await ErreurAsync(erreurs, api.EcrireAsync(HttpMethod.Put, AdresseDuBrouillonRelu(id, relance), $$"""{"texte":["{{Marque}}"]}"""), HttpStatusCode.BadRequest);
             await ErreurAsync(erreurs, api.EcrireAsync(HttpMethod.Put, AdresseDuBrouillonRelu(id, relance), $$"""{"texte":"{{Marque}}"""), HttpStatusCode.BadRequest);
@@ -100,10 +131,16 @@ public sealed class JournauxDesPremiersJetsTests
         Assert.Contains(entrees, entree => entree.Contains("Demande à l'IA : Claude a répondu", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("Premier jet d'une relance refusé (aucun fournisseur en ligne).", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("Texte relu d'un brouillon refusé (lien trop long).", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Premier jet d'une relance refusé (restauration en cours).", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Premier jet d'une relance refusé (une demande en cours).", StringComparison.Ordinal));
+        // Les consignes de Sollicito, que le fournisseur reçoit, ne s'écrivent dans aucun journal ni aucune erreur.
+        var consignes = PremierJetDeRelance.Consignes[..40];
+        Assert.DoesNotContain(entrees, entree => entree.Contains(consignes, StringComparison.Ordinal));
         Assert.DoesNotContain(entrees, entree => entree.Contains(Marque, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(entrees, entree => entree.Contains(PartieReconnaissable, StringComparison.Ordinal));
         Assert.All(erreurs, erreur =>
         {
+            Assert.DoesNotContain(consignes, erreur, StringComparison.Ordinal);
             Assert.DoesNotContain(Marque, erreur, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain(PartieReconnaissable, erreur, StringComparison.Ordinal);
         });
