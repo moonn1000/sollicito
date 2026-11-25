@@ -113,3 +113,46 @@ function premierJour(maintenant: Date, jours: number): string {
   const debut = new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate() - (jours - 1), 12);
   return jourDeLEnvoi(debut.toISOString());
 }
+
+/** Le bouton qui demande à l'IA de proposer les champs d'une offre collée (#46), et son libellé pendant la demande. */
+export const LIBELLE_DE_LA_PROPOSITION = "Proposer les champs avec l'IA";
+export const LIBELLE_DE_LA_PROPOSITION_EN_COURS = "L'IA lit l'offre…";
+
+/** Le bouton qui retire, des champs, ce que l'IA a proposé et que l'utilisateur n'a pas modifié. */
+export const LIBELLE_DU_RETRAIT_DE_LA_PROPOSITION = "Retirer la proposition";
+
+/** La marque d'un champ que l'IA a rempli, tant que l'utilisateur ne l'a pas modifié. */
+export const MARQUE_DE_L_IA = "Proposé par l'IA : relisez-le.";
+
+/** Ce que l'écran dit à la place du bouton quand aucune IA n'est prête. */
+export const SANS_IA_PRETE =
+  "Sans IA prête, remplissez les champs vous-même. Pour vous faire aider, choisissez une IA et enregistrez sa clé dans les réglages, section « IA ».";
+
+/** Une demande que l'API locale n'a pas reçue, ou à laquelle elle n'a pas répondu. */
+export const PROPOSITION_IMPOSSIBLE =
+  "La proposition n'a pas pu être demandée. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.";
+
+/** L'aide sous le bouton : ce que fait l'IA, et où part le texte. */
+export function aideDeLaProposition(societe: "Anthropic" | "OpenAI"): string {
+  return `L'IA lit le texte collé et propose l'entreprise, le poste, le lieu, la date de publication et l'adresse de l'annonce. Le texte part chez ${societe}, avec votre clé ; rien n'est enregistré sans votre confirmation.`;
+}
+
+/**
+ * Ce que l'écran dit d'une proposition : combien de champs l'IA a remplis, ou qu'elle n'a rien trouvé, ou que tous les
+ * champs trouvés étaient déjà remplis. Les champs que l'utilisateur avait remplis ne sont jamais remplacés.
+ */
+export function messageDeLaProposition(trouves: number, remplis: number, dejaRemplis: number): string {
+  if (trouves === 0) {
+    return "L'IA n'a trouvé aucun de ces champs dans le texte : remplissez-les vous-même.";
+  }
+
+  if (remplis === 0) {
+    return "Tous les champs étaient déjà remplis : rien n'a été changé.";
+  }
+
+  const message =
+    remplis === 1
+      ? "L'IA a proposé 1 champ : relisez-le, et corrigez-le au besoin, avant d'enregistrer l'offre."
+      : `L'IA a proposé ${remplis} champs : relisez-les, et corrigez-les au besoin, avant d'enregistrer l'offre.`;
+  return dejaRemplis > 0 ? `${message} Les champs que vous aviez remplis n'ont pas été changés.` : message;
+}

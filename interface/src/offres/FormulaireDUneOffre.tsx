@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type {
   ChampDeLOffre,
+  ChampsProposes,
   ClientDeLApi,
   EntrepriseConnue,
   FicheDUneOffre,
@@ -11,15 +12,21 @@ import type {
 } from "../api/clientDeLApi.ts";
 import { proposerDesEntreprises } from "../candidatures/affichage.ts";
 import { Champ, sansLeChamp } from "../formulaires/Champ.tsx";
-import { AIDE_DU_TEXTE, decrireLeDoublon, MESSAGE_DU_DOUBLON, messageDejaEnregistree } from "./affichage.ts";
+import { AIDE_DU_TEXTE, decrireLeDoublon, MARQUE_DE_L_IA, MESSAGE_DU_DOUBLON, messageDejaEnregistree } from "./affichage.ts";
 import { ApercuDUneOffre } from "./ApercuDUneOffre.tsx";
+import { PropositionDeLIA } from "./PropositionDeLIA.tsx";
 
 type Envoi = "pret" | "en-cours" | "echec";
 
 /** Ce qui arrête l'envoi, en plus des refus : le même texte déjà enregistré, ou des doublons possibles. */
 type Conflit = { sorte: "dejaEnregistree"; id: number; ajouteeLe: string } | { sorte: "doublonPossible"; doublons: OffreSignalee[] };
 
+/** Un champ que l'IA peut proposer : tous, sauf le texte. */
+type ChampProposable = Exclude<ChampDeLOffre, "texte">;
+
 const ORDRE_DES_CHAMPS: readonly ChampDeLOffre[] = ["texte", "entreprise", "poste", "lieu", "publieeLe", "adresse"];
+
+const CHAMPS_PROPOSABLES: readonly ChampProposable[] = ["entreprise", "poste", "lieu", "publieeLe", "adresse"];
 
 /**
  * Les champs d'une offre, tels que sa saisie (#36) et sa correction les présentent : le texte collé, à la saisie
@@ -29,12 +36,15 @@ const ORDRE_DES_CHAMPS: readonly ChampDeLOffre[] = ["texte", "entreprise", "post
  * entreprise et de même poste le sont (règle 3) : l'utilisateur garde les deux, ou renonce. L'autre offre s'ouvre sur
  * place, dans un aperçu, sans quitter le formulaire : le texte collé et les champs restent (suites de #36, #98). Un
  * refus ou un signal disparaît dès qu'on modifie la saisie, qu'il ne décrit plus. Le texte n'a pas de longueur bornée à
- * l'écran : un collage trop long serait tronqué sans le dire ; l'API le refuse, et l'écran le dit.
+ * l'écran : un collage trop long serait tronqué sans le dire ; l'API le refuse, et l'écran le dit. À la saisie, l'IA
+ * peut proposer les champs, sur un clic (#46) : elle ne remplit que les champs vides, chacun marqué jusqu'à ce que
+ * l'utilisateur le modifie, et rien ne s'enregistre avant l'envoi du formulaire.
  */
 export function FormulaireDUneOffre({
   client,
   depart,
   avecLeTexte,
+  proposerAvecLIA = false,
   envoyer,
   quandEnregistree,
   renoncer,
@@ -49,6 +59,8 @@ export function FormulaireDUneOffre({
   depart: SaisieDUneOffre;
   /** Vrai à la saisie : le texte se colle. La correction ne le montre pas, et ne l'envoie pas. */
   avecLeTexte: boolean;
+  /** Vrai à la saisie : l'IA réglée peut proposer les champs à partir du texte, sur un clic (#46). */
+  proposerAvecLIA?: boolean;
   /** Envoie la saisie à l'API, avec ou sans l'accord de garder un doublon possible ; une erreur levée se signale. */
   envoyer: (saisie: SaisieDUneOffre, garderLesDeux: boolean) => Promise<ResultatDeLOffre>;
   /** Reçoit la fiche de l'offre enregistrée. */
@@ -74,6 +86,11 @@ export function FormulaireDUneOffre({
   const [apercu, setApercu] = useState<{ signal: Conflit; offre: number }>();
   const [envoi, setEnvoi] = useState<Envoi>("pret");
   const [connues, setConnues] = useState<EntrepriseConnue[]>([]);
+  // Les valeurs que l'IA a mises dans des champs vides (#46) : un champ reste marqué tant qu'il garde la sienne.
+  const [proposes, setProposes] = useState<Partial<Record<ChampProposable, string>>>({});
+  // La saisie du dernier rendu, lue quand la proposition arrive : seuls les champs encore vides la reçoivent.
+  const saisieCourante = useRef(saisie);
+  saisieCourante.current = saisie;
   // Lu aussitôt, sans attendre le rendu : deux envois rapprochés n'en font qu'un.
   const enCours = useRef(false);
   const titreDuConflit = useRef<HTMLHeadingElement>(null);
@@ -129,6 +146,71 @@ export function FormulaireDUneOffre({
     setConflit(undefined);
   };
 
+  // La proposition de l'IA, dans les seuls champs encore vides : rien de ce que l'utilisateur a saisi n'est remplacé.
+  const appliquerLaProposition = (champs: ChampsProposes) => {
+    const remplis: Partial<Record<ChampProposable, string>> = {};
+    let dejaRemplis = 0;
+    for (const champ of CHAMPS_PROPOSABLES) {
+      const valeur = champs[champ];
+      if (valeur === null) {
+        continue;
+      }
+
+      if (saisieCourante.current[champ].trim() === "") {
+        remplis[champ] = valeur;
+      } else {
+        dejaRemplis++;
+      }
+    }
+
+    const nombre = Object.keys(remplis).length;
+    if (nombre > 0) {
+      setSaisie((avant) => {
+        const apres = { ...avant };
+        for (const champ of CHAMPS_PROPOSABLES) {
+          const valeur = remplis[champ];
+          if (valeur !== undefined && apres[champ].trim() === "") {
+            apres[champ] = valeur;
+          }
+        }
+
+        return apres;
+      });
+      setProposes((avant) => ({ ...avant, ...remplis }));
+      setRefus((avant) => CHAMPS_PROPOSABLES.reduce((reste, champ) => (champ in remplis ? sansLeChamp(reste, champ) : reste), avant));
+      setConflit(undefined);
+    }
+
+    return { remplis: nombre, dejaRemplis };
+  };
+
+  // Les champs proposés que l'utilisateur n'a pas modifiés.
+  const champsMarques = CHAMPS_PROPOSABLES.filter((champ) => proposes[champ] !== undefined && saisie[champ] === proposes[champ]);
+
+  // Retire la proposition : les champs proposés que l'utilisateur n'a pas modifiés redeviennent vides.
+  const retirerLaProposition = () => {
+    const aRetirer = proposes;
+    setSaisie((avant) => {
+      const apres = { ...avant };
+      for (const champ of CHAMPS_PROPOSABLES) {
+        if (aRetirer[champ] !== undefined && apres[champ] === aRetirer[champ]) {
+          apres[champ] = "";
+        }
+      }
+
+      return apres;
+    });
+    setProposes({});
+    setConflit(undefined);
+  };
+
+  // Le texte refusé par l'API avant toute demande à l'IA : son refus, sous son champ, qui reçoit le focus.
+  const quandLeTexteEstRefuse = (refusDuTexte: string[]) => {
+    setConflit(undefined);
+    setRefus((avant) => ({ ...avant, texte: refusDuTexte }));
+    setRefusRecus((nombre) => nombre + 1);
+  };
+
   async function transmettre(garderLesDeux: boolean) {
     if (enCours.current) {
       return;
@@ -173,8 +255,14 @@ export function FormulaireDUneOffre({
     void transmettre(false);
   }
 
-  const champDeTexte = (champ: Exclude<ChampDeLOffre, "texte">, libelle: string, type: "text" | "date" | "url", aide?: string) => (
-    <Champ id={`offre-${champ}`} libelle={libelle} aide={aide} refus={refus[champ]}>
+  const champDeTexte = (champ: ChampProposable, libelle: string, type: "text" | "date" | "url", aide?: string) => (
+    <Champ
+      id={`offre-${champ}`}
+      libelle={libelle}
+      aide={aide}
+      marque={champsMarques.includes(champ) ? MARQUE_DE_L_IA : undefined}
+      refus={refus[champ]}
+    >
       {(attributs) => (
         <input
           {...attributs}
@@ -203,6 +291,15 @@ export function FormulaireDUneOffre({
             />
           )}
         </Champ>
+      )}
+      {avecLeTexte && proposerAvecLIA && (
+        <PropositionDeLIA
+          client={client}
+          texte={saisie.texte}
+          appliquer={appliquerLaProposition}
+          quandTexteRefuse={quandLeTexteEstRefuse}
+          retirer={champsMarques.length > 0 ? retirerLaProposition : undefined}
+        />
       )}
       {champDeTexte("entreprise", "Entreprise", "text", "Facultative.")}
       {propositions.length > 0 && (

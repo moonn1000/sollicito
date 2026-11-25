@@ -6,8 +6,9 @@ const VIDE = { texte: "", entreprise: "", poste: "", lieu: "", publieeLe: "", ad
 
 /**
  * L'écran « Coller une offre » (#36) : le texte d'une offre trouvée ailleurs, gardé tel quel, et ses champs, que
- * l'utilisateur remplit lui-même, sans IA ni aucun appel réseau. L'API valide et dédoublonne : le même texte recollé
- * mène à l'offre enregistrée ; un doublon possible se garde, ou s'abandonne.
+ * l'utilisateur remplit lui-même, ou fait proposer par l'IA réglée, sur un clic (#46) ; la proposition se relit et se
+ * corrige avant l'enregistrement. L'API valide et dédoublonne : le même texte recollé mène à l'offre enregistrée ; un
+ * doublon possible se garde, ou s'abandonne.
  */
 export function SaisieDUneOffre({
   client,
@@ -35,6 +36,7 @@ export function SaisieDUneOffre({
         client={client}
         depart={VIDE}
         avecLeTexte
+        proposerAvecLIA
         envoyer={(saisie, garderLesDeux) => client.collerUneOffre(saisie, garderLesDeux)}
         quandEnregistree={quandEnregistree}
         renoncer={renoncer}
