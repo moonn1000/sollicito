@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Sockets;
@@ -30,6 +31,24 @@ public sealed class TransportDeLIATests
         Assert.Equal(DecompressionMethods.None, gestionnaire.AutomaticDecompression);
         Assert.Equal(TimeSpan.Zero, gestionnaire.PooledConnectionLifetime);
         Assert.Null(gestionnaire.SslOptions.RemoteCertificateValidationCallback);
+        Assert.Null(gestionnaire.ActivityHeadersPropagator);
+    }
+
+    [Fact]
+    public async Task Seuls_partent_les_en_tetes_de_la_requete_meme_pendant_une_activite()
+    {
+        await using var fournisseur = new EcouteLocale(_ => Encoding.ASCII.GetBytes(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}"));
+        using var transport = new TransportDeLIA();
+        // Pendant une requête de l'API, une activité est en cours : .NET y ajouterait d'office un en-tête de traçage.
+        using var activite = new Activity("Sollicito.EssaiDuTransport").SetIdFormat(ActivityIdFormat.W3C).Start();
+
+        await EnvoyerAsync(transport, fournisseur.Port);
+
+        var enTetes = fournisseur.Requetes.Single().Split("\r\n\r\n")[0].Split("\r\n").Skip(1)
+            .Select(ligne => ligne[..ligne.IndexOf(':', StringComparison.Ordinal)].ToLowerInvariant())
+            .Order(StringComparer.Ordinal);
+        Assert.Equal(["content-length", "content-type", "host", "x-api-key"], enTetes);
     }
 
     [Theory]

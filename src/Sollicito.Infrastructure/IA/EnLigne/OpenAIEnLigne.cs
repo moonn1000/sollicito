@@ -66,10 +66,8 @@ public sealed class OpenAIEnLigne(TransportDeLIA transport, ISourceDeLaCle cles,
                     "content_filter" => Refus,
                     _ => ReponseIllisible(),
                 };
-            case "failed":
-                return EnPanne;
             default:
-                // queued, in_progress, cancelled, ou un statut inconnu : rien de ce qu'une demande sans attente rend.
+                // failed, queued, in_progress, cancelled, ou un statut inconnu : aucun texte à rendre.
                 return ReponseIllisible();
         }
 

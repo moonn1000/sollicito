@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Sollicito.Api.IA;
 using Sollicito.Api.Sauvegardes;
@@ -57,6 +59,33 @@ public sealed class EssaiDeLaCleTests
         Assert.Equal(EssaiDeLaCle.Donnees, corps["input"]!.GetValue<string>());
         Assert.False(corps["store"]!.GetValue<bool>());
         Assert.DoesNotContain(PartieReconnaissable, requete.Texte, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Aucune_configuration_ne_change_l_adresse_ni_l_en_tete_de_la_cle()
+    {
+        var reglages = new Dictionary<string, string?>
+        {
+            ["Anthropic:BaseUrl"] = "https://exemple.invalid/",
+            ["ANTHROPIC_BASE_URL"] = "https://exemple.invalid/",
+            ["OpenAI:BaseUrl"] = "https://exemple.invalid/",
+            ["IA:Adresse"] = "https://exemple.invalid/",
+            ["Sollicito:IA:Claude:Adresse"] = "https://exemple.invalid/",
+        };
+        await using var api = await ApiLancee.LancerAsync(builder =>
+        {
+            new HorlogeDeTest().Utiliser(builder);
+            builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(reglages));
+        });
+        await api.ChoisirLIAAvecSuccesAsync("Claude");
+        await api.EnregistrerLaCleAvecSuccesAsync(CleDeClaude);
+        api.FauxFournisseur.RepondreReussi();
+
+        await api.EssayerLaCleAvecResultatAsync();
+
+        var requete = Assert.Single(api.FauxFournisseur.Recues);
+        Assert.Equal("https://api.anthropic.com/v1/messages", requete.Adresse);
+        Assert.Equal(CleDeClaude, Assert.Single(requete.Valeurs("x-api-key")));
     }
 
     public static TheoryData<string, int, string, string> Echecs => new()

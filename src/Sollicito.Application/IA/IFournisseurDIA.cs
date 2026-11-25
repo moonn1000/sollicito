@@ -178,7 +178,7 @@ public enum SorteDEchec
     /// <summary>Le fournisseur ne sert plus le modèle de cette version de Sollicito (404).</summary>
     ModeleIndisponible,
 
-    /// <summary>Le fournisseur est en panne ou surchargé (5xx, 529), ou n'a pas pu finir la réponse.</summary>
+    /// <summary>Le fournisseur est en panne ou surchargé (408, 5xx, 529).</summary>
     FournisseurEnPanne,
 
     /// <summary>Une autre demande à l'IA est en cours : aucune requête n'est partie (une seule à la fois).</summary>

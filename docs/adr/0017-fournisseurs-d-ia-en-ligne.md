@@ -13,22 +13,24 @@ Plusieurs décisions les cadrent déjà : chaque clé est liée à l'adresse off
 Cinq faits, relevés le 2026-11-25, pèsent sur la façon de faire :
 
 - **Une redirection suivie par .NET** ne retire de la requête que `Authorization` et `Proxy-Authorization`[^redirection]. L'en-tête `x-api-key`, qui porte la clé de Claude, suivrait une redirection vers un autre hôte en HTTPS.
-- **Le SDK d'Anthropic** lit son adresse dans la variable d'environnement `ANTHROPIC_BASE_URL`, et refait deux tentatives par défaut (408, 409, 429, 5xx, coupure).
+- **Le SDK C# d'Anthropic** prend son adresse dans la variable d'environnement `ANTHROPIC_BASE_URL` quand le code n'en donne pas, refait deux tentatives par défaut (coupure, délai, 408, 409, 429, 5xx), et décompresse les réponses[^sdk].
 - **Les journaux d'un client HTTP de .NET** ne viennent que de sa fabrique (`IHttpClientFactory`) ; un client construit à part n'en écrit aucun. Le texte d'une requête (`HttpRequestMessage.ToString()`) montre ses en-têtes.
-- **Le message d'une erreur d'OpenAI** a longtemps recopié le début et la fin de la clé refusée. Il n'est pas revérifié : la décision ne lit jamais le corps d'une erreur.
+- **.NET ajoute d'office un en-tête de traçage** (`traceparent`) à une requête envoyée pendant une activité, ce qui est le cas pendant une requête de l'API ; le réglage `ActivityHeadersPropagator` du gestionnaire le coupe.
 - **OpenAI garde ses réponses** au moins 30 jours, sauf si la requête demande `store: false`[^store].
 
 ## Décision
 
 ### HTTP sans SDK, un transport réglé dans le code
 
-Chaque adaptateur envoie sa requête par un transport à part : un `HttpMessageInvoker` sur un `SocketsHttpHandler` construit au premier usage, jamais au lancement, et sans la fabrique de .NET. Aucune configuration, aucune variable d'environnement ne règle l'adresse ni le transport. Son réglage :
+Chaque adaptateur envoie sa requête par un transport à part : un `HttpMessageInvoker`, la base de `HttpClient`, sans son délai ni sa mise en tampon, sur un `SocketsHttpHandler` construit au premier usage, jamais au lancement, et sans la fabrique de .NET. Aucune configuration, aucune variable d'environnement ne règle l'adresse ni ce réglage :
 
 - **aucune redirection suivie** : une réponse 3xx revient telle quelle, et vaut une réponse illisible ;
 - **aucun cookie, aucun identifiant Windows**, proxy compris ;
 - **aucune décompression** : aucun `Accept-Encoding` ne part, et la borne de taille compte les octets reçus ; un corps codé (gzip…) est illisible ;
 - **aucune connexion réutilisée** : une connexion neuve par demande, donc aucune reprise de .NET sur une connexion que le serveur aurait fermée ;
-- **la validation TLS du système**, sans rappel ; **le proxy du système**.
+- **aucun en-tête de traçage** : ni `traceparent`, ni `Request-Id` ;
+- **la validation TLS du système**, sans rappel ;
+- **le proxy du système**, avec ses réglages et ses variables d'environnement (`HTTPS_PROXY`…) : ils peuvent faire passer la connexion par un proxy, que le TLS traverse de bout en bout, mais jamais changer l'adresse.
 
 ### Les adresses et les requêtes, fixées dans le code
 
@@ -73,8 +75,7 @@ L'ADR-0016 laissait aux fournisseurs en ligne le détail de l'échec. Les issues
 | 200, texte complet (`end_turn`, `stop_sequence` ; `completed`) | le texte |
 | 200, réponse coupée (`max_tokens`, `model_context_window_exceeded` ; `incomplete` par `max_output_tokens`) | réponse trop longue |
 | 200, contenu refusé (`refusal` ; une partie `refusal`, `incomplete` par `content_filter`) | refus du fournisseur |
-| 200, réponse qu'OpenAI n'a pas pu finir (`failed`) | fournisseur en panne |
-| 200, autre fin, aucun texte, autre forme ; un autre 2xx ; une redirection ; tout autre statut | réponse illisible |
+| 200, autre fin (`failed` compris), aucun texte, autre forme ; un autre 2xx ; une redirection ; tout autre statut | réponse illisible |
 | 400, 413, 422 | refus du fournisseur |
 | 401 | clé refusée |
 | 402, 429 (débit, crédit, plafond de dépense) | quota atteint |
@@ -112,13 +113,13 @@ Une entrée par demande partie : le fournisseur et l'issue, deux valeurs de list
 
 ## Alternatives écartées
 
-- **Les SDK officiels** : une variable d'environnement d'adresse à neutraliser, des tentatives à couper, leurs journaux à fermer, et deux dépendances de plus à auditer.
+- **Les SDK officiels** : une variable d'environnement d'adresse à neutraliser, des tentatives et une décompression à couper, et deux dépendances de plus à auditer.
 - **La fabrique de clients HTTP de .NET** : ses journaux écrivent l'adresse de chaque requête, et masquer les en-têtes est un réglage de plus à tenir.
 - **Suivre les redirections** : `x-api-key` partirait vers l'hôte de la redirection.
 - **Un modèle réglable** dans `reglages.json` : il survit à un retrait sans nouvelle version, mais c'est un réglage, un champ et sa validation de plus, et un champ libre peut désigner un modèle coûteux.
 - **Le modèle intermédiaire** (`claude-sonnet-5-5`, `gpt-6-sol`, 2 $ et 10 $ par million de jetons) : une meilleure rédaction, pour vingt fois le prix. #47 pourra le choisir pour le brouillon seul. **Le modèle par défaut d'Anthropic** (`claude-opus-5-5`, 4 $ et 20 $) : son raisonnement ne se coupe pas.
 - **Chat Completions d'OpenAI** : OpenAI conseille l'API Responses aux nouveaux projets.
-- **Lire le corps des erreurs** : il peut recopier une partie de la clé ou de la demande, et son texte n'est pas fiable.
+- **Lire le corps des erreurs** : son texte n'est pas fiable, et peut reprendre une partie de la demande ; le statut suffit à dire ce qui est arrivé.
 - **Une nouvelle tentative automatique** : chaque appel coûte, et un quota épuisé ne revient pas en réessayant.
 - **Attendre la porte** au lieu de refuser : les demandes s'empileraient, et chacune coûterait.
 - **`GET /v1/models/<modèle>` pour l'essai** : gratuit, mais il ne prouve ni le crédit ni la lecture d'une vraie réponse ; un essai réussi pourrait précéder un vrai appel qui échoue.
@@ -149,11 +150,12 @@ Une entrée par demande partie : le fournisseur et l'issue, deux valeurs de list
 Documentation officielle, consultée le 2026-11-25 (aucune page n'affiche de date de mise à jour) :
 
 [^redirection]: .NET, `RedirectHandler.cs` du dépôt `dotnet/runtime`, branche `main` : « Clear the authorization headers » (`Authorization`, `Proxy-Authorization`), et aucune redirection de HTTPS vers HTTP : <https://github.com/dotnet/runtime/blob/main/src/libraries/System.Net.Http/src/System/Net/Http/SocketsHttpHandler/RedirectHandler.cs>
-[^messages]: Anthropic, Create a Message (`POST /v1/messages` ; `system` admet une chaîne ; `thinking` de type `disabled` ; `content` en blocs `text` ; `stop_reason` : `end_turn`, `max_tokens`, `stop_sequence`, `tool_use`, `pause_turn`, `refusal`, `model_context_window_exceeded`) : <https://platform.claude.com/docs/en/api/messages/create.md> ; les codes d'erreur (400, 401, 402 `billing_error`, 403, 404, 413, 429, 500, 529 `overloaded_error`) : <https://platform.claude.com/docs/en/api/errors.md>
+[^messages]: Anthropic, Create a Message (`POST /v1/messages` ; `system` admet une chaîne ; `thinking` de type `disabled` ; `content` en blocs `text` ; `stop_reason` : `end_turn`, `max_tokens`, `stop_sequence`, `tool_use`, `pause_turn`, `refusal`, `model_context_window_exceeded`) : <https://platform.claude.com/docs/en/api/messages/create.md>. Cette page ne donne ni l'hôte ni l'en-tête de la clé : ils viennent des exemples cURL de la page Thinking (`curl https://api.anthropic.com/v1/messages`, en-têtes `x-api-key`, `anthropic-version`, `content-type`) et de la page des erreurs, qui donne aussi les codes (400, 401, 402 `billing_error`, 403, 404, 413, 429, 500, 529 `overloaded_error`) : <https://platform.claude.com/docs/en/build-with-claude/thinking.md>, <https://platform.claude.com/docs/en/api/errors.md>
 [^versions]: Anthropic, versions de l'API (`2026-10-21` en tête de l'historique, puis `2023-06-01`) : <https://platform.claude.com/docs/en/api/versioning.md>
 [^modeles]: Anthropic, Models overview (`claude-haiku-5-5`, un instantané figé ; à partir de 0,10 $ et 0,50 $ par million de jetons ; sortie de 128 000 jetons au plus ; effort par défaut `medium` ; retrait « Not sooner than October 7, 2027 ») : <https://platform.claude.com/docs/en/about-claude/models/overview.md>
 [^thinking]: Anthropic, Thinking (« Claude Haiku 5.5 also has thinking on by default and accepts `thinking: {type: "disabled"}` at effort `high` or below ») : <https://platform.claude.com/docs/en/build-with-claude/thinking.md>
-[^responses]: OpenAI, Create a model response (`POST /v1/responses` ; `instructions`, une chaîne, message du développeur ; `input`, une chaîne, au rôle de l'utilisateur ; `max_output_tokens`, 16 au moins, raisonnement compris ; `status` : `completed`, `failed`, `in_progress`, `cancelled`, `queued`, `incomplete` ; `incomplete_details.reason` : `max_output_tokens`, `max_messages`, `content_filter`, `steered` ; contenu `output_text` ou `refusal`) : <https://developers.openai.com/api/reference/resources/responses/methods/create> ; l'API Responses conseillée aux nouveaux projets : <https://developers.openai.com/api/docs/guides/text> ; les codes d'erreur (401, 403 pays non pris en charge, 429 `credit_balance_exhausted`, `organization_spend_limit_exceeded`, `slow_down`, 503 `server_is_overloaded`) : <https://developers.openai.com/api/docs/guides/error-codes>
+[^responses]: OpenAI, Create a model response (`POST /responses` ; `instructions`, une chaîne, message du développeur ; `input`, une chaîne, au rôle de l'utilisateur ; `max_output_tokens`, 16 au moins, raisonnement compris ; `status` : `completed`, `failed`, `in_progress`, `cancelled`, `queued`, `incomplete` ; `incomplete_details.reason` : `max_output_tokens`, `max_messages`, `content_filter`, `steered` ; contenu `output_text` ou `refusal`) : <https://developers.openai.com/api/reference/resources/responses/methods/create>. L'hôte et l'en-tête de la clé viennent de l'exemple cURL du guide de migration (`https://api.openai.com/v1/responses`, `Authorization: Bearer`) : <https://developers.openai.com/api/docs/guides/migrate-to-responses> ; l'API Responses conseillée aux nouveaux projets : <https://developers.openai.com/api/docs/guides/text> ; les codes d'erreur (401, 403 pays non pris en charge, 429 `credit_balance_exhausted`, `organization_spend_limit_exceeded`, `slow_down`, 503 `server_is_overloaded`) : <https://developers.openai.com/api/docs/guides/error-codes>
 [^luna]: OpenAI, GPT-6 Luna (`gpt-6-luna` ; `reasoning.effort` admet `none`, `low`, `medium` par défaut, `high`, `xhigh`, `max` ; 0,10 $ et 0,50 $ par million de jetons ; sortie de 128 000 jetons au plus) : <https://developers.openai.com/api/docs/models/gpt-6-luna>
 [^store]: OpenAI, `store` (« Defaults to true when omitted. If set to true, response data will be stored for at least 30 days ») : <https://developers.openai.com/api/reference/resources/responses/methods/create> ; « To disable storage when using either API, set `store: false` » : <https://developers.openai.com/api/docs/guides/migrate-to-responses>
 [^retraits]: OpenAI, retraits des modèles (« Generally available models: At least 6 months ») : <https://developers.openai.com/api/docs/deprecations>
+[^sdk]: Anthropic, SDK C# (`anthropics/anthropic-sdk-csharp`), options du client : `BaseUrl` par défaut « `ANTHROPIC_BASE_URL` env var, else `https://api.anthropic.com` » ; `MaxRetries` par défaut 2, sur « connection errors, request timeouts, 408, 409, 429, 5xx » ; un gestionnaire par défaut en `AutomaticDecompression = DecompressionMethods.Available` : <https://github.com/anthropics/anthropic-sdk-csharp>

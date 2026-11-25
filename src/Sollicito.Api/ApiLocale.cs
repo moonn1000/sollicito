@@ -156,8 +156,9 @@ public static class ApiLocale
         builder.Services.AddSingleton<ISourceDeLaCle>(services => services.GetRequiredService<GardeDeLaCle>());
         builder.Services.AddSingleton<ReglageDeLIA>();
         // Les fournisseurs en ligne (#48, ADR-0017) : leurs adresses sont fixées dans leur code, et le transport ne se règle
-        // que dans le code, jamais par la configuration. La fenêtre de la version de test, et les tests, le remplacent par
-        // un faux, qui ne touche jamais le réseau. Une demande à la fois, pour tous les fournisseurs.
+        // que dans le code, jamais par la configuration ; seul le proxy du système s'y applique. La fenêtre de la version de
+        // test, et les tests, le remplacent par un faux, qui ne touche jamais le réseau. Une demande à la fois, pour tous
+        // les fournisseurs.
         builder.Services.TryAddSingleton(_ => new TransportDeLIA());
         builder.Services.AddSingleton<PorteDesDemandes>();
         builder.Services.AddSingleton<ClaudeEnLigne>();

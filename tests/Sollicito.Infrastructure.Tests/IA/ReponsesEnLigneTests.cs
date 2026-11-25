@@ -140,7 +140,7 @@ public sealed class ReponsesEnLigneTests
     [InlineData("""{"status":"incomplete","incomplete_details":{"reason":"content_filter"},"output":[]}""", SorteDEchec.RefusDuFournisseur)]
     [InlineData("""{"status":"incomplete","incomplete_details":{"reason":"steered"},"output":[]}""", SorteDEchec.ReponseIllisible)]
     [InlineData("""{"status":"incomplete","output":[]}""", SorteDEchec.ReponseIllisible)]
-    [InlineData("""{"status":"failed","error":{"code":"server_error","message":"x"},"output":[]}""", SorteDEchec.FournisseurEnPanne)]
+    [InlineData("""{"status":"failed","error":{"code":"server_error","message":"x"},"output":[]}""", SorteDEchec.ReponseIllisible)]
     [InlineData("""{"status":"queued","output":[]}""", SorteDEchec.ReponseIllisible)]
     [InlineData("""{"status":"in_progress","output":[]}""", SorteDEchec.ReponseIllisible)]
     [InlineData("""{"status":"cancelled","output":[]}""", SorteDEchec.ReponseIllisible)]

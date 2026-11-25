@@ -79,9 +79,6 @@ public abstract partial class FournisseurEnLigne : IFournisseurDIA
     /// <summary>Le refus du fournisseur, ou de son contenu.</summary>
     protected static ReponseDeLIA Refus { get; } = new ReponseDeLIA.Echec(SorteDEchec.RefusDuFournisseur);
 
-    /// <summary>Une réponse que le fournisseur n'a pas pu finir.</summary>
-    protected static ReponseDeLIA EnPanne { get; } = new ReponseDeLIA.Echec(SorteDEchec.FournisseurEnPanne);
-
     /// <inheritdoc />
     public async Task<ReponseDeLIA> DemanderAsync(DemandeALIA demande, CancellationToken annulation)
     {

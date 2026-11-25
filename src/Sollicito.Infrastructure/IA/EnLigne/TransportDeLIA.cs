@@ -6,8 +6,9 @@ namespace Sollicito.Infrastructure.IA.EnLigne;
 /// Le transport des fournisseurs d'IA en ligne (#48, ADR-0017) : ce qui envoie une requête et rend sa réponse, en-têtes
 /// reçus, sans jamais lire le corps à sa place. En production, un <see cref="SocketsHttpHandler"/> réglé ici, construit au
 /// premier usage, jamais au lancement ; dans les tests et la version de test de la fenêtre, un faux, qui ne touche jamais le
-/// réseau. Ce n'est pas un <c>HttpClient</c> de la fabrique de .NET : aucun journal de <c>HttpClient</c> n'existe, et
-/// aucune configuration, aucune variable d'environnement ne règle ni l'adresse, ni le transport.
+/// réseau. C'est un <see cref="HttpMessageInvoker"/>, la base de <c>HttpClient</c>, sans son délai ni sa mise en tampon, et
+/// hors de la fabrique de .NET : aucun journal de client HTTP n'existe. Aucune configuration, aucune variable
+/// d'environnement ne règle l'adresse ni ce réglage ; seul le proxy du système s'applique.
 /// </summary>
 public sealed class TransportDeLIA : IDisposable
 {
@@ -35,7 +36,11 @@ public sealed class TransportDeLIA : IDisposable
     /// <item>aucune décompression : la borne de taille compte les octets reçus, et aucun <c>Accept-Encoding</c> ne part ;</item>
     /// <item>aucune connexion réutilisée : une connexion neuve par demande, donc aucune reprise de .NET sur une connexion
     /// morte ;</item>
-    /// <item>la validation TLS du système, sans rappel ; le proxy du système.</item>
+    /// <item>aucun en-tête de traçage (<c>traceparent</c>, <c>Request-Id</c>) : .NET en ajoute d'office quand une activité
+    /// est en cours, ce qui est le cas pendant une requête de l'API ;</item>
+    /// <item>la validation TLS du système, sans rappel ; le proxy du système, avec ses réglages et ses variables
+    /// d'environnement (<c>HTTPS_PROXY</c>…) : ils peuvent faire passer la connexion par un proxy, que le TLS traverse de
+    /// bout en bout, mais jamais changer l'adresse.</item>
     /// </list>
     /// </summary>
     internal static SocketsHttpHandler CreerLeGestionnaire() => new()
@@ -50,6 +55,7 @@ public sealed class TransportDeLIA : IDisposable
         PooledConnectionIdleTimeout = TimeSpan.Zero,
         MaxConnectionsPerServer = 1,
         MaxResponseHeadersLength = 64,
+        ActivityHeadersPropagator = null,
     };
 
     /// <summary>Envoie <paramref name="requete"/>, et rend sa réponse dès ses en-têtes reçus.</summary>
