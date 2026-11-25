@@ -1,8 +1,10 @@
 #if VERSION_DE_TEST
+using System.Buffers;
 using System.Globalization;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace Sollicito.Fenetre;
 
@@ -12,13 +14,16 @@ namespace Sollicito.Fenetre;
 /// <list type="bullet">
 /// <item>Il répond selon le scénario écrit dans un fichier du dossier de données, relu à chaque demande ; sans lui, comme un
 /// réseau absent.</item>
+/// <item>Le scénario <c>texte</c> rend, comme texte de l'IA, le contenu d'un autre fichier du dossier de données, relu à
+/// chaque demande, tel quel, dans l'enveloppe d'une réponse complète de Claude ou d'OpenAI : un test y écrit la réponse
+/// qu'il veut, piégée ou non, pour toute demande (#46, #47). Sans ce fichier, le faux répond comme un réseau absent.</item>
 /// <item>Il note chaque demande sur une ligne d'un autre fichier : la méthode, l'adresse, les noms des en-têtes, l'en-tête
 /// qui porte la clé et l'empreinte SHA-256 de la clé, si la clé paraît dans l'adresse ou dans le corps, et la taille du
 /// corps. Jamais la clé elle-même, ni le corps.</item>
 /// <item>Ses erreurs portent un message reconnaissable, que Sollicito ne doit jamais lire ni recopier.</item>
 /// </list>
 /// </summary>
-internal sealed class FauxFournisseurDeLIA(string fichierDuScenario, string fichierDesDemandes) : HttpMessageHandler
+internal sealed class FauxFournisseurDeLIA(string fichierDuScenario, string fichierDuTexte, string fichierDesDemandes) : HttpMessageHandler
 {
     /// <summary>Le message que portent les erreurs du faux : il ne doit paraître nulle part.</summary>
     public const string MessageDuFournisseur = "SOLLICITO-MESSAGE-DU-FOURNISSEUR";
@@ -54,6 +59,14 @@ internal sealed class FauxFournisseurDeLIA(string fichierDuScenario, string fich
                 return Json(HttpStatusCode.OK, deClaude ? Claude("", "refusal") : """{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"refusal","refusal":"Non."}]}]}""");
             case "reussi":
                 return Json(HttpStatusCode.OK, deClaude ? Claude("OK", "end_turn") : """{"status":"completed","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"OK","annotations":[]}]}]}""");
+            case "texte":
+                if (!File.Exists(fichierDuTexte))
+                {
+                    throw new HttpRequestException("Faux réseau absent : aucun texte à rendre.", null, statusCode: null);
+                }
+
+                var texte = await File.ReadAllTextAsync(fichierDuTexte, Encoding.UTF8, cancellationToken);
+                return Json(HttpStatusCode.OK, Enveloppe(texte, deClaude));
             default:
                 if (int.TryParse(scenario, NumberStyles.None, CultureInfo.InvariantCulture, out var statut) && statut is >= 400 and <= 599)
                 {
@@ -69,6 +82,53 @@ internal sealed class FauxFournisseurDeLIA(string fichierDuScenario, string fich
 
     private static string Claude(string texte, string fin) =>
         $$$"""{"id":"msg_essai","type":"message","role":"assistant","model":"claude-haiku-5-5","content":[{"type":"text","text":"{{{texte}}}"}],"stop_reason":"{{{fin}}}","stop_sequence":null,"usage":{"input_tokens":20,"output_tokens":1}}""";
+
+    // Une réponse complète, chez Claude ou chez OpenAI, dont le texte est écrit tel quel : l'écriture du JSON l'échappe.
+    private static string Enveloppe(string texte, bool deClaude)
+    {
+        var tampon = new ArrayBufferWriter<byte>();
+        using (var json = new Utf8JsonWriter(tampon))
+        {
+            json.WriteStartObject();
+            if (deClaude)
+            {
+                json.WriteString("id", "msg_essai");
+                json.WriteString("type", "message");
+                json.WriteString("role", "assistant");
+                json.WriteString("model", "claude-haiku-5-5");
+                json.WriteStartArray("content");
+                json.WriteStartObject();
+                json.WriteString("type", "text");
+                json.WriteString("text", texte);
+                json.WriteEndObject();
+                json.WriteEndArray();
+                json.WriteString("stop_reason", "end_turn");
+                json.WriteNull("stop_sequence");
+            }
+            else
+            {
+                json.WriteString("status", "completed");
+                json.WriteStartArray("output");
+                json.WriteStartObject();
+                json.WriteString("type", "message");
+                json.WriteString("role", "assistant");
+                json.WriteStartArray("content");
+                json.WriteStartObject();
+                json.WriteString("type", "output_text");
+                json.WriteString("text", texte);
+                json.WriteStartArray("annotations");
+                json.WriteEndArray();
+                json.WriteEndObject();
+                json.WriteEndArray();
+                json.WriteEndObject();
+                json.WriteEndArray();
+            }
+
+            json.WriteEndObject();
+        }
+
+        return Encoding.UTF8.GetString(tampon.WrittenSpan);
+    }
 
     // Une ligne par demande, sans la clé ni le corps : ce qu'il faut pour vérifier l'adresse, l'en-tête et l'empreinte.
     private async Task NoterAsync(HttpRequestMessage requete, byte[] corps, string scenario, CancellationToken annulation)
