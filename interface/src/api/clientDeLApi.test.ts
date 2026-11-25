@@ -574,3 +574,35 @@ test("les refus de « Postuler » se lisent, et une réponse qui ne se lit pas e
   await expect(repondre({ status: 400, errors: { autre: ["ignoré"] } }, 400)).rejects.toEqual(new ErreurDeLApi(400));
   await expect(repondre({ title: "Cette offre n'existe pas.", status: 404 }, 404)).rejects.toEqual(new ErreurDeLApi(404));
 });
+
+test("l'essai de la clé part en POST sans corps, et rend le résultat sans rien d'autre de la réponse", async () => {
+  const envoyer = apiQuiRepond(
+    Response.json({ reussi: false, echec: "CleRefusee", message: "Claude a refusé la clé : vérifiez-la, ou remplacez-la. Sollicito continue sans IA.", autre: "ignoré" }),
+  );
+
+  const resultat = await creerClientDeLApi(JETON_FICTIF, envoyer).testerLaCleDIA();
+
+  expect(resultat).toEqual({
+    issue: "fait",
+    reussi: false,
+    message: "Claude a refusé la clé : vérifiez-la, ou remplacez-la. Sollicito continue sans IA.",
+  });
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/reglages/ia/essai");
+  expect(options?.method).toBe("POST");
+  expect(options?.body).toBeUndefined();
+  expect(new Headers(options?.headers).get("Content-Type")).toBeNull();
+});
+
+test("un essai refusé rend son motif, et toute autre réponse est une erreur de l'API", async () => {
+  const refuse = apiQuiRepond(Response.json({ title: "Aucune clé n'est enregistrée : enregistrez d'abord votre clé.", status: 409 }, { status: 409 }));
+  const sansMessage = apiQuiRepond(Response.json({ reussi: true }));
+  const avecUnCorps = apiQuiRepond(Response.json({ title: "L'essai de la clé ne prend aucun corps.", status: 400 }, { status: 400 }));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, refuse).testerLaCleDIA()).toEqual({
+    issue: "refuse",
+    motif: "Aucune clé n'est enregistrée : enregistrez d'abord votre clé.",
+  });
+  await expect(creerClientDeLApi(JETON_FICTIF, sansMessage).testerLaCleDIA()).rejects.toBeInstanceOf(ErreurDeLApi);
+  await expect(creerClientDeLApi(JETON_FICTIF, avecUnCorps).testerLaCleDIA()).rejects.toBeInstanceOf(ErreurDeLApi);
+});

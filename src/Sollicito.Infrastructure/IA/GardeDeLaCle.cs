@@ -28,7 +28,7 @@ namespace Sollicito.Infrastructure.IA;
 /// </list>
 /// L'appelant écrit et efface sous le verrou des réglages (<see cref="FichierDesReglages.SousLeVerrouAsync{T}"/>).
 /// </summary>
-public sealed class GardeDeLaCle : IDisposable
+public sealed class GardeDeLaCle : ISourceDeLaCle, IDisposable
 {
     /// <summary>La fin (purpose) de Data Protection propre à la clé d'IA : aucune autre charge ne s'y déchiffre.</summary>
     public const string Fin = "Sollicito.IA.CleDUnFournisseur.v1";

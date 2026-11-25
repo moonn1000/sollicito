@@ -8,9 +8,10 @@ using static Sollicito.Api.Tests.Outils.AppelsDeLIA;
 namespace Sollicito.Api.Tests;
 
 /// <summary>
-/// Les quatre routes du réglage de l'IA (#43) passent par les protections de #10 (ADR-0001, D9 ; ADR-0003) : <c>Host</c>
-/// (400), jeton (401), <c>Origin</c> (403), et figurent dans la documentation OpenAPI. Une requête refusée ne change rien :
-/// ni le fournisseur, ni la clé, ni le fichier des réglages.
+/// Les quatre routes du réglage de l'IA (#43) et celle de l'essai de la clé (#48) passent par les protections de #10
+/// (ADR-0001, D9 ; ADR-0003) : <c>Host</c> (400), jeton (401), <c>Origin</c> (403), et figurent dans la documentation
+/// OpenAPI. Une requête refusée ne change rien : ni le fournisseur, ni la clé, ni le fichier des réglages, et aucun essai
+/// ne part vers le fournisseur.
 /// </summary>
 public sealed class ProtectionsDeLIATests
 {
@@ -20,6 +21,7 @@ public sealed class ProtectionsDeLIATests
         ("PUT", Adresse, """{"fournisseur":"OpenAI"}"""),
         ("PUT", AdresseDeLaCle, $$"""{"cle":"{{AutreCleDeClaude}}"}"""),
         ("DELETE", AdresseDeLaCle, null),
+        ("POST", AdresseDeLEssai, null),
     ];
 
     public static TheoryData<string, string, string?> Routes
@@ -136,6 +138,7 @@ public sealed class ProtectionsDeLIATests
             (Adresse, "put", "ChoisirLeFournisseurDIA", ["200", "400", "409", "413"]),
             (AdresseDeLaCle, "put", "EnregistrerLaCleDIA", ["200", "400", "409", "413"]),
             (AdresseDeLaCle, "delete", "RetirerLaCleDIA", ["200", "409"]),
+            (AdresseDeLEssai, "post", "EssayerLaCleDIA", ["200", "400", "409"]),
         })
         {
             var route = chemins[chemin]![methode]!.AsObject();
@@ -157,20 +160,22 @@ public sealed class ProtectionsDeLIATests
         }
     }
 
-    // Claude, et sa clé enregistrée.
+    // Claude, et sa clé enregistrée ; le faux fournisseur répond à un essai.
     private static async Task<string> PreparerAsync(ApiLancee api)
     {
+        api.FauxFournisseur.RepondreReussi();
         await api.ChoisirLIAAvecSuccesAsync("Claude");
         await api.EnregistrerLaCleAvecSuccesAsync(CleDeClaude);
         return await InstantaneAsync(api);
     }
 
-    // Ce qu'une requête refusée ne doit pas changer : l'état, le fichier des réglages et la clé chiffrée.
+    // Ce qu'une requête refusée ne doit pas changer : l'état, le fichier des réglages, la clé chiffrée, et les essais partis.
     private static async Task<string> InstantaneAsync(ApiLancee api)
     {
         var dossier = new DossierDeLaBase(api.DossierDeDonnees);
         return string.Join(
             '\n',
+            api.FauxFournisseur.Recues.Count.ToString(CultureInfo.InvariantCulture),
             (await api.EtatDeLIAAsync()).ToJsonString(),
             await File.ReadAllTextAsync(dossier.FichierDesReglages, TestContext.Current.CancellationToken),
             File.Exists(dossier.FichierDeLaCle) ? await File.ReadAllTextAsync(dossier.FichierDeLaCle, TestContext.Current.CancellationToken) : "(sans clé)");

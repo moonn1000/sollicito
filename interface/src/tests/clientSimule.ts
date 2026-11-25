@@ -326,6 +326,11 @@ export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
       issue: "fait",
       etat: etatDeLIAFictif({ fournisseur: "Claude", cle: "Aucune" }),
     })),
+    testerLaCleDIA: vi.fn<ClientDeLApi["testerLaCleDIA"]>(async () => ({
+      issue: "fait",
+      reussi: true,
+      message: "Claude a répondu : la clé fonctionne.",
+    })),
     collerUneOffre: vi.fn<ClientDeLApi["collerUneOffre"]>(async (saisie) => ({
       issue: "enregistree",
       fiche: offreFictive({ id: 12, poste: saisie.poste.trim(), texte: saisie.texte.trim() }),

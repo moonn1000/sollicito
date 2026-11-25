@@ -1,5 +1,6 @@
 using Sollicito.Application.IA;
 using Sollicito.Infrastructure.IA;
+using Sollicito.Infrastructure.IA.EnLigne;
 using Sollicito.Infrastructure.Persistance;
 using Sollicito.Infrastructure.Sauvegardes;
 
@@ -13,10 +14,15 @@ namespace Sollicito.Api.IA;
 /// <item>« Une clé, une adresse » (ADR-0001, D7) : changer de fournisseur efface d'abord la clé, puis écrit le réglage,
 /// sous le verrou des réglages ; une clé qui ne s'efface pas fait refuser le changement.</item>
 /// <item>La clé ne sort jamais d'ici, ni vers une réponse ni vers un journal : l'état ne dit que si elle est enregistrée,
-/// absente ou illisible.</item>
+/// absente ou illisible. Seul l'adaptateur de son fournisseur la lit, au moment de l'appel (#48).</item>
 /// </list>
 /// </summary>
-public sealed partial class ReglageDeLIA(DossierDeLaBase dossier, GardeDeLaCle garde, ILogger<ReglageDeLIA> journal)
+public sealed partial class ReglageDeLIA(
+    DossierDeLaBase dossier,
+    GardeDeLaCle garde,
+    ClaudeEnLigne claude,
+    OpenAIEnLigne openAI,
+    ILogger<ReglageDeLIA> journal)
 {
     private readonly FichierDesReglages _fichier = new(dossier);
 
@@ -32,14 +38,58 @@ public sealed partial class ReglageDeLIA(DossierDeLaBase dossier, GardeDeLaCle g
     }
 
     /// <summary>
-    /// L'adaptateur qui sert l'IA choisie, ou « aucune IA » avec sa raison. En #43, aucun fournisseur n'est encore branché :
-    /// Claude et OpenAI le seront par #48, Ollama par #45.
+    /// L'adaptateur qui sert l'IA choisie, ou « aucune IA » avec sa raison. Claude et OpenAI sont branchés (#48) ; Ollama le
+    /// sera par #45. L'adaptateur relit la clé au moment de l'appel : celle d'un autre fournisseur ne lui sert jamais.
     /// </summary>
     public IFournisseurDIA Fournisseur()
     {
         var etat = LireLEtat();
-        var raison = ChoixDuFournisseurDIA.Raison(etat.Fournisseur, etat.ReglageLisible, etat.Cle);
-        return new AucuneIA(raison ?? RaisonDIndisponibilite.PasEncoreBranche);
+        return ChoixDuFournisseurDIA.Raison(etat.Fournisseur, etat.ReglageLisible, etat.Cle) switch
+        {
+            { } raison => new AucuneIA(raison),
+            null when etat.Fournisseur == FournisseurDIA.Claude => claude,
+            null when etat.Fournisseur == FournisseurDIA.OpenAI => openAI,
+            _ => new AucuneIA(RaisonDIndisponibilite.PasEncoreBranche),
+        };
+    }
+
+    /// <summary>
+    /// L'essai de la clé (#48, ADR-0017) : une demande fixe, sans aucune donnée de l'utilisateur, au fournisseur réglé, par
+    /// le port. Il ne part que sur un geste de l'utilisateur, jamais à l'enregistrement d'une clé ni au lancement. Refusé, sans
+    /// requête, si aucune clé n'est prête ou si une autre demande est en cours.
+    /// </summary>
+    public async Task<IssueDeLEssai> TesterLaCleAsync(CancellationToken annulation)
+    {
+        var adaptateur = Fournisseur();
+        if (adaptateur is AucuneIA aucune)
+        {
+            var (motif, message) = aucune.Raison switch
+            {
+                RaisonDIndisponibilite.CleAbsente => ("clé absente", MessagesDeLIA.SansCle),
+                RaisonDIndisponibilite.CleIllisible => ("clé illisible", MessagesDeLIA.CleIllisible),
+                _ => ("fournisseur sans clé", MessagesDeLIA.SansFournisseurEnLigne),
+            };
+            EssaiRefuse(motif);
+            return IssueDeLEssai.Refuse(message);
+        }
+
+        var fournisseur = adaptateur.Fournisseur;
+        var reponse = await adaptateur.DemanderAsync(EssaiDeLaCle.Demande(), annulation);
+        switch (reponse)
+        {
+            case ReponseDeLIA.Texte:
+                return IssueDeLEssai.Fait(new ResultatDeLEssai(Reussi: true, Echec: null, MessagesDeLIA.Reussite(fournisseur)));
+            case ReponseDeLIA.Echec { Sorte: SorteDEchec.UneDemandeEnCours }:
+                EssaiRefuse("une demande en cours");
+                return IssueDeLEssai.Refuse(MessagesDeLIA.UneDemandeEnCours);
+            case ReponseDeLIA.Echec echec:
+                return IssueDeLEssai.Fait(new ResultatDeLEssai(Reussi: false, echec.Sorte, echec.Sorte.Message(fournisseur)));
+            default:
+                // La clé a disparu entre le choix de l'adaptateur et l'appel : retirée, ou devenue illisible.
+                var illisible = reponse is ReponseDeLIA.Indisponible { Raison: RaisonDIndisponibilite.CleIllisible };
+                EssaiRefuse(illisible ? "clé illisible" : "clé absente");
+                return IssueDeLEssai.Refuse(illisible ? MessagesDeLIA.CleIllisible : MessagesDeLIA.SansCle);
+        }
     }
 
     /// <summary>
@@ -201,6 +251,37 @@ public sealed partial class ReglageDeLIA(DossierDeLaBase dossier, GardeDeLaCle g
 
     [LoggerMessage(EventId = 90, Level = LogLevel.Debug, Message = "Clé d'IA illisible ({Cause}) : Sollicito continue sans IA.")]
     private partial void CleIllisible(string cause);
+
+    [LoggerMessage(EventId = 96, Level = LogLevel.Information, Message = "Essai de la clé d'IA refusé ({Motif}).")]
+    private partial void EssaiRefuse(string motif);
+}
+
+/// <summary>Le résultat d'un essai de la clé : réussi, ou l'échec, et le texte que l'écran montre ; jamais la réponse du fournisseur.</summary>
+/// <param name="Reussi">Vrai si le fournisseur a répondu.</param>
+/// <param name="Echec">Comment l'essai a échoué, s'il a échoué.</param>
+/// <param name="Message">Ce que l'écran dit.</param>
+public sealed record ResultatDeLEssai(bool Reussi, SorteDEchec? Echec, string Message);
+
+/// <summary>L'issue d'un essai : fait, avec son résultat, ou refusé sans requête, avec le texte du refus.</summary>
+public sealed class IssueDeLEssai
+{
+    private IssueDeLEssai(ResultatDeLEssai? resultat, string? refus)
+    {
+        Resultat = resultat;
+        MotifDuRefus = refus;
+    }
+
+    /// <summary>Le résultat d'un essai qui est parti.</summary>
+    public ResultatDeLEssai? Resultat { get; }
+
+    /// <summary>Le texte d'un essai refusé sans requête.</summary>
+    public string? MotifDuRefus { get; }
+
+    /// <summary>Un essai parti, réussi ou non.</summary>
+    public static IssueDeLEssai Fait(ResultatDeLEssai resultat) => new(resultat ?? throw new ArgumentNullException(nameof(resultat)), null);
+
+    /// <summary>Un essai refusé sans requête.</summary>
+    public static IssueDeLEssai Refuse(string motif) => new(null, motif);
 }
 
 /// <summary>L'état de l'IA, sans jamais la clé.</summary>

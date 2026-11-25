@@ -239,6 +239,12 @@ export interface EtatDeLIA {
 /** Ce que rend un choix de fournisseur, ou le retrait de la clé : l'état à jour, ou le motif d'un refus. */
 export type ResultatDeLIA = { issue: "fait"; etat: EtatDeLIA } | { issue: "refuse"; motif: string };
 
+/**
+ * Ce que rend l'essai de la clé (#48) : l'essai est parti, réussi ou non, avec le texte à montrer ; ou il a été refusé
+ * sans requête, avec son motif (aucune clé prête, une demande déjà en cours). Jamais la réponse du fournisseur.
+ */
+export type ResultatDeLEssai = { issue: "fait"; reussi: boolean; message: string } | { issue: "refuse"; motif: string };
+
 /** Ce que rend l'enregistrement d'une clé : l'état à jour, le refus du champ, ou le motif d'un refus. */
 export type ResultatDeLaCle =
   | { issue: "enregistree"; etat: EtatDeLIA }
@@ -592,6 +598,11 @@ export interface ClientDeLApi {
   /** Retire la clé enregistrée. */
   retirerLaCleDIA(): Promise<ResultatDeLIA>;
   /**
+   * Teste la clé (#48) : une courte question fixe au fournisseur réglé, sans aucune donnée de l'utilisateur, sur son seul
+   * geste. Rend le résultat et son texte, ou le motif d'un refus sans requête.
+   */
+  testerLaCleDIA(): Promise<ResultatDeLEssai>;
+  /**
    * Colle une offre (#36) : sa fiche, ou les refus de ses champs, ou l'offre déjà enregistrée du même texte, ou ses
    * doublons possibles. Avec `garderLesDeux`, un doublon possible s'enregistre quand même.
    */
@@ -852,6 +863,25 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
       throw new ErreurDeLApi(reponse.status);
     },
     retirerLaCleDIA: async () => reglerLIA(await ecrire("/api/reglages/ia/cle", undefined, "DELETE")),
+    testerLaCleDIA: async () => {
+      // Sans corps : la route de l'essai refuse tout corps.
+      const reponse = await ecrire("/api/reglages/ia/essai");
+      if (reponse.status === 200) {
+        const resultat = lireLeResultatDeLEssai(await reponse.json().catch(() => undefined));
+        if (resultat !== undefined) {
+          return { issue: "fait", ...resultat };
+        }
+      }
+
+      if (reponse.status === 409) {
+        const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+        if (motif !== undefined) {
+          return { issue: "refuse", motif };
+        }
+      }
+
+      throw new ErreurDeLApi(reponse.status);
+    },
     collerUneOffre: async (saisie, garderLesDeux = false) =>
       enregistrerLOffre(await ecrire("/api/offres", garderLesDeux ? { ...saisie, garderLesDeux: true } : saisie), 201),
     lireUneOffre: async (offre) => (await lire(adresseDeLOffre(offre))) as FicheDUneOffre,
@@ -1044,6 +1074,16 @@ async function enregistrerLeContact(reponse: Response, attendu: 200 | 201): Prom
   }
 
   throw new ErreurDeLApi(reponse.status);
+}
+
+// Le résultat d'un essai parti : réussi ou non, et son texte ; rien d'autre n'est lu de la réponse.
+function lireLeResultatDeLEssai(corps: unknown): { reussi: boolean; message: string } | undefined {
+  if (typeof corps !== "object" || corps === null) {
+    return undefined;
+  }
+
+  const { reussi, message } = corps as { reussi?: unknown; message?: unknown };
+  return typeof reussi === "boolean" && typeof message === "string" && message.length > 0 ? { reussi, message } : undefined;
 }
 
 // L'état de l'IA à jour (200), ou le motif d'un refus (409) : réglages illisibles, clé qui ne s'efface pas.

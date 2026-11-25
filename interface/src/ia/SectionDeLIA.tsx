@@ -14,9 +14,18 @@ export const FOURNISSEURS: readonly { valeur: FournisseurDIA; libelle: string }[
 
 const LIBELLES_DES_CLES = { Claude: "Clé d'API de Claude", OpenAI: "Clé d'API d'OpenAI" } as const;
 
+/** Ce que dit l'aide de l'essai (#48), pour chaque fournisseur en ligne. */
+export const AIDES_DE_L_ESSAI = {
+  Claude:
+    "L'essai envoie à Claude une courte question fixe, sans aucune de vos données. Comme tout appel, il est décompté sur votre compte chez Anthropic.",
+  OpenAI:
+    "L'essai envoie à OpenAI une courte question fixe, sans aucune de vos données. Comme tout appel, il est décompté sur votre compte chez OpenAI.",
+} as const;
+
 const ECHEC_DU_CHOIX = "Le choix n'a pas pu être enregistré. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.";
 const ECHEC_DE_LA_CLE = "La clé n'a pas pu être enregistrée. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.";
 const ECHEC_DU_RETRAIT = "La clé n'a pas pu être retirée. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.";
+const ECHEC_DE_L_ESSAI = "L'essai n'a pas pu être lancé. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.";
 
 function prendUneCle(fournisseur: FournisseurDIA): fournisseur is "Claude" | "OpenAI" {
   return fournisseur === "Claude" || fournisseur === "OpenAI";
@@ -25,8 +34,10 @@ function prendUneCle(fournisseur: FournisseurDIA): fournisseur is "Claude" | "Op
 /**
  * La section « IA » de l'écran des réglages (#43, ADR-0016) : choisir son fournisseur d'IA, ou aucun, et enregistrer sa
  * clé. La clé s'écrit une fois, dans un champ masqué qui se vide après l'envoi ; la page ne la relit jamais, et l'écran
- * dit seulement qu'une clé est enregistrée, à remplacer ou à retirer. Changer de fournisseur efface la clé, après une
- * confirmation dans la page. Un choix ou une clé illisibles se disent, et Sollicito continue sans IA.
+ * dit seulement qu'une clé est enregistrée, à remplacer, à retirer ou à tester. Changer de fournisseur efface la clé, après
+ * une confirmation dans la page. Un choix ou une clé illisibles se disent, et Sollicito continue sans IA. L'essai de la clé
+ * (#48) ne part que sur le clic de « Tester la clé » : une courte question fixe, sans aucune donnée de l'utilisateur, dont
+ * l'écran ne montre que le résultat, jamais la réponse du fournisseur.
  */
 export function SectionDeLIA({ client, prendreLeFocus = false }: { client: ClientDeLApi; prendreLeFocus?: boolean }) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
@@ -36,6 +47,7 @@ export function SectionDeLIA({ client, prendreLeFocus = false }: { client: Clien
   const [cle, setCle] = useState("");
   const [refus, setRefus] = useState<string[]>();
   const [envoi, setEnvoi] = useState<"pret" | "en-cours">("pret");
+  const [essai, setEssai] = useState(false);
   const [message, setMessage] = useState<{ sorte: "annonce" | "alerte"; texte: string }>();
   const titre = useRef<HTMLHeadingElement>(null);
   const champ = useRef<HTMLInputElement>(null);
@@ -180,6 +192,31 @@ export function SectionDeLIA({ client, prendreLeFocus = false }: { client: Clien
     );
   }
 
+  // L'essai de la clé, sur ce seul clic : une demande à la fois, comme toute écriture de la section.
+  function testerLaCle() {
+    setEssai(true);
+    void envoyer(
+      () => client.testerLaCleDIA(),
+      (resultat) => {
+        if (resultat.issue === "fait") {
+          setMessage({ sorte: resultat.reussi ? "annonce" : "alerte", texte: resultat.message });
+        } else {
+          setMessage({ sorte: "alerte", texte: resultat.motif });
+          // Un refus peut venir d'une clé retirée ou devenue illisible : l'état se relit.
+          client.lireLEtatDeLIA().then(
+            (etat) => affichee.current && adopter(etat),
+            () => undefined,
+          );
+        }
+      },
+      ECHEC_DE_L_ESSAI,
+    ).finally(() => {
+      if (affichee.current) {
+        setEssai(false);
+      }
+    });
+  }
+
   const enCours = envoi === "en-cours";
 
   return (
@@ -302,29 +339,43 @@ export function SectionDeLIA({ client, prendreLeFocus = false }: { client: Clien
                       </div>
                     </div>
                   ) : (
-                    <div className="actions">
-                      <button
-                        type="button"
-                        disabled={enCours}
-                        onClick={() => {
-                          setMessage(undefined);
-                          setRemplacement(true);
-                        }}
-                      >
-                        Remplacer la clé
-                      </button>
-                      <button
-                        type="button"
-                        className="secondaire"
-                        disabled={enCours}
-                        onClick={() => {
-                          setMessage(undefined);
-                          setConfirmation("retrait");
-                        }}
-                      >
-                        Retirer la clé
-                      </button>
-                    </div>
+                    <>
+                      <div className="actions">
+                        <button
+                          type="button"
+                          disabled={enCours}
+                          onClick={() => {
+                            setMessage(undefined);
+                            setRemplacement(true);
+                          }}
+                        >
+                          Remplacer la clé
+                        </button>
+                        <button
+                          type="button"
+                          className="secondaire"
+                          disabled={enCours}
+                          aria-describedby="aide-de-l-essai"
+                          onClick={testerLaCle}
+                        >
+                          {essai ? "Essai en cours…" : "Tester la clé"}
+                        </button>
+                        <button
+                          type="button"
+                          className="secondaire"
+                          disabled={enCours}
+                          onClick={() => {
+                            setMessage(undefined);
+                            setConfirmation("retrait");
+                          }}
+                        >
+                          Retirer la clé
+                        </button>
+                      </div>
+                      <p className="aide" id="aide-de-l-essai">
+                        {AIDES_DE_L_ESSAI[chargement.etat.fournisseur]}
+                      </p>
+                    </>
                   )}
                 </>
               )}

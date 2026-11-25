@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Sollicito.Api.Securite;
+using Sollicito.Infrastructure.IA.EnLigne;
 using Sollicito.Infrastructure.Persistance;
 
 namespace Sollicito.Api.Tests.Outils;
@@ -37,8 +39,20 @@ public sealed class ApiLancee : IAsyncLifetime
             ajuster(builder);
             // Après eux : la garde voit le dossier qui servira.
             builder.ConfigureTestServices(GarderLeDossierDeLUtilisateur);
+            // Après eux aussi : les fournisseurs d'IA en ligne passent toujours par le faux, jamais par le réseau (#48, ADR-0002).
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<TransportDeLIA>();
+                services.AddSingleton(new TransportDeLIA(() => FauxFournisseur));
+            });
         });
     }
+
+    /// <summary>
+    /// Le faux des fournisseurs d'IA en ligne, posé à la place du transport : le test y prévoit les réponses, et y lit les
+    /// requêtes reçues. Sans réponse prévue, un appel échoue, et l'API refuse de se fermer sans le dire.
+    /// </summary>
+    public FauxFournisseurEnLigne FauxFournisseur { get; } = new();
 
     // Garde (#28) : aucun test ne construit l'API sur le dossier de données de l'utilisateur, où une restauration
     // remplacerait sa vraie base. Elle joue pendant la construction, avant que la préparation de la base ne démarre.
@@ -164,8 +178,13 @@ public sealed class ApiLancee : IAsyncLifetime
             catch (IOException)
             {
                 // Le dossier temporaire reste : le système le videra.
-                return;
+                break;
             }
+        }
+
+        if (FauxFournisseur.AppelsSansReponsePrevue > 0)
+        {
+            throw new InvalidOperationException("Un test a demandé l'IA en ligne sans réponse prévue : il n'atteint jamais le réseau.");
         }
     }
 }

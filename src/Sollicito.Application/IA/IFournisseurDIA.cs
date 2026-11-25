@@ -141,25 +141,46 @@ public enum RaisonDIndisponibilite
     /// <summary>La clé enregistrée ne se relit pas sur ce poste : elle est à ressaisir.</summary>
     CleIllisible,
 
-    /// <summary>Le fournisseur choisi n'a pas encore d'adaptateur : Claude et OpenAI arrivent avec #48, Ollama avec #45.</summary>
+    /// <summary>Le fournisseur choisi n'a pas encore d'adaptateur : Ollama arrive avec #45.</summary>
     PasEncoreBranche,
 }
 
-/// <summary>Comment une demande à l'IA a échoué.</summary>
+/// <summary>
+/// Comment une demande à l'IA a échoué (#43, #48, ADR-0017) : une liste fermée, sans jamais le message du fournisseur. Un
+/// fournisseur en ligne classe une erreur par son seul statut HTTP, sans en lire le corps.
+/// </summary>
 public enum SorteDEchec
 {
-    /// <summary>La demande a dépassé sa durée.</summary>
+    /// <summary>La demande a dépassé sa durée, lecture de la réponse comprise.</summary>
     DelaiDepasse,
 
-    /// <summary>La réponse dépassait la borne de la demande : elle n'est pas rendue.</summary>
+    /// <summary>La réponse dépassait la borne de la demande, ou le fournisseur l'a coupée : elle n'est pas rendue.</summary>
     ReponseTropLongue,
 
-    /// <summary>La réponse ne se lisait pas.</summary>
+    /// <summary>La réponse ne se lisait pas, ou n'était pas celle qu'on attend : une redirection, un statut inattendu.</summary>
     ReponseIllisible,
 
-    /// <summary>Le fournisseur a refusé la demande : clé refusée, quota, contenu.</summary>
+    /// <summary>Le fournisseur a refusé la demande ou son contenu.</summary>
     RefusDuFournisseur,
 
-    /// <summary>Le fournisseur n'a pas pu être joint.</summary>
+    /// <summary>Le fournisseur n'a pas pu être joint : réseau absent, nom introuvable, connexion ou TLS refusés.</summary>
     Injoignable,
+
+    /// <summary>Le fournisseur a refusé la clé (401).</summary>
+    CleRefusee,
+
+    /// <summary>Une limite d'usage, un crédit épuisé ou un plafond de dépense (402, 429).</summary>
+    QuotaAtteint,
+
+    /// <summary>Le fournisseur refuse l'accès avec cette clé : un pays, un compte (403).</summary>
+    AccesRefuse,
+
+    /// <summary>Le fournisseur ne sert plus le modèle de cette version de Sollicito (404).</summary>
+    ModeleIndisponible,
+
+    /// <summary>Le fournisseur est en panne ou surchargé (5xx, 529), ou n'a pas pu finir la réponse.</summary>
+    FournisseurEnPanne,
+
+    /// <summary>Une autre demande à l'IA est en cours : aucune requête n'est partie (une seule à la fois).</summary>
+    UneDemandeEnCours,
 }

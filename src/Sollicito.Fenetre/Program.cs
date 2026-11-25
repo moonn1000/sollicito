@@ -39,7 +39,7 @@ internal static class Program
             }
 
             Directory.CreateDirectory(lancement.DossierDeDonnees);
-            api = ApiLocale.ConstruirePourLaFenetre(fichiers, lancement.DossierDeDonnees, lancement.EtapesDeLaRestauration);
+            api = ApiLocale.ConstruirePourLaFenetre(fichiers, lancement.DossierDeDonnees, lancement.EtapesDeLaRestauration, lancement.FaussesReponsesDeLIA);
             api.StartAsync().GetAwaiter().GetResult();
         }
         catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException or InvalidOperationException)

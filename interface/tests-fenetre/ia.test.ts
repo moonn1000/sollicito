@@ -1,8 +1,10 @@
 // La clé d'IA dans la vraie fenêtre (#43, ADR-0016), dans la version de test, journaux de l'API au niveau Trace. Le
 // dossier de données est un dossier temporaire neuf : jamais celui de l'utilisateur ; le trousseau de Data Protection
-// y naît, et la clé, fictive et reconnaissable, n'est en clair nulle part. Les tests se suivent dans l'ordre.
+// y naît, et la clé, fictive et reconnaissable, n'est en clair nulle part. L'essai de la clé (#48, ADR-0017) passe par le
+// faux fournisseur de la version de test, qui ne touche jamais le réseau. Les tests se suivent dans l'ordre.
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
@@ -83,6 +85,52 @@ test("sur un dossier neuf, la carte propose une IA ; la clé saisie s'enregistre
   expect(await page.getByRole("heading", { level: 3, name: "Connecter une IA ?" }).count()).toBe(0);
 });
 
+test("« Tester la clé » ne part que sur le clic, vers l'adresse fixée, la clé dans x-api-key, et l'écran dit le résultat", async () => {
+  const { page } = fenetre;
+  const demandes = join(dossier, "ia-demandes.txt");
+  // Enregistrer la clé n'a appelé personne.
+  expect(existsSync(demandes)).toBe(false);
+  await page.getByRole("button", { name: "Réglages", exact: true }).click();
+  await page.getByText("Une clé est enregistrée.", { exact: true }).waitFor();
+  await page
+    .getByText(
+      "L'essai envoie à Claude une courte question fixe, sans aucune de vos données. Comme tout appel, il est décompté sur votre compte chez Anthropic.",
+      { exact: true },
+    )
+    .waitFor();
+
+  // Le faux fournisseur de la version de test répond selon ce fichier ; aucune requête ne quitte le poste.
+  await writeFile(join(dossier, "ia-scenario.txt"), "reussi");
+  await page.getByRole("button", { name: "Tester la clé", exact: true }).click();
+  await page.getByText("Claude a répondu : la clé fonctionne.", { exact: true }).waitFor();
+  await writeFile(join(dossier, "ia-scenario.txt"), "401");
+  await page.getByRole("button", { name: "Tester la clé", exact: true }).click();
+  await page.getByText("Claude a refusé la clé : vérifiez-la, ou remplacez-la. Sollicito continue sans IA.", { exact: true }).waitFor();
+  await writeFile(join(dossier, "ia-scenario.txt"), "redirection");
+  await page.getByRole("button", { name: "Tester la clé", exact: true }).click();
+  await page.getByText("La réponse de Claude n'a pas pu être lue. Réessayez plus tard.", { exact: true }).waitFor();
+
+  // Trois essais, trois requêtes : la redirection n'a pas été suivie. Chacune vers l'adresse fixée, la clé dans x-api-key
+  // seulement, ni dans l'adresse ni dans le corps ; le faux n'en note que l'empreinte.
+  const lignes = (await readFile(demandes, "utf8")).trim().split(/\r?\n/u);
+  expect(lignes).toHaveLength(3);
+  const empreinte = createHash("sha256").update(CLE_DE_CLAUDE).digest("hex");
+  for (const ligne of lignes) {
+    expect(ligne.startsWith("POST https://api.anthropic.com/v1/messages | ")).toBe(true);
+    expect(ligne).toContain(`clé : x-api-key sha256=${empreinte}`);
+    expect(ligne).toContain("clé dans l'adresse : non | clé dans le corps : non");
+    expect(ligne).toContain("anthropic-version");
+    expect(ligne).not.toMatch(/authorization|cookie/iu);
+    expect(ligne).not.toContain(PARTIE);
+  }
+
+  const html = await page.evaluate(() => document.documentElement.outerHTML);
+  expect(html).not.toContain(PARTIE);
+  expect(html).not.toContain("SOLLICITO-MESSAGE-DU-FOURNISSEUR");
+  expect(await reponses()).not.toContain(PARTIE);
+  expect(await reponses()).not.toContain("SOLLICITO-MESSAGE-DU-FOURNISSEUR");
+});
+
 test("changer de fournisseur, après une confirmation dans la page, efface la clé", async () => {
   const { page } = fenetre;
   await page.getByRole("button", { name: "Réglages", exact: true }).click();
@@ -110,6 +158,12 @@ test("fermée, la fenêtre ne laisse la clé dans aucun fichier, profil compris,
   // Témoins : les journaux étaient au plus bavard, et la clé a bien été enregistrée (ReglageDeLIA, événement 84).
   expect(sortie).toContain("trce: ");
   expect(sortie).toContain("Sollicito.Api.IA.ReglageDeLIA[84]");
+  // Et les essais de la clé (#48) : réussi (91), refusé (92), sans jamais le message du fournisseur ni un journal de HttpClient.
+  expect(sortie).toContain("Sollicito.Infrastructure.IA.EnLigne.ClaudeEnLigne[91]");
+  expect(sortie).toContain("Sollicito.Infrastructure.IA.EnLigne.ClaudeEnLigne[92]");
+  expect(sortie).not.toContain("SOLLICITO-MESSAGE-DU-FOURNISSEUR");
+  expect(sortie).not.toContain("System.Net.Http");
+  expect(sortie).not.toContain("api.anthropic.com");
   expect(sortie).not.toContain(PARTIE);
   expect(sortie).not.toContain("sk-ant-");
   expect(sortie).not.toContain("sk-proj-");

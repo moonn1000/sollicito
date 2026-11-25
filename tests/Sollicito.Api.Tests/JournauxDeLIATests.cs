@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Sollicito.Api.Tests.Outils;
+using Sollicito.Application.IA;
 using Sollicito.Infrastructure.Persistance;
 using static Sollicito.Api.Tests.Outils.AppelsDeLIA;
 using static Sollicito.Api.Tests.Outils.AppelsDesSauvegardes;
@@ -168,6 +169,77 @@ public sealed class JournauxDeLIATests : IDisposable
         Assert.DoesNotContain(entrees, entree => entree.Contains(_racine, StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(entrees, entree => entree.Contains("cle-ia.json", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(entrees, entree => entree.Contains("Microsoft.AspNetCore.DataProtection", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task L_essai_de_la_cle_n_ecrit_ni_la_cle_ni_la_demande_ni_la_reponse_sur_aucun_chemin()
+    {
+        Directory.CreateDirectory(Dossier);
+        var capture = new CaptureDesJournaux();
+        await using (var api = await LancerSurAsync(Dossier, new HorlogeDeTest(), builder => ToutJournaliser(builder, capture)))
+        {
+            // Sans clé prête, puis Claude avec sa clé : réussi, refusé (401, corps qui porte un message du fournisseur), réseau
+            // absent, réponse mal formée, une seconde demande pendant la première, et un corps refusé.
+            Assert.Equal(HttpStatusCode.Conflict, await StatutAsync(api.EssayerLaCleAsync()));
+            await api.ChoisirLIAAvecSuccesAsync("Claude");
+            await api.EnregistrerLaCleAvecSuccesAsync(CleDeClaude);
+            api.FauxFournisseur.RepondreReussi();
+            Assert.Equal(HttpStatusCode.OK, await StatutAsync(api.EssayerLaCleAsync()));
+            api.FauxFournisseur.RepondreErreur(HttpStatusCode.Unauthorized);
+            Assert.Equal(HttpStatusCode.OK, await StatutAsync(api.EssayerLaCleAsync()));
+            api.FauxFournisseur.Repondre((_, _) => throw new HttpRequestException("Faux réseau absent " + PartieReconnaissable));
+            Assert.Equal(HttpStatusCode.OK, await StatutAsync(api.EssayerLaCleAsync()));
+            api.FauxFournisseur.Repondre(HttpStatusCode.OK, $$"""{"type":"message","content":[{"type":"text","text":"{{PartieReconnaissable}}""");
+            Assert.Equal(HttpStatusCode.OK, await StatutAsync(api.EssayerLaCleAsync()));
+            Assert.Equal(HttpStatusCode.BadRequest, await StatutAsync(api.EcrireAsync(HttpMethod.Post, AdresseDeLEssai, $$"""{"cle":"{{CleDeClaude}}"}""")));
+
+            var liberer = new TaskCompletionSource();
+            var arrivee = new TaskCompletionSource();
+            api.FauxFournisseur.Repondre(async (requete, annulation) =>
+            {
+                arrivee.TrySetResult();
+                await liberer.Task.WaitAsync(annulation);
+                return FauxFournisseurEnLigne.Json(HttpStatusCode.OK, FauxFournisseurEnLigne.Reussie(requete));
+            });
+            var premier = api.EssayerLaCleAsync();
+            await arrivee.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.Conflict, await StatutAsync(api.EssayerLaCleAsync()));
+            liberer.SetResult();
+            Assert.Equal(HttpStatusCode.OK, await StatutAsync(premier));
+
+            // OpenAI, réussi.
+            await api.ChoisirLIAAvecSuccesAsync("OpenAI");
+            await api.EnregistrerLaCleAvecSuccesAsync(CleDOpenAI);
+            api.FauxFournisseur.RepondreReussi();
+            Assert.Equal(HttpStatusCode.OK, await StatutAsync(api.EssayerLaCleAsync()));
+        }
+
+        var entrees = capture.Entrees.ToArray();
+        Assert.Contains(entrees, entree => entree.StartsWith(nameof(LogLevel.Trace) + " ", StringComparison.Ordinal));
+        foreach (var temoin in new[]
+        {
+            "Essai de la clé d'IA refusé (fournisseur sans clé).",
+            "Demande à l'IA : Claude a répondu (statut 200) en ",
+            "Demande à l'IA : Claude, échec CleRefusee (statut 401) en ",
+            "Demande à l'IA : Claude n'a pas pu être joint (HttpRequestException) en ",
+            "Demande à l'IA : Claude, échec ReponseIllisible (statut 200) en ",
+            "Demande à l'IA refusée : une autre est en cours (Claude).",
+            "Essai de la clé d'IA refusé (une demande en cours).",
+            "Demande à l'IA : OpenAI a répondu (statut 200) en ",
+        })
+        {
+            Assert.Contains(entrees, entree => entree.Contains(temoin, StringComparison.Ordinal));
+        }
+
+        foreach (var interdit in new[]
+        {
+            PartieReconnaissable, "sk-ant-", "sk-proj-", FauxFournisseurEnLigne.MessageDuFournisseur, EssaiDeLaCle.Consignes,
+            EssaiDeLaCle.Donnees, "api.anthropic.com", "api.openai.com", "x-api-key", "Bearer", "Compte.Fictif-Dupont", _racine,
+            "System.Net.Http",
+        })
+        {
+            Assert.DoesNotContain(entrees, entree => entree.Contains(interdit, StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     private static void ToutJournaliser(IWebHostBuilder builder, CaptureDesJournaux capture) =>

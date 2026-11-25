@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import type { EtatDeLIA, ResultatDeLIA } from "../api/clientDeLApi.ts";
+import type { EtatDeLIA, ResultatDeLEssai, ResultatDeLIA } from "../api/clientDeLApi.ts";
 import { clientSimule, etatDeLIAFictif } from "../tests/clientSimule.ts";
 import { SectionDeLIA } from "./SectionDeLIA.tsx";
 
@@ -253,4 +253,90 @@ test("venue de la carte du tableau de bord, la section prend le focus", async ()
   render(<SectionDeLIA client={clientSimule()} prendreLeFocus />);
 
   expect(document.activeElement).toBe(await screen.findByRole("heading", { name: "IA" }));
+});
+
+test("tester la clé ne part que sur le clic, et dit le résultat sans la réponse du fournisseur", async () => {
+  const client = clientSimule({ lireLEtatDeLIA: async () => claude({ cle: "Enregistree" }) });
+  render(<SectionDeLIA client={client} />);
+
+  const bouton = await screen.findByRole("button", { name: "Tester la clé" });
+  expect(client.testerLaCleDIA).not.toHaveBeenCalled();
+  expect(bouton.getAttribute("aria-describedby")).toBe("aide-de-l-essai");
+  expect(document.getElementById("aide-de-l-essai")?.textContent).toBe(
+    "L'essai envoie à Claude une courte question fixe, sans aucune de vos données. Comme tout appel, il est décompté sur votre compte chez Anthropic.",
+  );
+
+  fireEvent.click(bouton);
+
+  expect((await screen.findByText("Claude a répondu : la clé fonctionne.")).getAttribute("role")).toBe("status");
+  expect(client.testerLaCleDIA).toHaveBeenCalledOnce();
+});
+
+test("l'aide de l'essai d'OpenAI nomme OpenAI", async () => {
+  const client = clientSimule({ lireLEtatDeLIA: async () => etatDeLIAFictif({ fournisseur: "OpenAI", cle: "Enregistree" }) });
+  render(<SectionDeLIA client={client} />);
+
+  expect(await screen.findByText(
+    "L'essai envoie à OpenAI une courte question fixe, sans aucune de vos données. Comme tout appel, il est décompté sur votre compte chez OpenAI.",
+  )).toBeDefined();
+});
+
+test("un essai qui échoue se dit en alerte, et un refus relit l'état", async () => {
+  const client = clientSimule({
+    lireLEtatDeLIA: vi.fn(async () => claude({ cle: "Enregistree" })),
+    testerLaCleDIA: vi
+      .fn<() => Promise<ResultatDeLEssai>>()
+      .mockResolvedValueOnce({ issue: "fait", reussi: false, message: "Claude a refusé la clé : vérifiez-la, ou remplacez-la. Sollicito continue sans IA." })
+      .mockResolvedValueOnce({ issue: "refuse", motif: "Une demande à l'IA est déjà en cours : attendez sa réponse." }),
+  });
+  render(<SectionDeLIA client={client} />);
+
+  fireEvent.click(await screen.findByRole("button", { name: "Tester la clé" }));
+  expect((await screen.findByText("Claude a refusé la clé : vérifiez-la, ou remplacez-la. Sollicito continue sans IA.")).getAttribute("role")).toBe(
+    "alert",
+  );
+
+  const lectures = vi.mocked(client.lireLEtatDeLIA).mock.calls.length;
+  fireEvent.click(screen.getByRole("button", { name: "Tester la clé" }));
+  expect((await screen.findByText("Une demande à l'IA est déjà en cours : attendez sa réponse.")).getAttribute("role")).toBe("alert");
+  expect(vi.mocked(client.lireLEtatDeLIA).mock.calls.length).toBeGreaterThan(lectures);
+});
+
+test("un essai qui ne part pas se dit, et pendant l'essai les boutons attendent", async () => {
+  let rendre: (resultat: ResultatDeLEssai) => void = () => {};
+  const client = clientSimule({
+    lireLEtatDeLIA: async () => claude({ cle: "Enregistree" }),
+    testerLaCleDIA: vi
+      .fn<() => Promise<ResultatDeLEssai>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<ResultatDeLEssai>((resolution) => {
+            rendre = resolution;
+          }),
+      )
+      .mockRejectedValueOnce(new Error("hors ligne")),
+  });
+  render(<SectionDeLIA client={client} />);
+
+  const bouton = await screen.findByRole("button", { name: "Tester la clé" });
+  fireEvent.click(bouton);
+  fireEvent.click(bouton);
+  expect(await screen.findByRole("button", { name: "Essai en cours…" })).toBeDefined();
+  expect((screen.getByRole("button", { name: "Remplacer la clé" }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole("button", { name: "Retirer la clé" }) as HTMLButtonElement).disabled).toBe(true);
+  await act(async () => rendre({ issue: "fait", reussi: true, message: "Claude a répondu : la clé fonctionne." }));
+  expect(client.testerLaCleDIA).toHaveBeenCalledOnce();
+
+  fireEvent.click(await screen.findByRole("button", { name: "Tester la clé" }));
+  expect(
+    await screen.findByText("L'essai n'a pas pu être lancé. Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le."),
+  ).toBeDefined();
+});
+
+test("sans clé enregistrée, aucun bouton d'essai", async () => {
+  const client = clientSimule({ lireLEtatDeLIA: async () => claude() });
+  render(<SectionDeLIA client={client} />);
+
+  await screen.findByLabelText("Clé d'API de Claude");
+  expect(screen.queryByRole("button", { name: "Tester la clé" })).toBeNull();
 });
