@@ -36,12 +36,8 @@ public static class AppelsDesPremiersJets
     public static string PremierJet(bool reussi, string? texte, string? echec, string? message) =>
         new JsonObject { ["reussi"] = reussi, ["texte"] = texte, ["echec"] = echec, ["message"] = message }.ToJsonString();
 
-    /// <summary>Répond par ce texte, complet, comme le fournisseur de la requête le rendrait.</summary>
-    public static void RepondreTexte(this FauxFournisseurEnLigne faux, string texte)
-    {
-        ArgumentNullException.ThrowIfNull(faux);
-        faux.Repondre((requete, _) => Task.FromResult(FauxFournisseurEnLigne.Json(HttpStatusCode.OK, Reponse(requete, texte))));
-    }
+    // Répondre par un texte complet, comme le fournisseur de la requête le rendrait : la méthode `RepondreTexte` d'`AppelsDeLExtraction`
+    // (#46), que les tests du premier jet emploient aussi.
 
     /// <summary>La réponse complète du fournisseur de <paramref name="requete"/>, qui porte <paramref name="texte"/>.</summary>
     public static string Reponse(HttpRequestMessage requete, string texte)

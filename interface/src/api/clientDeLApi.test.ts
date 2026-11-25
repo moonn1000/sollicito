@@ -606,3 +606,45 @@ test("un essai refusé rend son motif, et toute autre réponse est une erreur de
   await expect(creerClientDeLApi(JETON_FICTIF, sansMessage).testerLaCleDIA()).rejects.toBeInstanceOf(ErreurDeLApi);
   await expect(creerClientDeLApi(JETON_FICTIF, avecUnCorps).testerLaCleDIA()).rejects.toBeInstanceOf(ErreurDeLApi);
 });
+
+test("l'extraction part en POST, son texte seul dans le corps, et rend les champs proposés sans rien d'autre de la réponse", async () => {
+  const champs = { entreprise: "Lumière Verte SA", poste: "Comptable", lieu: null, publieeLe: "2026-11-12", adresse: null };
+  const envoyer = apiQuiRepond(Response.json({ issue: "Proposee", champs: { ...champs, autre: "ignoré" }, echec: null, message: null }));
+  const annulation = new AbortController();
+
+  const resultat = await creerClientDeLApi(JETON_FICTIF, envoyer).extraireUneOffre("Texte fictif de l'offre.", annulation.signal);
+
+  expect(resultat).toEqual({ issue: "proposee", champs });
+  const [adresse, options] = envoyer.mock.calls[0]!;
+  expect(adresse).toBe("/api/offres/extraction");
+  expect(options?.method).toBe("POST");
+  expect(JSON.parse(String(options?.body))).toEqual({ texte: "Texte fictif de l'offre." });
+  expect(new Headers(options?.headers).get(EN_TETE_DU_JETON)).toBe(JETON_FICTIF);
+  expect(options?.signal).toBe(annulation.signal);
+});
+
+test("une extraction en échec rend son texte ; un texte refusé, ses motifs ; un refus sans requête, son motif", async () => {
+  const echec = apiQuiRepond(Response.json({ issue: "Echec", champs: null, echec: "HorsSchema", message: "La réponse de Claude ne correspond pas." }));
+  const texteRefuse = apiQuiRepond(
+    Response.json({ title: "Rien n'a été demandé à l'IA : corrigez le champ signalé.", errors: { texte: ["Collez le texte de l'offre."] } }, { status: 400 }),
+  );
+  const refuse = apiQuiRepond(Response.json({ title: "Une demande à l'IA est déjà en cours : attendez sa réponse.", status: 409 }, { status: 409 }));
+
+  expect(await creerClientDeLApi(JETON_FICTIF, echec).extraireUneOffre("x")).toEqual({ issue: "echec", message: "La réponse de Claude ne correspond pas." });
+  expect(await creerClientDeLApi(JETON_FICTIF, texteRefuse).extraireUneOffre("")).toEqual({ issue: "texteRefuse", refus: ["Collez le texte de l'offre."] });
+  expect(await creerClientDeLApi(JETON_FICTIF, refuse).extraireUneOffre("x")).toEqual({
+    issue: "refuse",
+    motif: "Une demande à l'IA est déjà en cours : attendez sa réponse.",
+  });
+});
+
+test.each([
+  ["une issue inconnue", Response.json({ issue: "Autre", champs: null })],
+  ["un champ proposé qui n'est pas un texte", Response.json({ issue: "Proposee", champs: { entreprise: 42, poste: null, lieu: null, publieeLe: null, adresse: null } })],
+  ["un champ proposé absent", Response.json({ issue: "Proposee", champs: { entreprise: null, poste: null, lieu: null, publieeLe: null } })],
+  ["un échec sans texte", Response.json({ issue: "Echec", champs: null, echec: "HorsSchema", message: "" })],
+  ["un corps trop gros", Response.json({ title: "Payload Too Large" }, { status: 413 })],
+  ["une erreur", new Response(null, { status: 500 })],
+])("une extraction qui rend %s est une erreur de l'API", async (_, reponse) => {
+  await expect(creerClientDeLApi(JETON_FICTIF, apiQuiRepond(reponse)).extraireUneOffre("x")).rejects.toBeInstanceOf(ErreurDeLApi);
+});
