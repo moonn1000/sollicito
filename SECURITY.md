@@ -22,7 +22,7 @@ Sont notamment concernés :
 
 - l'API locale : accès depuis une page web, une autre application ou un autre compte Windows, contournement du jeton de session, de l'en-tête `Host` ou du contrôle des origines ;
 - la fenêtre de l'application : chargement d'un contenu tiers, ouverture de liens, accès aux permissions du navigateur ;
-- le stockage des clés d'API d'IA et des données de l'utilisateur ;
+- le stockage des clés d'API d'IA et des données de l'utilisateur, et l'envoi de chaque clé à son seul fournisseur ;
 - le traitement des offres importées, qui sont du contenu non fiable : injection de script, injection d'instructions dans l'IA, récupération d'une adresse qui viserait la machine ou le réseau interne ;
 - la sauvegarde, la restauration, l'export et l'import des données ;
 - l'exe publié et, en V2, l'installeur.
