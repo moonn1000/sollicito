@@ -34,7 +34,7 @@ Candidature envoyée le : {jour local de l'envoi, en toutes lettres}
 ```
 
 - **Rien d'autre** : ni le contact, son nom ou son adresse, ni l'échéance, ni le statut, ni l'historique, ni les notes, ni l'offre et son texte, ni la date du jour. L'IA n'écrit que le paragraphe central : le salut, qui porte le nom du contact, et la formule de politesse sont ceux du brouillon de #14, posés par Sollicito.
-- **Le poste et l'entreprise** sont des textes d'une ligne, sans saut de ligne ni contrôle : ils ne peuvent pas forger une ligne de plus. Ils ne sont pas fiables pour autant, puisqu'ils peuvent venir d'une offre collée : ils restent dans les données, jamais dans les consignes.
+- **Le poste et l'entreprise** sont des textes d'une ligne, sans saut de ligne ni contrôle. Cette règle admet pourtant U+2028, U+2029 et les caractères invisibles : Sollicito les épure avant de bâtir les trois lignes (ce que retire le nettoyage de la réponse en est retiré, et chaque séparateur de ligne devient une espace), si bien qu'ils ne peuvent ni forger une ligne de plus ni cacher un texte. Un poste ou une entreprise vides une fois épurés font refuser la demande, comme s'ils manquaient. Ils ne sont pas fiables pour autant, puisqu'ils peuvent venir d'une offre collée : ils restent dans les données, jamais dans les consignes.
 - **Une demande sans donnée ne part pas** : un poste ou une entreprise vides la font refuser avant le port (#108, point 2). Le domaine les exige déjà ; le refus est un chemin de défense.
 
 ### Les consignes, fixées dans le code
