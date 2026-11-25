@@ -264,6 +264,31 @@ public sealed class LectureDeLaPropositionTests
         Assert.Equal(new ChampEcarte(ChampDeLaProposition.Adresse, MotifDeLEcart.AdresseAbsenteDuTexte), Assert.Single(proposee.Ecartes));
     }
 
+    [Theory]
+    [InlineData("https://emplois.exemple/offres/4")]
+    [InlineData("https://emplois.exemple")]
+    [InlineData("https://emplois.exemple/")]
+    public void Un_debut_d_adresse_du_texte_n_est_pas_propose(string adresse)
+    {
+        var proposee = Assert.IsType<IssueDeLExtraction.Proposee>(Lire(Objet(adresse: Chaine(adresse))));
+
+        Assert.Null(proposee.Champs.Adresse);
+        Assert.Equal(new ChampEcarte(ChampDeLaProposition.Adresse, MotifDeLEcart.AdresseAbsenteDuTexte), Assert.Single(proposee.Ecartes));
+    }
+
+    [Theory]
+    [InlineData("Postulez sur https://emplois.exemple/offres/42")]
+    [InlineData("Postulez sur https://emplois.exemple/offres/42.")]
+    [InlineData("(https://emplois.exemple/offres/42)")]
+    [InlineData("« https://emplois.exemple/offres/42 »")]
+    [InlineData("https://emplois.exemple/offres/4 puis https://emplois.exemple/offres/42\n")]
+    public void Une_adresse_entiere_du_texte_est_proposee_quelle_que_soit_la_ponctuation_qui_la_suit(string texte)
+    {
+        var proposee = Assert.IsType<IssueDeLExtraction.Proposee>(LectureDeLaProposition.Lire(Objet(), texte, Aujourdhui));
+
+        Assert.Equal(Adresse, proposee.Champs.Adresse);
+    }
+
     [Fact]
     public void Une_faute_ailleurs_ecarte_tout_meme_avec_un_champ_deja_ecarte()
     {

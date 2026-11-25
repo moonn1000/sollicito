@@ -122,7 +122,15 @@ export function PropositionDeLIA({
           {etat.sorte === "en-cours" ? LIBELLE_DE_LA_PROPOSITION_EN_COURS : LIBELLE_DE_LA_PROPOSITION}
         </button>
         {retirer !== undefined && (
-          <button type="button" className="secondaire" onClick={retirer}>
+          <button
+            type="button"
+            className="secondaire"
+            onClick={() => {
+              // Le message de la proposition ne décrit plus les champs : il part avec elle.
+              setEtat({ sorte: "repos" });
+              retirer();
+            }}
+          >
             {LIBELLE_DU_RETRAIT_DE_LA_PROPOSITION}
           </button>
         )}

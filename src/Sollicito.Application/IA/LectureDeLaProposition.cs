@@ -170,8 +170,8 @@ public static class LectureDeLaProposition
                 return Refusee(ChampDeLaProposition.Adresse);
             }
 
-            // L'IA ne propose jamais une adresse que le texte de l'offre ne porte pas : inventée, ou venue d'ailleurs.
-            if (texteDeLOffre.Contains(lue!, StringComparison.Ordinal))
+            // L'IA ne propose jamais une adresse que le texte de l'offre ne porte pas : inventée, venue d'ailleurs, ou tronquée.
+            if (FigureDansLeTexte(lue!, texteDeLOffre))
             {
                 adresse = lue;
             }
@@ -182,6 +182,25 @@ public static class LectureDeLaProposition
         }
 
         return new IssueDeLExtraction.Proposee(new ChampsProposes(entreprise, poste, lieu, publieeLe, adresse), ecartes);
+    }
+
+    /// <summary>
+    /// Vrai si <paramref name="adresse"/> figure telle quelle dans le texte, entière : suivie de la fin du texte, d'un blanc,
+    /// ou d'une ponctuation qui la ferme. Un début d'adresse (le seul domaine, <c>…/offres/4</c> pour <c>…/offres/42</c>)
+    /// ne compte pas.
+    /// </summary>
+    internal static bool FigureDansLeTexte(string adresse, string texte)
+    {
+        for (var debut = texte.IndexOf(adresse, StringComparison.Ordinal); debut >= 0; debut = texte.IndexOf(adresse, debut + 1, StringComparison.Ordinal))
+        {
+            var fin = debut + adresse.Length;
+            if (fin == texte.Length || char.IsWhiteSpace(texte[fin]) || ")]}>»\"'.,;:!?".Contains(texte[fin], StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Une valeur vide, ou faite de blancs, ne propose rien.

@@ -90,7 +90,9 @@ export function FormulaireDUneOffre({
   const [proposes, setProposes] = useState<Partial<Record<ChampProposable, string>>>({});
   // La saisie du dernier rendu, lue quand la proposition arrive : seuls les champs encore vides la reçoivent.
   const saisieCourante = useRef(saisie);
-  saisieCourante.current = saisie;
+  useEffect(() => {
+    saisieCourante.current = saisie;
+  }, [saisie]);
   // Lu aussitôt, sans attendre le rendu : deux envois rapprochés n'en font qu'un.
   const enCours = useRef(false);
   const titreDuConflit = useRef<HTMLHeadingElement>(null);

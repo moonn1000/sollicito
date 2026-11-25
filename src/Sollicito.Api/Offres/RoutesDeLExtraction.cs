@@ -27,7 +27,7 @@ internal static class RoutesDeLExtraction
             .WithDescription(
                 "Sur un geste de l'utilisateur seulement. Le texte suit les règles du collage : vide, trop long ou porteur d'un "
                 + "caractère refusé, il ne part pas (400). La réponse de l'IA, lue par les règles des champs du collage, propose "
-                + "des champs, ou est écartée en entier (horsSchema) ; rien ne s'enregistre. Refusé (409), sans requête, sans IA "
+                + "des champs, ou est écartée en entier (HorsSchema) ; rien ne s'enregistre. Refusé (409), sans requête, sans IA "
                 + "prête ou si une demande à l'IA est déjà en cours. Corps de 1 Mio au plus.")
             .WithMetadata(new RequestSizeLimitAttribute(RoutesDesOffres.BorneDuCorps))
             .ProducesProblem(StatusCodes.Status400BadRequest)

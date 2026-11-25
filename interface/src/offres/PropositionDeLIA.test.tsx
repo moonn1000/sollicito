@@ -183,6 +183,7 @@ test("modifier un champ proposé retire sa marque ; retirer la proposition ne vi
     expect(marque(libelle)).toBeUndefined();
   }
   expect(screen.queryByRole("button", { name: "Retirer la proposition" })).toBeNull();
+  expect(screen.queryByText(/L'IA a proposé/u)).toBeNull();
   expect(client.collerUneOffre).not.toHaveBeenCalled();
 });
 
