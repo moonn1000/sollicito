@@ -27,7 +27,8 @@ namespace Sollicito.Fenetre;
 /// écrit un fichier de ce dossier, puis attend que le test tue le processus, pour essayer un arrêt brutal ;</item>
 /// <item>les fournisseurs d'IA en ligne remplacés par un faux (#48), qui ne touche jamais le réseau : il répond selon le
 /// scénario qu'un fichier de ce dossier donne (« réseau absent » sans lui), et note chaque demande dans un autre, avec
-/// l'empreinte SHA-256 de l'en-tête qui porte la clé, jamais sa valeur.</item>
+/// l'empreinte SHA-256 de l'en-tête qui porte la clé, jamais sa valeur. Le scénario « texte » rend, comme texte de l'IA,
+/// le contenu d'un troisième fichier de ce dossier (#46).</item>
 /// </list>
 /// </summary>
 internal static class VersionDeTest
@@ -44,6 +45,7 @@ internal static class VersionDeTest
     public const string FichierDesRestaurationsDemandees = "restaurations-demandees.txt";
     public const string FichierDeLArret = "restauration-arretee.txt";
     public const string FichierDuScenarioDeLIA = "ia-scenario.txt";
+    public const string FichierDuTexteDeLIA = "ia-texte.txt";
     public const string FichierDesDemandesALIA = "ia-demandes.txt";
 
     public static Lancement Lancement()
@@ -73,7 +75,10 @@ internal static class VersionDeTest
             new JournalDesBrouillons(Path.Combine(dossier, FichierDesBrouillonsOuverts)),
             new ConfirmationLueDansUnFichier(Path.Combine(dossier, FichierDeLaConfirmation), Path.Combine(dossier, FichierDesRestaurationsDemandees)),
             EtapesArreteesParLeTest.Lire(Environment.GetEnvironmentVariable(VariableDeLArretDeLaRestauration), Path.Combine(dossier, FichierDeLArret)),
-            () => new FauxFournisseurDeLIA(Path.Combine(dossier, FichierDuScenarioDeLIA), Path.Combine(dossier, FichierDesDemandesALIA)));
+            () => new FauxFournisseurDeLIA(
+                Path.Combine(dossier, FichierDuScenarioDeLIA),
+                Path.Combine(dossier, FichierDuTexteDeLIA),
+                Path.Combine(dossier, FichierDesDemandesALIA)));
     }
 
     /// <summary>
