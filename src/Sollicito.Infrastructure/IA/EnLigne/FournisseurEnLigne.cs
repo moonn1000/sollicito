@@ -255,8 +255,11 @@ public abstract partial class FournisseurEnLigne : IFournisseurDIA
             using var document = JsonDocument.Parse(corps, LectureStricte);
             return LireLeCorps(document.RootElement, demande);
         }
-        catch (JsonException)
+        catch (Exception erreur) when (erreur is JsonException or InvalidOperationException)
         {
+            // Du JSON mal formé, ou valide mais illisible en texte : un échappement de substitut sans son pareil, dans un texte
+            // ou dans un nom de propriété, fait lever InvalidOperationException par la lecture. La réponse n'est pas fiable,
+            // et le port ne laisse sortir aucune exception.
             return Illisible;
         }
     }

@@ -102,7 +102,7 @@ L'ADR-0016 laissait l'essai à #48 : un vrai appel ne pouvait venir qu'avec un a
 
 ### Les journaux
 
-Une entrée par demande partie : le fournisseur et l'issue, deux valeurs de listes fermées, le statut HTTP (un nombre) et la durée ; le type de l'erreur d'un transport injoignable. Une demande refusée par la porte, ou sans clé prête, le dit aussi. Jamais la clé, sa longueur, son début ou son empreinte ; ni un en-tête, ni un corps, de la requête comme de la réponse ; ni l'adresse, ni le message ou l'identifiant de requête du fournisseur ; ni les consignes, ni les données, ni le texte de l'IA ; ni le message d'une exception. Sans fabrique, aucun journal de client HTTP n'existe.
+Une entrée par demande partie : le fournisseur et l'issue, deux valeurs de listes fermées, le statut HTTP (un nombre) et la durée ; le type de l'erreur d'un transport injoignable. Une demande refusée par la porte, ou sans clé prête, le dit aussi ; une demande que l'appelant annule n'écrit aucune entrée. Jamais la clé, sa longueur, son début ou son empreinte ; ni un en-tête, ni un corps, de la requête comme de la réponse ; ni l'adresse, ni le message ou l'identifiant de requête du fournisseur ; ni les consignes, ni les données, ni le texte de l'IA ; ni le message d'une exception. Sans fabrique, aucun journal de client HTTP n'existe.
 
 ### Les tests, sur des réponses fictives
 

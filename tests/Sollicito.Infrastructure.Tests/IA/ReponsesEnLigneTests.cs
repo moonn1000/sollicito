@@ -189,6 +189,53 @@ public sealed class ReponsesEnLigneTests
         Assert.Equal(SorteDEchec.ReponseIllisible, Assert.IsType<ReponseDeLIA.Echec>(rendue).Sorte);
     }
 
+    // Un échappement de substitut sans son pareil (un haut ou un bas seul) est du JSON valide, mais ne se lit pas en texte :
+    // la lecture lève InvalidOperationException, que le port ne laisse jamais sortir (revue de #48). L'antislash vient de
+    // (char)92 : aucun échappement unicode n'est écrit dans ces cas.
+    public static TheoryData<FournisseurDIA, string> JsonQuiPorteUnSubstitutIsole
+    {
+        get
+        {
+            var antislash = ((char)92).ToString();
+            var donnees = new TheoryData<FournisseurDIA, string>();
+            foreach (var fournisseur in new[] { FournisseurDIA.Claude, FournisseurDIA.OpenAI })
+            {
+                var reussie = ReponseReussie(fournisseur);
+                foreach (var texte in new[]
+                {
+                    antislash + "ud800",
+                    antislash + "udc00",
+                    antislash + "ud800" + antislash + "u0041",
+                    "a" + antislash + "ud83d",
+                })
+                {
+                    donnees.Add(fournisseur, reussie.Replace("\"OK\"", "\"" + texte + "\"", StringComparison.Ordinal));
+                }
+
+                donnees.Add(fournisseur, reussie[..^1] + ",\"x" + antislash + "ud800\":1}");
+            }
+
+            return donnees;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(JsonQuiPorteUnSubstitutIsole))]
+    public async Task Un_substitut_isole_est_illisible_sans_rien_lever_et_la_porte_se_rend(FournisseurDIA fournisseur, string corps)
+    {
+        var journal = new JournalDeTest();
+        var adaptateur = Adaptateur(fournisseur, new FauxGestionnaire(() => Json(HttpStatusCode.OK, corps)), journal: journal);
+
+        var premiere = await adaptateur.DemanderAsync(Demande(), TestContext.Current.CancellationToken);
+        var seconde = await adaptateur.DemanderAsync(Demande(), TestContext.Current.CancellationToken);
+
+        Assert.Equal(SorteDEchec.ReponseIllisible, Assert.IsType<ReponseDeLIA.Echec>(premiere).Sorte);
+        Assert.Equal(SorteDEchec.ReponseIllisible, Assert.IsType<ReponseDeLIA.Echec>(seconde).Sorte);
+        Assert.Equal(
+            2,
+            journal.Entrees.Count(entree => entree.Contains("ReponseIllisible", StringComparison.Ordinal) && entree.Contains("(statut 200)", StringComparison.Ordinal)));
+    }
+
     [Theory]
     [InlineData(FournisseurDIA.Claude, "application/json; charset=utf-8")]
     [InlineData(FournisseurDIA.OpenAI, "Application/JSON; charset=UTF-8")]
