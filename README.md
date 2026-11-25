@@ -78,7 +78,7 @@ Les protections prévues dès la conception, détaillées dans l'[ADR-0001](docs
 - l'API locale refuse les appels venus d'autres pages web, d'autres appareils ou d'autres comptes du PC (voir le [modèle de menaces](docs/modele-de-menaces.md)) : écoute sur 127.0.0.1 seulement, jeton aléatoire à chaque lancement transmis par un en-tête, refus par le serveur des origines et des en-têtes `Host` inattendus ; ses journaux ne contiennent ni le jeton ni vos données ;
 - la fenêtre n'affiche que l'interface de Sollicito, sous une politique de sécurité du contenu stricte ; les liens externes s'ouvrent dans votre navigateur ;
 - les clés d'API d'IA sont chiffrées par l'API Data Protection d'ASP.NET Core, protégée par DPAPI et liée à votre compte Windows ; jamais stockées en clair, jamais dans les sauvegardes, et l'export ne les emportera pas ; chaque clé ne part que vers l'adresse officielle de son fournisseur, en HTTPS ;
-- le contenu des offres sera traité comme non fiable : affichage échappé, et une IA qui ne peut rien déclencher d'elle-même ;
+- le contenu des offres est traité comme non fiable : affichage échappé ; le texte d'une offre n'est transmis à l'IA que comme une donnée à analyser, jamais comme une consigne ; l'IA n'a aucun outil et ne peut rien déclencher d'elle-même ; les champs qu'elle propose sont vérifiés par Sollicito, et rien n'est enregistré sans votre confirmation ;
 - aucun secret dans ce dépôt.
 
 Le [modèle de menaces](docs/modele-de-menaces.md) détaille les protections en place et leurs limites. Pour signaler une vulnérabilité : [SECURITY.md](SECURITY.md).
