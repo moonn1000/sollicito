@@ -86,6 +86,8 @@ L'ADR-0016 laissait aux fournisseurs en ligne le détail de l'échec. Les issues
 | Durée dépassée | délai dépassé |
 | Corps ou texte au-delà des bornes | réponse trop longue |
 
+Chez Anthropic, un plafond de dépense que l'utilisateur a fixé lui-même rend un 400 (le plafond mensuel de la plateforme rend un 429)[^messages] : il se classe, comme tout 400, avec le refus de la demande, et l'écran renvoie au compte de l'utilisateur chez Anthropic.
+
 Le texte de chaque issue, pour chaque fournisseur, vit dans l'application : l'essai de la clé s'en sert, l'extraction d'une offre (#46) et le brouillon de relance (#47) le reprendront.
 
 ### Une demande à l'IA à la fois
@@ -140,6 +142,8 @@ Une entrée par demande partie : le fournisseur et l'issue, deux valeurs de list
 ## À vérifier
 
 - **Le premier vrai appel** se fera par « Tester la clé », après la fusion, si le mainteneur le veut. Les formes des requêtes sont recoupées avec la documentation de chaque fournisseur, jamais avec son API réelle : les faux ne prouvent que ce que Sollicito envoie.
+- **L'en-tête de la clé de Claude** : `x-api-key`, que la page d'aperçu de l'API appelle un repli « legacy », toujours pris en charge, l'en-tête principal étant `Authorization: Bearer`. Si Anthropic retirait le repli, l'essai rendrait « clé refusée » (401) pour une clé bonne, et une nouvelle version de Sollicito changerait l'en-tête.
+- **Le statut d'un modèle retiré chez OpenAI** : aucune page lue ne le donne (la page des retraits dit seulement que le modèle n'accepte plus de requêtes). La table range le 404 sous « modèle indisponible », comme chez Anthropic, où la page des retraits le confirme.
 - **Ce que chaque fournisseur garde** des demandes qu'il reçoit, à lire dans ses conditions pour le guide « Démarrer ».
 
 ## Sources
@@ -150,7 +154,7 @@ Une entrée par demande partie : le fournisseur et l'issue, deux valeurs de list
 Documentation officielle, consultée le 2026-11-25 (aucune page n'affiche de date de mise à jour) :
 
 [^redirection]: .NET, `RedirectHandler.cs` du dépôt `dotnet/runtime`, branche `main` : « Clear the authorization headers » (`Authorization`, `Proxy-Authorization`), et aucune redirection de HTTPS vers HTTP : <https://github.com/dotnet/runtime/blob/main/src/libraries/System.Net.Http/src/System/Net/Http/SocketsHttpHandler/RedirectHandler.cs>
-[^messages]: Anthropic, Create a Message (`POST /v1/messages` ; `system` admet une chaîne ; `thinking` de type `disabled` ; `content` en blocs `text` ; `stop_reason` : `end_turn`, `max_tokens`, `stop_sequence`, `tool_use`, `pause_turn`, `refusal`, `model_context_window_exceeded`) : <https://platform.claude.com/docs/en/api/messages/create.md>. Cette page ne donne ni l'hôte ni l'en-tête de la clé : ils viennent des exemples cURL de la page Thinking (`curl https://api.anthropic.com/v1/messages`, en-têtes `x-api-key`, `anthropic-version`, `content-type`) et de la page des erreurs, qui donne aussi les codes (400, 401, 402 `billing_error`, 403, 404, 413, 429, 500, 529 `overloaded_error`) : <https://platform.claude.com/docs/en/build-with-claude/thinking.md>, <https://platform.claude.com/docs/en/api/errors.md>
+[^messages]: Anthropic, Create a Message (`POST /v1/messages` ; `system` admet une chaîne ; `thinking` de type `disabled` ; `content` en blocs `text` ; `stop_reason` : `end_turn`, `max_tokens`, `stop_sequence`, `tool_use`, `pause_turn`, `refusal`, `model_context_window_exceeded`) : <https://platform.claude.com/docs/en/api/messages/create.md>. Son exemple cURL donne l'hôte (`https://api.anthropic.com/v1/messages`) et `anthropic-version: 2026-10-21`, avec la clé en `Authorization: Bearer`. La page d'aperçu de l'API donne `Authorization: Bearer` comme en-tête d'authentification, et `x-api-key` comme repli « legacy », toujours pris en charge : <https://platform.claude.com/docs/en/api/overview.md>. Sollicito envoie `x-api-key`, comme les exemples cURL de la page Thinking (`curl https://api.anthropic.com/v1/messages`, en-têtes `x-api-key`, `anthropic-version`, `content-type`). La page des erreurs donne les codes (400, 401, 402 `billing_error`, 403, 404, 413, 429, 500, 529 `overloaded_error`) : <https://platform.claude.com/docs/en/build-with-claude/thinking.md>, <https://platform.claude.com/docs/en/api/errors.md>
 [^versions]: Anthropic, versions de l'API (`2026-10-21` en tête de l'historique, puis `2023-06-01`) : <https://platform.claude.com/docs/en/api/versioning.md>
 [^modeles]: Anthropic, Models overview (`claude-haiku-5-5`, un instantané figé ; à partir de 0,10 $ et 0,50 $ par million de jetons ; sortie de 128 000 jetons au plus ; effort par défaut `medium` ; retrait « Not sooner than October 7, 2027 ») : <https://platform.claude.com/docs/en/about-claude/models/overview.md>
 [^thinking]: Anthropic, Thinking (« Claude Haiku 5.5 also has thinking on by default and accepts `thinking: {type: "disabled"}` at effort `high` or below ») : <https://platform.claude.com/docs/en/build-with-claude/thinking.md>
