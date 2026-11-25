@@ -1,6 +1,6 @@
 # ADR-0019 : le brouillon de relance rédigé par l'IA : trois données, des consignes fixées, une sortie nettoyée et relue, ouverte par l'hôte
 
-- **Statut** : acceptée ; critères et décisions acceptés par le pilote le 2026-11-25
+- **Statut** : acceptée ; critères et décisions acceptés par le pilote le 2026-11-25 ; consignes validées mot pour mot par le mainteneur le 2026-11-25
 - **Date** : 2026-11-25
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D7 (le brouillon de relance par l'IA, en V1), D8 (le texte relu par l'utilisateur, envoyé par lui seul) et D9 (« Contenu non fiable » : les données de la base transmises comme données, la sortie de l'IA nettoyée et affichée en texte brut) ; [ADR-0003](0003-hote-interface-webview2.md), « Durcissement de la fenêtre » (une cinquième demande de la page à l'hôte, qui ne porte que l'identifiant d'une relance) ; [ADR-0011](0011-relances-et-brouillon.md), « Le brouillon, ouvert par l'hôte à partir de la base » (le texte relu à la place du corps du gabarit, l'objet et le destinataire lus en base, un lien borné) ; [ADR-0017](0017-fournisseurs-d-ia-en-ligne.md) (le modèle fixé gardé, une demande sans donnée refusée avant le port, la porte de la base tenue le temps de la lecture)
 
@@ -39,7 +39,7 @@ Candidature envoyée le : {jour local de l'envoi, en toutes lettres}
 
 ### Les consignes, fixées dans le code
 
-Elles façonnent ce qui part chez les recruteurs : le mainteneur les valide mot pour mot. Elles partent dans `system` chez Claude, dans `instructions` chez OpenAI :
+Elles façonnent ce qui part chez les recruteurs : le mainteneur les a validées mot pour mot le 2026-11-25. Elles partent dans `system` chez Claude, dans `instructions` chez OpenAI :
 
 > Tu rédiges en français le paragraphe central d'un courriel de relance. Une personne en recherche d'emploi a envoyé sa candidature à un poste, sans réponse depuis ; elle relira ton texte, le corrigera au besoin et l'enverra elle-même.
 >
