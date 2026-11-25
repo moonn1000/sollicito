@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.Json.Serialization;
 using Sollicito.Domain.Offres;
 
 namespace Sollicito.Application.IA;
@@ -157,7 +158,8 @@ public abstract class IssueDeLExtraction
 /// <param name="Adresse">L'adresse de l'annonce, telle qu'elle figure dans le texte de l'offre.</param>
 public sealed record ChampsProposes(string? Entreprise, string? Poste, string? Lieu, string? PublieeLe, string? Adresse)
 {
-    /// <summary>Le nombre de champs proposés.</summary>
+    /// <summary>Le nombre de champs proposés ; il ne part pas avec eux.</summary>
+    [JsonIgnore]
     public int Nombre => new[] { Entreprise, Poste, Lieu, PublieeLe, Adresse }.Count(valeur => valeur is not null);
 
     /// <summary>Un texte qui ne montre aucune valeur.</summary>
