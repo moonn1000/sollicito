@@ -2,10 +2,12 @@
 // niveau Trace. Le dossier de données est un dossier temporaire neuf : jamais celui de l'utilisateur. Le faux fournisseur
 // de la version de test répond à la place du réseau : son scénario « texte » rend, comme texte de l'IA, le contenu de
 // ia-texte.txt. La clé et le texte de l'offre sont fictifs et reconnaissables. Les tests se suivent dans l'ordre.
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Request } from "playwright-core";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { lancerLaFenetre, type FenetreLancee } from "./outils/fenetre.ts";
 import { fichiersQuiContiennent, profilRelache } from "./outils/fichiers.ts";
@@ -48,6 +50,17 @@ async function collerUneOffre() {
   await page.getByRole("button", { name: "Offres", exact: true }).click();
   await page.getByRole("button", { name: "Coller une offre", exact: true }).click();
   await page.getByRole("heading", { level: 2, name: "Coller une offre" }).waitFor();
+}
+
+// La base et son journal (WAL), tels qu'ils sont sur le disque : un octet écrit, dans l'un ou dans l'autre, change l'empreinte.
+async function empreinteDeLaBase(): Promise<string> {
+  const fichier = join(dossier, "sollicito.db");
+  const octets = [await readFile(fichier)];
+  if (existsSync(`${fichier}-wal`)) {
+    octets.push(await readFile(`${fichier}-wal`));
+  }
+
+  return createHash("sha256").update(Buffer.concat(octets)).digest("hex");
 }
 
 test("sans IA prête, l'écran le dit, et rien ne part", async () => {
@@ -118,10 +131,24 @@ test("une proposition retirée, puis un écran quitté, n'écrivent rien", async
   expect(await page.locator("table.offres tbody tr").count()).toBe(1);
 });
 
-test("une réponse piégée est écartée en entier : rien n'est proposé, rien ne s'exécute, et l'écran le dit", async () => {
-  const { page } = fenetre;
+test("une réponse piégée est écartée en entier : rien n'est proposé, rien ne s'exécute, aucune navigation, aucune fenêtre de plus, rien en base, et l'écran le dit", async () => {
+  const { page, navigateur } = fenetre;
   await collerUneOffre();
   await page.getByLabel("Texte de l'offre").fill(`${PIEGE}\n${TEXTE}\nTroisième offre.`);
+  // Ce qu'une réponse piégée ne doit jamais provoquer : une navigation, une fenêtre de plus, une écriture en base.
+  const navigations: string[] = [];
+  const fenetresDeLaPage: string[] = [];
+  const appelsDeLAPI: Request[] = [];
+  page.on("framenavigated", (cadre) => navigations.push(cadre.url()));
+  page.context().on("page", (nouvelle) => fenetresDeLaPage.push(nouvelle.url()));
+  page.on("request", (requete) => {
+    if (new URL(requete.url()).pathname.startsWith("/api/")) {
+      appelsDeLAPI.push(requete);
+    }
+  });
+  const pagesAvant = navigateur.contexts().flatMap((contexte) => contexte.pages()).length;
+  const adresseAvant = page.url();
+  const baseAvant = await empreinteDeLaBase();
   for (const reponse of [
     JSON.stringify({ entreprise: PIEGE, poste: "Comptable", lieu: null, publieeLe: null, adresse: "javascript:alert(1)" }),
     JSON.stringify({ entreprise: null, poste: null, lieu: null, publieeLe: null, adresse: null, inconnue: PIEGE }),
@@ -141,6 +168,22 @@ test("une réponse piégée est écartée en entier : rien n'est proposé, rien 
   // Aucune balise de la réponse ni du texte ne s'est créée, et aucun lien ne s'est ouvert.
   expect(await page.locator("main img, main script, main a[href^='javascript']").count()).toBe(0);
   expect(existsSync(join(dossier, "liens-ouverts.txt"))).toBe(false);
+  // Aucune navigation, aucune fenêtre de plus.
+  expect(navigations).toEqual([]);
+  expect(fenetresDeLaPage).toEqual([]);
+  expect(page.url()).toBe(adresseAvant);
+  expect(navigateur.contexts().flatMap((contexte) => contexte.pages()).length).toBe(pagesAvant);
+  // Rien en base : le fichier de la base et son journal n'ont pas bougé d'un octet, et l'API ne connaît toujours que
+  // l'offre et l'entreprise du premier test.
+  expect(await empreinteDeLaBase()).toBe(baseAvant);
+  const jeton = (await appelsDeLAPI[0]!.allHeaders())["sollicito-jeton"] ?? "";
+  const lire = (chemin: string) =>
+    page.evaluate(
+      async ({ chemin, jeton }) => (await (await fetch(chemin, { headers: { "Sollicito-Jeton": jeton } })).json()) as unknown[],
+      { chemin, jeton },
+    );
+  expect(await lire("/api/offres")).toHaveLength(1);
+  expect(await lire("/api/entreprises")).toHaveLength(1);
 });
 
 test("un échec du fournisseur se dit, et la saisie à la main reste possible", async () => {
