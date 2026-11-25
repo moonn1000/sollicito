@@ -68,20 +68,63 @@ public static class PremierJetDeRelance
 
     /// <summary>
     /// Les données de la demande : trois lignes étiquetées, sans balises. Le poste et l'entreprise sont des textes d'une
-    /// ligne (<see cref="TexteDUneLigne"/>), qui ne peuvent pas forger une ligne de plus. Rien si l'une manque : une
-    /// demande sans donnée ne part pas (#108, point 2).
+    /// ligne (<see cref="TexteDUneLigne"/>), qui admet pourtant U+2028, U+2029 et les caractères invisibles : ils partent
+    /// épurés (<see cref="UneLigne"/>), pour qu'aucun ne forge une ligne de plus ni ne cache un texte. Rien si l'une manque,
+    /// ou si elle est vide une fois épurée : une demande sans donnée ne part pas (#108, point 2).
     /// </summary>
     public static string? Donnees(RelancePourLePremierJet relance, TimeZoneInfo fuseau)
     {
         ArgumentNullException.ThrowIfNull(relance);
         ArgumentNullException.ThrowIfNull(fuseau);
-        if (string.IsNullOrWhiteSpace(relance.Poste) || string.IsNullOrWhiteSpace(relance.Entreprise))
+        var poste = UneLigne(relance.Poste);
+        var entreprise = UneLigne(relance.Entreprise);
+        if (poste.Length == 0 || entreprise.Length == 0)
         {
             return null;
         }
 
         var envoi = BrouillonDeRelance.EnToutesLettres(DelaiDeRelance.JourLocal(relance.EnvoyeeLe, fuseau));
-        return $"Poste : {relance.Poste}\nEntreprise : {relance.Entreprise}\nCandidature envoyée le : {envoi}";
+        return $"Poste : {poste}\nEntreprise : {entreprise}\nCandidature envoyée le : {envoi}";
+    }
+
+    /// <summary>
+    /// Un texte d'une ligne, tel qu'il part chez le fournisseur. Tout ce que retire <see cref="Nettoyer"/> en est retiré, et
+    /// chaque séparateur de ligne, U+2028 et U+2029 compris, que la règle d'un texte d'une ligne admet, devient une espace :
+    /// il ne peut ni forger une ligne de plus, ni cacher un texte. Les blancs du bord partent ; d'un texte qui n'était fait
+    /// que de cela, il ne reste rien.
+    /// </summary>
+    private static string UneLigne(string? texte)
+    {
+        if (texte is null)
+        {
+            return string.Empty;
+        }
+
+        var propre = new StringBuilder(texte.Length);
+        Span<char> unites = stackalloc char[2];
+        var lu = texte.AsSpan();
+        var position = 0;
+        while (position < lu.Length)
+        {
+            if (Rune.DecodeFromUtf16(lu[position..], out var rune, out var lues) != OperationStatus.Done)
+            {
+                // Une moitié isolée d'une paire de substitution : retirée.
+                position += Math.Max(lues, 1);
+                continue;
+            }
+
+            position += lues;
+            if (rune.Value is 0x09 or 0x0A or 0x0B or 0x0C or 0x0D or 0x85 or 0x2028 or 0x2029)
+            {
+                propre.Append(' ');
+            }
+            else if (!EstRetire(rune))
+            {
+                propre.Append(unites[..rune.EncodeToUtf16(unites)]);
+            }
+        }
+
+        return propre.ToString().Trim();
     }
 
     /// <summary>La demande à l'IA pour cette relance, ou rien si elle n'a pas de données : elle ne part pas.</summary>

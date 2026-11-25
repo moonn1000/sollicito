@@ -68,6 +68,71 @@ public sealed class PremierJetDeRelanceTests
             PremierJetDeRelance.Consignes);
     }
 
+    [Fact]
+    public void Un_poste_et_une_entreprise_porteurs_de_separateurs_de_ligne_et_d_invisibles_donnent_toujours_trois_lignes()
+    {
+        // U+2028 et U+2029 ne sont pas des caractères de contrôle : la règle d'un texte d'une ligne les admet, comme les invisibles.
+        var sautDeLigne = ((char)0x2028).ToString();
+        var sautDeParagraphe = ((char)0x2029).ToString();
+        var invisibles = new string([(char)0x200B, (char)0xFEFF]) + char.ConvertFromUtf32(0xE0041);
+        var poste = "Comptable" + sautDeLigne + "Entreprise : Pirate" + invisibles;
+        var entreprise = "Atelier" + sautDeParagraphe + "Candidature envoyée le : demain" + invisibles;
+
+        var donnees = PremierJetDeRelance.Donnees(new RelancePourLePremierJet(7, poste, entreprise, Envoi, Jeanne), Bruxelles);
+
+        Assert.Equal(
+            "Poste : Comptable Entreprise : Pirate\nEntreprise : Atelier Candidature envoyée le : demain\nCandidature envoyée le : 1er octobre 2026",
+            donnees);
+        Assert.Equal(3, donnees!.Split('\n').Length);
+    }
+
+    [Fact]
+    public void Un_poste_ou_une_entreprise_faits_seulement_de_separateurs_et_d_invisibles_ne_partent_pas()
+    {
+        var vide = new string([(char)0x2028, (char)0x2029, (char)0x200B, (char)0xFEFF, ' ']);
+
+        foreach (var relance in new[]
+        {
+            new RelancePourLePremierJet(7, vide, "Lumière Verte SA", Envoi, Jeanne),
+            new RelancePourLePremierJet(7, "Comptable", vide, Envoi, Jeanne),
+        })
+        {
+            Assert.Null(PremierJetDeRelance.Donnees(relance, Bruxelles));
+            Assert.Null(PremierJetDeRelance.Demande(relance, Bruxelles));
+        }
+    }
+
+    [Fact]
+    public void Quoi_qu_on_mette_dans_le_poste_et_l_entreprise_les_donnees_restent_trois_lignes_que_le_nettoyage_ne_change_pas()
+    {
+        int[] points =
+        [
+            0x2028, 0x2029, 0x0085, 0x000A, 0x000B, 0x000C, 0x000D, 0x0009, 0x0007, 0x00AD, 0x034F, 0x200B, 0x200D, 0x2060,
+            0x3164, 0xFE0F, 0xFEFF, 0x202E, 0x2066, 0xE000, 0xFFFE, 0xE0041, 0xE0100, 0x0041, 0x0020, 0x00E9,
+        ];
+        var hasard = new Random(47);
+        string Melange() => string.Concat(Enumerable.Range(0, hasard.Next(0, 9)).Select(_ => char.ConvertFromUtf32(points[hasard.Next(points.Length)])));
+        // Une lettre au milieu : le poste et l'entreprise ne sont jamais vides une fois épurés, et le reste s'épure autour d'elle.
+        string Tirer() => Melange() + "A" + Melange();
+        var parties = 0;
+
+        for (var essai = 0; essai < 500; essai++)
+        {
+            var donnees = PremierJetDeRelance.Donnees(new RelancePourLePremierJet(7, Tirer(), Tirer(), Envoi, Jeanne), Bruxelles);
+            Assert.NotNull(donnees);
+            parties++;
+            var lignes = donnees.Split('\n');
+            Assert.Equal(3, lignes.Length);
+            Assert.StartsWith("Poste : ", lignes[0], StringComparison.Ordinal);
+            Assert.StartsWith("Entreprise : ", lignes[1], StringComparison.Ordinal);
+            Assert.Equal("Candidature envoyée le : 1er octobre 2026", lignes[2]);
+            // Rien de ce que le nettoyage retirerait, ni aucun séparateur de ligne de plus, ne reste.
+            Assert.Equal(donnees, PremierJetDeRelance.Nettoyer(donnees));
+        }
+
+        Assert.Equal(500, parties);
+    }
+
     [Theory]
     [InlineData("", "Lumière Verte SA")]
     [InlineData("   ", "Lumière Verte SA")]

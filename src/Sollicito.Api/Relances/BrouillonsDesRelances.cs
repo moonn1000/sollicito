@@ -45,13 +45,19 @@ public sealed class BrouillonsDesRelances(IServiceScopeFactory portees, TimeProv
     /// </summary>
     public async Task<BrouillonDeRelance?> PreparerLeBrouillonReluAsync(int relanceId, CancellationToken annulation)
     {
-        if (relus.Prendre(relanceId) is not { } texte || !porte.EssayerDEntrer())
+        if (!porte.EssayerDEntrer())
         {
             return null;
         }
 
         try
         {
+            // Porte fermée, le texte déposé reste en place : il n'est pris qu'une fois la base lisible.
+            if (relus.Prendre(relanceId) is not { } texte)
+            {
+                return null;
+            }
+
             await using var portee = portees.CreateAsyncScope();
             var depot = portee.ServiceProvider.GetRequiredService<IDepotDesCandidatures>();
             var relance = await depot.LireLaRelancePourLeBrouillonAsync(relanceId, annulation);
