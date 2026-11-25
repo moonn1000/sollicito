@@ -7,6 +7,7 @@ using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Tests.Outils;
 using Sollicito.Application.IA;
 using Sollicito.Application.Sauvegardes;
+using Sollicito.Infrastructure.IA.EnLigne;
 using Sollicito.Infrastructure.Persistance;
 using static Sollicito.Api.Tests.Outils.AppelsDeLIA;
 using static Sollicito.Api.Tests.Outils.AppelsDesSauvegardes;
@@ -71,8 +72,9 @@ public sealed class ReglageDeLIATests : IDisposable
         Assert.NotEmpty(Directory.GetFiles(Base.Trousseau, "key-*.xml"));
         Assert.Equal("Claude", JsonNode.Parse(await File.ReadAllTextAsync(Base.FichierDesReglages, TestContext.Current.CancellationToken))!["fournisseurDIA"]!.GetValue<string>());
         AucunFichierNeContientDeCle(_dossier);
-        // L'adaptateur dit qu'il ne sert pas encore : Claude arrive avec #48.
-        Assert.Equal(RaisonDIndisponibilite.PasEncoreBranche, Assert.IsType<AucuneIA>(api.Services.GetRequiredService<ReglageDeLIA>().Fournisseur()).Raison);
+        // L'adaptateur de Claude sert (#48) ; enregistrer la clé n'a appelé personne.
+        Assert.Equal(FournisseurDIA.Claude, Assert.IsType<ClaudeEnLigne>(api.Services.GetRequiredService<ReglageDeLIA>().Fournisseur()).Fournisseur);
+        Assert.Empty(api.FauxFournisseur.Recues);
     }
 
     [Fact]

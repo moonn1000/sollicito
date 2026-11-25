@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <Compile Include="..\Commun\GrapheDesDependances.cs" Link="Commun\GrapheDesDependances.cs" />
+    <Compile Include="..\Commun\ContratDUnFournisseurDIA.cs" Link="Commun\ContratDUnFournisseurDIA.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sollicito.Infrastructure\Sollicito.Infrastructure.csproj" />

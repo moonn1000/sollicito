@@ -24,7 +24,10 @@ namespace Sollicito.Fenetre;
 /// <item>le dialogue de la restauration remplacé par un fichier de ce dossier (#28) : il vaut le oui s'il contient
 /// « restaurer » ; sans lui, la restauration est annulée. La question du dialogue est notée dans un autre fichier ;</item>
 /// <item>un point d'arrêt de la restauration (#28) : à l'étape que donne une variable d'environnement, la restauration
-/// écrit un fichier de ce dossier, puis attend que le test tue le processus, pour essayer un arrêt brutal.</item>
+/// écrit un fichier de ce dossier, puis attend que le test tue le processus, pour essayer un arrêt brutal ;</item>
+/// <item>les fournisseurs d'IA en ligne remplacés par un faux (#48), qui ne touche jamais le réseau : il répond selon le
+/// scénario qu'un fichier de ce dossier donne (« réseau absent » sans lui), et note chaque demande dans un autre, avec
+/// l'empreinte SHA-256 de l'en-tête qui porte la clé, jamais sa valeur.</item>
 /// </list>
 /// </summary>
 internal static class VersionDeTest
@@ -40,6 +43,8 @@ internal static class VersionDeTest
     public const string FichierDeLaConfirmation = "restauration-a-confirmer.txt";
     public const string FichierDesRestaurationsDemandees = "restaurations-demandees.txt";
     public const string FichierDeLArret = "restauration-arretee.txt";
+    public const string FichierDuScenarioDeLIA = "ia-scenario.txt";
+    public const string FichierDesDemandesALIA = "ia-demandes.txt";
 
     public static Lancement Lancement()
     {
@@ -67,7 +72,8 @@ internal static class VersionDeTest
             new ChoixLuDansUnFichier(Path.Combine(dossier, FichierDuDossierAChoisir)),
             new JournalDesBrouillons(Path.Combine(dossier, FichierDesBrouillonsOuverts)),
             new ConfirmationLueDansUnFichier(Path.Combine(dossier, FichierDeLaConfirmation), Path.Combine(dossier, FichierDesRestaurationsDemandees)),
-            EtapesArreteesParLeTest.Lire(Environment.GetEnvironmentVariable(VariableDeLArretDeLaRestauration), Path.Combine(dossier, FichierDeLArret)));
+            EtapesArreteesParLeTest.Lire(Environment.GetEnvironmentVariable(VariableDeLArretDeLaRestauration), Path.Combine(dossier, FichierDeLArret)),
+            () => new FauxFournisseurDeLIA(Path.Combine(dossier, FichierDuScenarioDeLIA), Path.Combine(dossier, FichierDesDemandesALIA)));
     }
 
     /// <summary>

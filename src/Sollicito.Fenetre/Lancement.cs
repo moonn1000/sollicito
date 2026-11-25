@@ -10,6 +10,7 @@ namespace Sollicito.Fenetre;
 /// <param name="OuvreurDeBrouillons">Ce qui ouvre le brouillon d'une relance : la messagerie par défaut dans la version publiée.</param>
 /// <param name="ConfirmationDeLaRestauration">Ce qui demande le oui d'une restauration : le dialogue de Windows dans la version publiée (#28).</param>
 /// <param name="EtapesDeLaRestauration">Ce qui voit passer les étapes d'une restauration : rien dans la version publiée.</param>
+/// <param name="FaussesReponsesDeLIA">Ce qui répond à la place des fournisseurs d'IA en ligne : rien dans la version publiée, qui les appelle (#48).</param>
 internal sealed record Lancement(
     string DossierDeDonnees,
     string? ArgumentsDuNavigateur,
@@ -19,7 +20,8 @@ internal sealed record Lancement(
     IChoixDUnDossier ChoixDUnDossier,
     IOuvreurDeBrouillons OuvreurDeBrouillons,
     IConfirmationDeLaRestauration ConfirmationDeLaRestauration,
-    Api.Sauvegardes.IEtapesDeLaRestauration? EtapesDeLaRestauration)
+    Api.Sauvegardes.IEtapesDeLaRestauration? EtapesDeLaRestauration,
+    Func<HttpMessageHandler>? FaussesReponsesDeLIA)
 {
     /// <summary>Le lancement de cet exe.</summary>
     public static Lancement Lire()
@@ -36,7 +38,8 @@ internal sealed record Lancement(
             new ChoixParLeDialogue(),
             new OuvreurDeBrouillonsParLeShell(),
             new ConfirmationParLeDialogue(),
-            EtapesDeLaRestauration: null);
+            EtapesDeLaRestauration: null,
+            FaussesReponsesDeLIA: null);
 #endif
     }
 }

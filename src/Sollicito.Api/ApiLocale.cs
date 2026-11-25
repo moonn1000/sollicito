@@ -19,6 +19,7 @@ using Sollicito.Application.Offres;
 using Sollicito.Application.Relances;
 using Sollicito.Infrastructure;
 using Sollicito.Infrastructure.IA;
+using Sollicito.Infrastructure.IA.EnLigne;
 using Sollicito.Infrastructure.Persistance;
 
 namespace Sollicito.Api;
@@ -50,7 +51,15 @@ public static class ApiLocale
     /// <param name="fichiersDeLInterface">Les fichiers de l'interface React construite (index.html, assets).</param>
     /// <param name="dossierDeDonnees">Le dossier de données de l'utilisateur, déjà créé : la racine du contenu et le dossier de la base.</param>
     /// <param name="etapesDeLaRestauration">Ce qui voit passer les étapes d'une restauration : la version de test seule en donne (#28).</param>
-    public static WebApplication ConstruirePourLaFenetre(IFileProvider fichiersDeLInterface, string dossierDeDonnees, IEtapesDeLaRestauration? etapesDeLaRestauration = null)
+    /// <param name="faussesReponsesDeLIA">
+    /// Ce qui répond à la place des fournisseurs d'IA en ligne, sans jamais toucher le réseau : la version de test seule en
+    /// donne (#48). Sans lui, le transport de production sert, vers les adresses fixées dans le code.
+    /// </param>
+    public static WebApplication ConstruirePourLaFenetre(
+        IFileProvider fichiersDeLInterface,
+        string dossierDeDonnees,
+        IEtapesDeLaRestauration? etapesDeLaRestauration = null,
+        Func<HttpMessageHandler>? faussesReponsesDeLIA = null)
     {
         ArgumentNullException.ThrowIfNull(fichiersDeLInterface);
         ArgumentException.ThrowIfNullOrEmpty(dossierDeDonnees);
@@ -78,6 +87,11 @@ public static class ApiLocale
                 if (etapesDeLaRestauration is not null)
                 {
                     builder.Services.AddSingleton(etapesDeLaRestauration);
+                }
+
+                if (faussesReponsesDeLIA is not null)
+                {
+                    builder.Services.AddSingleton(_ => new TransportDeLIA(faussesReponsesDeLIA));
                 }
             });
     }
@@ -139,7 +153,16 @@ public static class ApiLocale
         // de la clé prend le dossier de la base des services, celui d'un test compris, et ne construit Data Protection
         // qu'au premier usage : rien ne s'écrit au lancement.
         builder.Services.AddSingleton<GardeDeLaCle>();
+        builder.Services.AddSingleton<ISourceDeLaCle>(services => services.GetRequiredService<GardeDeLaCle>());
         builder.Services.AddSingleton<ReglageDeLIA>();
+        // Les fournisseurs en ligne (#48, ADR-0017) : leurs adresses sont fixées dans leur code, et le transport ne se règle
+        // que dans le code, jamais par la configuration ; seul le proxy du système s'y applique. La fenêtre de la version de
+        // test, et les tests, le remplacent par un faux, qui ne touche jamais le réseau. Une demande à la fois, pour tous
+        // les fournisseurs.
+        builder.Services.TryAddSingleton(_ => new TransportDeLIA());
+        builder.Services.AddSingleton<PorteDesDemandes>();
+        builder.Services.AddSingleton<ClaudeEnLigne>();
+        builder.Services.AddSingleton<OpenAIEnLigne>();
 
         // Les statuts s'écrivent en toutes lettres. Un champ inconnu du corps rend la requête illisible plutôt que
         // d'être ignoré : le statut, par exemple, ne vient jamais de l'interface. Un champ répété aussi (#36) : sans

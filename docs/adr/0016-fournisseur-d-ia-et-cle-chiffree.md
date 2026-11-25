@@ -1,6 +1,6 @@
 # ADR-0016 : le fournisseur d'IA, un réglage, un port, et une clé chiffrée hors de la base
 
-- **Statut** : acceptée ; critères et décisions acceptés par le pilote le 2026-11-24
+- **Statut** : acceptée ; critères et décisions acceptés par le pilote le 2026-11-24 ; « Le port du fournisseur » précisé par l'[ADR-0017](0017-fournisseurs-d-ia-en-ligne.md) (les issues d'une demande, l'essai de la clé, « pas encore branché » réservé à Ollama)
 - **Date** : 2026-11-24
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D7 (l'interface de fournisseur, ce que #43 en branche ; « une clé, une adresse » : la clé liée à son fournisseur, effacée quand il change), D9 (« Secrets et journaux » : le trousseau, son dossier, DPAPI en portée utilisateur, ce que les journaux en disent) et D10 (la clé hors de la base, de ses copies et des exports ; ce qu'elle devient après une restauration) ; [ADR-0004](0004-v1-resserree-paliers.md), « Contexte » (le premier écran qui propose de connecter une IA) ; [ADR-0008](0008-sauvegardes-de-la-base.md), « Le premier réglage de l'application, hors de la base » (un troisième réglage, qui distingue « jamais choisi » d'« aucune IA »)
 

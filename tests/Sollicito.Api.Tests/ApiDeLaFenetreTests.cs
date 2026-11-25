@@ -3,9 +3,12 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Sollicito.Api.Donnees;
+using Sollicito.Api.IA;
 using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Securite;
 using Sollicito.Api.Tests.Outils;
+using Sollicito.Application.IA;
+using Sollicito.Infrastructure.IA.EnLigne;
 using Sollicito.Infrastructure.Persistance;
 using Sollicito.Infrastructure.Sauvegardes;
 
@@ -64,6 +67,28 @@ public sealed class ApiDeLaFenetreTests
         finally
         {
             // Avec réessai : un antivirus peut tenir un instant la base ou une copie tout juste écrite (#26).
+            await AppelsDesSauvegardes.SupprimerAsync(dossier);
+        }
+    }
+
+    [Fact]
+    public async Task Sans_fausses_reponses_elle_branche_les_fournisseurs_en_ligne_sans_rien_envoyer()
+    {
+        using var interfaceDeTest = new InterfaceDeTest();
+        var dossier = Directory.CreateTempSubdirectory("sollicito-donnees-").FullName;
+        try
+        {
+            // Construite comme la version publiée la construit (#48) : le transport de production, jamais un faux. Elle
+            // n'est pas lancée, et rien n'est demandé à l'IA : aucune requête ne part.
+            await using var app = ApiLocale.ConstruirePourLaFenetre(interfaceDeTest.Fichiers, dossier);
+
+            Assert.Single(app.Services.GetServices<TransportDeLIA>());
+            Assert.Equal(FournisseurDIA.Claude, app.Services.GetRequiredService<ClaudeEnLigne>().Fournisseur);
+            Assert.Equal(FournisseurDIA.OpenAI, app.Services.GetRequiredService<OpenAIEnLigne>().Fournisseur);
+            Assert.Equal(RaisonDIndisponibilite.AucuneIA, Assert.IsType<AucuneIA>(app.Services.GetRequiredService<ReglageDeLIA>().Fournisseur()).Raison);
+        }
+        finally
+        {
             await AppelsDesSauvegardes.SupprimerAsync(dossier);
         }
     }

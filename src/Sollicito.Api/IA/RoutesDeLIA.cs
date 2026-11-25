@@ -15,11 +15,19 @@ namespace Sollicito.Api.IA;
 /// <item><c>PUT /api/reglages/ia</c> : le fournisseur choisi ; un autre efface la clé.</item>
 /// <item><c>PUT /api/reglages/ia/cle</c> : la clé du fournisseur réglé, à la place de toute autre.</item>
 /// <item><c>DELETE /api/reglages/ia/cle</c> : la clé retirée.</item>
+/// <item><c>POST /api/reglages/ia/essai</c> : l'essai de la clé (#48), une demande fixe au fournisseur réglé, sans aucune
+/// donnée de l'utilisateur ; la réponse du fournisseur n'est jamais rendue.</item>
 /// </list>
 /// Ses titres sont publics : les tests et l'écran les comparent mot pour mot.
 /// </summary>
 public static class RoutesDeLIA
 {
+    /// <summary>L'adresse de l'essai de la clé.</summary>
+    public const string AdresseDeLEssai = "/api/reglages/ia/essai";
+
+    /// <summary>Le titre d'un essai envoyé avec un corps : il n'en prend aucun.</summary>
+    public const string TitreDeLEssaiAvecUnCorps = "L'essai de la clé ne prend aucun corps.";
+
     /// <summary>Le corps le plus gros qu'une écriture de l'IA lit : une clé de 512 caractères y tient largement.</summary>
     public const int BorneDuCorps = 4 * 1024;
 
@@ -102,6 +110,19 @@ public static class RoutesDeLIA
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithTags("IA")
             .SansLaBase();
+
+        routes.MapPost(AdresseDeLEssai, EssayerLaCleAsync)
+            .WithName("EssayerLaCleDIA")
+            .WithSummary("Tester la clé : une courte question fixe au fournisseur réglé, sans aucune donnée de l'utilisateur")
+            .WithDescription(
+                "Un seul appel, à l'adresse officielle du fournisseur, sur un geste de l'utilisateur ; ni la clé ni la réponse du "
+                + "fournisseur ne sont rendues, seulement l'issue et son texte. Refusé (400) avec un corps, (409) sans clé prête "
+                + "ou si une demande à l'IA est déjà en cours.")
+            .WithMetadata(new RequestSizeLimitAttribute(BorneDuCorps))
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithTags("IA")
+            .SansLaBase();
     }
 
     private static Ok<EtatDeLIA> Lire(ReglageDeLIA reglage) => TypedResults.Ok(reglage.LireLEtat());
@@ -153,6 +174,19 @@ public static class RoutesDeLIA
 
     private static async Task<Results<Ok<EtatDeLIA>, ProblemHttpResult>> RetirerLaCleAsync(ReglageDeLIA reglage) =>
         await reglage.RetirerLaCleAsync() ? TypedResults.Ok(reglage.LireLEtat()) : Conflit(TitreDeLaCleNonRetiree);
+
+    // L'essai n'a pas de corps : un corps annoncé, ou envoyé par morceaux, est refusé sans être lu.
+    private static async Task<Results<Ok<ResultatDeLEssai>, ProblemHttpResult>> EssayerLaCleAsync(HttpRequest requete, ReglageDeLIA reglage)
+    {
+        ArgumentNullException.ThrowIfNull(requete);
+        if (requete.ContentLength > 0 || requete.Headers.TransferEncoding.Count > 0)
+        {
+            return TypedResults.Problem(statusCode: StatusCodes.Status400BadRequest, title: TitreDeLEssaiAvecUnCorps);
+        }
+
+        var issue = await reglage.TesterLaCleAsync(requete.HttpContext.RequestAborted);
+        return issue.Resultat is { } resultat ? TypedResults.Ok(resultat) : Conflit(issue.MotifDuRefus!);
+    }
 
     private static ProblemHttpResult Conflit(string titre) => TypedResults.Problem(statusCode: StatusCodes.Status409Conflict, title: titre);
 }

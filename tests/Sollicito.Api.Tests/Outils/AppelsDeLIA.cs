@@ -61,6 +61,25 @@ public static class AppelsDeLIA
     public static Task<HttpResponseMessage> RetirerLaCleAsync(this ApiLancee api) =>
         api.EcrireAsync(HttpMethod.Delete, AdresseDeLaCle, corps: null);
 
+    /// <summary>L'adresse de l'essai de la clé (#48).</summary>
+    public const string AdresseDeLEssai = "/api/reglages/ia/essai";
+
+    /// <summary>Teste la clé, sans corps, comme la section « IA » le fait.</summary>
+    public static Task<HttpResponseMessage> EssayerLaCleAsync(this ApiLancee api) =>
+        api.EcrireAsync(HttpMethod.Post, AdresseDeLEssai, corps: null);
+
+    /// <summary>Teste la clé, et rend le résultat d'un essai parti (200).</summary>
+    public static async Task<JsonObject> EssayerLaCleAvecResultatAsync(this ApiLancee api)
+    {
+        using var reponse = await api.EssayerLaCleAsync();
+        Assert.Equal(HttpStatusCode.OK, reponse.StatusCode);
+        return (await AppelsDesCandidatures.LireAsync(reponse)).AsObject();
+    }
+
+    /// <summary>Le résultat attendu d'un essai, écrit comme l'API le rend.</summary>
+    public static string ResultatDeLEssai(bool reussi, string? echec, string message) =>
+        new JsonObject { ["reussi"] = reussi, ["echec"] = echec, ["message"] = message }.ToJsonString();
+
     /// <summary>L'état attendu, écrit comme l'API le rend.</summary>
     public static string Etat(string fournisseur, bool choisi, string cle, bool reglageLisible = true, bool fichierLisible = true) =>
         new JsonObject
