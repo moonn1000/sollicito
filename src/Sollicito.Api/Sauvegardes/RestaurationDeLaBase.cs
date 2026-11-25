@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using Sollicito.Api.Relances;
 using Sollicito.Application.Sauvegardes;
 using Sollicito.Infrastructure.Persistance;
 using Sollicito.Infrastructure.Sauvegardes;
@@ -27,6 +28,7 @@ public sealed partial class RestaurationDeLaBase(
     DossierDeLaBase dossier,
     TimeProvider horloge,
     IEtapesDeLaRestauration etapes,
+    BrouillonsRelus relus,
     ILogger<RestaurationDeLaBase> journal)
 {
     /// <summary>Le temps laissé à la vérification de la copie de travail, migration comprise.</summary>
@@ -161,6 +163,8 @@ public sealed partial class RestaurationDeLaBase(
 
             try
             {
+                // Le texte relu d'un premier jet (#47) désigne une relance de la base d'avant : il ne s'ouvre plus.
+                relus.Vider();
                 etapes.Atteinte(EtapeDeLaRestauration.PorteFermee);
                 return await CopierPuisRemplacerAsync(demande, copieDeTravail, verdict, annulation);
             }

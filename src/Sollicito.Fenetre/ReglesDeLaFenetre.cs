@@ -130,10 +130,23 @@ internal static class ReglesDeLaFenetre
     /// message porte son type et l'identifiant de la relance, un entier positif, et rien d'autre : un champ de plus, et
     /// rien ne s'ouvre, pas plus que pour un message mal formé, d'un autre type, ou sans identifiant.
     /// </summary>
-    public static bool DemandeLeBrouillon(string? source, string? messageEnJson, Uri origine, out int relance)
+    public static bool DemandeLeBrouillon(string? source, string? messageEnJson, Uri origine, out int relance) =>
+        DemandeUnBrouillon(source, messageEnJson, origine, "ouvrirLeBrouillon", out relance);
+
+    /// <summary>
+    /// Vrai si le message vient de l'interface et demande le brouillon du texte relu d'un premier jet (#47, ADR-0019) : la
+    /// fenêtre prend alors le texte que la page a déposé auprès de l'API pour cette relance, et l'ouvre dans la messagerie,
+    /// avec l'objet et le destinataire lus en base. Même contrôle et même forme stricte que le message de #14 : le type et
+    /// l'identifiant de la relance, un entier positif, et rien d'autre ; jamais le texte.
+    /// </summary>
+    public static bool DemandeLeBrouillonRelu(string? source, string? messageEnJson, Uri origine, out int relance) =>
+        DemandeUnBrouillon(source, messageEnJson, origine, "ouvrirLeBrouillonRelu", out relance);
+
+    // Un message de l'interface, du type attendu, qui ne porte que l'identifiant d'une relance, un entier positif.
+    private static bool DemandeUnBrouillon(string? source, string? messageEnJson, Uri origine, string typeAttendu, out int relance)
     {
         relance = 0;
-        if (!EstUnMessageDeLInterface(source, messageEnJson, origine, "ouvrirLeBrouillon"))
+        if (!EstUnMessageDeLInterface(source, messageEnJson, origine, typeAttendu))
         {
             return false;
         }
@@ -154,9 +167,17 @@ internal static class ReglesDeLaFenetre
     /// Le message qui rend à l'interface l'issue de l'ouverture du brouillon de cette relance, sans rien du brouillon :
     /// ni adresse, ni texte.
     /// </summary>
-    public static string MessageDuBrouillon(int relance, IssueDuBrouillon issue) => JsonSerializer.Serialize(new
+    public static string MessageDuBrouillon(int relance, IssueDuBrouillon issue) => MessageDUnBrouillon("brouillonDeRelance", relance, issue);
+
+    /// <summary>
+    /// Le message qui rend à l'interface l'issue de l'ouverture du brouillon relu de cette relance (#47), sans rien du
+    /// brouillon. Son type diffère de celui de #14 : les réponses des deux boutons d'une même relance ne se mêlent pas.
+    /// </summary>
+    public static string MessageDuBrouillonRelu(int relance, IssueDuBrouillon issue) => MessageDUnBrouillon("brouillonRelu", relance, issue);
+
+    private static string MessageDUnBrouillon(string type, int relance, IssueDuBrouillon issue) => JsonSerializer.Serialize(new
     {
-        type = "brouillonDeRelance",
+        type,
         relance,
         issue = issue switch
         {
