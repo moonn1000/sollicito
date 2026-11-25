@@ -276,12 +276,31 @@ public sealed class LectureDeLaPropositionTests
         Assert.Equal(new ChampEcarte(ChampDeLaProposition.Adresse, MotifDeLEcart.AdresseAbsenteDuTexte), Assert.Single(proposee.Ecartes));
     }
 
+    // Une ponctuation ne ferme l'adresse que si elle est elle-même suivie de la fin du texte ou d'un blanc : sinon, elle est la
+    // suite d'une adresse plus longue (un port, une requête, un autre sous-domaine), et l'adresse proposée n'en est qu'un début.
+    [Theory]
+    [InlineData("https://emplois.exemple", "Postulez : https://emplois.exemple:8443/x")]
+    [InlineData("https://emplois.exemple/offre", "Postulez sur https://emplois.exemple/offre?id=42")]
+    [InlineData("https://emplois", "Postulez sur https://emplois.exemple/offres/42.")]
+    [InlineData("https://emplois.exemple/offres/42", "Postulez sur https://emplois.exemple/offres/42,autre")]
+    [InlineData("https://emplois.exemple/offres/42", "Postulez sur https://emplois.exemple/offres/42).x")]
+    public void Un_debut_d_adresse_suivi_d_une_ponctuation_n_est_pas_propose(string adresse, string texte)
+    {
+        var proposee = Assert.IsType<IssueDeLExtraction.Proposee>(LectureDeLaProposition.Lire(Objet(adresse: Chaine(adresse)), texte, Aujourdhui));
+
+        Assert.Null(proposee.Champs.Adresse);
+        Assert.Equal(new ChampEcarte(ChampDeLaProposition.Adresse, MotifDeLEcart.AdresseAbsenteDuTexte), Assert.Single(proposee.Ecartes));
+    }
+
     [Theory]
     [InlineData("Postulez sur https://emplois.exemple/offres/42")]
     [InlineData("Postulez sur https://emplois.exemple/offres/42.")]
+    [InlineData("Postulez sur https://emplois.exemple/offres/42. Merci.")]
     [InlineData("(https://emplois.exemple/offres/42)")]
+    [InlineData("(voir https://emplois.exemple/offres/42), puis")]
     [InlineData("« https://emplois.exemple/offres/42 »")]
     [InlineData("https://emplois.exemple/offres/4 puis https://emplois.exemple/offres/42\n")]
+    [InlineData("https://emplois.exemple/offres/42:\n")]
     public void Une_adresse_entiere_du_texte_est_proposee_quelle_que_soit_la_ponctuation_qui_la_suit(string texte)
     {
         var proposee = Assert.IsType<IssueDeLExtraction.Proposee>(LectureDeLaProposition.Lire(Objet(), texte, Aujourdhui));

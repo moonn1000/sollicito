@@ -184,17 +184,27 @@ public static class LectureDeLaProposition
         return new IssueDeLExtraction.Proposee(new ChampsProposes(entreprise, poste, lieu, publieeLe, adresse), ecartes);
     }
 
+    // Ce qui ferme une phrase, une parenthèse ou une citation, juste après une adresse.
+    private const string PonctuationApresUneAdresse = ")]}>»\"'.,;:!?";
+
     /// <summary>
-    /// Vrai si <paramref name="adresse"/> figure telle quelle dans le texte, entière : suivie de la fin du texte, d'un blanc,
-    /// ou d'une ponctuation qui la ferme. Un début d'adresse (le seul domaine, <c>…/offres/4</c> pour <c>…/offres/42</c>)
-    /// ne compte pas.
+    /// Vrai si <paramref name="adresse"/> figure telle quelle dans le texte, entière : suivie de la fin du texte ou d'un
+    /// blanc, directement, ou après de la ponctuation de fin de phrase (<c>…/42.</c>, <c>(…/42)</c>, <c>…/42).</c>) qui est
+    /// elle-même suivie de la fin du texte ou d'un blanc. Une ponctuation suivie d'autre chose est la suite d'une adresse plus
+    /// longue : <c>https://emplois.exemple</c> dans <c>…exemple:8443/x</c>, <c>…/offre</c> dans <c>…/offre?id=42</c>,
+    /// <c>https://emplois</c> dans <c>…emplois.exemple/offres/42.</c> ne sont que des débuts d'adresse, et ne comptent pas.
     /// </summary>
     internal static bool FigureDansLeTexte(string adresse, string texte)
     {
         for (var debut = texte.IndexOf(adresse, StringComparison.Ordinal); debut >= 0; debut = texte.IndexOf(adresse, debut + 1, StringComparison.Ordinal))
         {
-            var fin = debut + adresse.Length;
-            if (fin == texte.Length || char.IsWhiteSpace(texte[fin]) || ")]}>»\"'.,;:!?".Contains(texte[fin], StringComparison.Ordinal))
+            var suite = debut + adresse.Length;
+            while (suite < texte.Length && PonctuationApresUneAdresse.Contains(texte[suite], StringComparison.Ordinal))
+            {
+                suite++;
+            }
+
+            if (suite == texte.Length || char.IsWhiteSpace(texte[suite]))
             {
                 return true;
             }
