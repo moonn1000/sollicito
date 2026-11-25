@@ -163,6 +163,8 @@ public static class ApiLocale
         builder.Services.AddSingleton<PorteDesDemandes>();
         builder.Services.AddSingleton<ClaudeEnLigne>();
         builder.Services.AddSingleton<OpenAIEnLigne>();
+        // L'extraction d'une offre collée (#46, ADR-0018) : sur un clic, par le port ; elle ne touche pas la base.
+        builder.Services.AddSingleton<ExtractionDesOffres>();
 
         // Les statuts s'écrivent en toutes lettres. Un champ inconnu du corps rend la requête illisible plutôt que
         // d'être ignoré : le statut, par exemple, ne vient jamais de l'interface. Un champ répété aussi (#36) : sans
@@ -207,6 +209,7 @@ public static class ApiLocale
         RoutesDesRelances.Declarer(app);
         RoutesDesOffres.Declarer(app);
         RoutesDeLImport.Declarer(app);
+        RoutesDeLExtraction.Declarer(app);
         RoutesDeLIA.Declarer(app);
 
         return app;

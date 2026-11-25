@@ -217,6 +217,22 @@ button {
   color: var(--refus);
 }
 
+/* Un champ que l'IA a rempli, à relire (#46). */
+.marque {
+  margin: 0.3rem 0 0;
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.proposition-de-l-ia {
+  margin: 0 0 1rem;
+}
+
+.etat-de-la-proposition {
+  margin: 0.3rem 0 0;
+}
+
 .propositions p {
   margin: 0 0 0.3rem;
   color: var(--texte-discret);

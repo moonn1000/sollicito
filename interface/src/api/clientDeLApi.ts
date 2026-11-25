@@ -245,6 +245,27 @@ export type ResultatDeLIA = { issue: "fait"; etat: EtatDeLIA } | { issue: "refus
  */
 export type ResultatDeLEssai = { issue: "fait"; reussi: boolean; message: string } | { issue: "refuse"; motif: string };
 
+/** Les champs d'une offre que l'IA propose (#46) : chacun un texte, ou rien s'il n'a pas été trouvé ou a été écarté. */
+export interface ChampsProposes {
+  entreprise: string | null;
+  poste: string | null;
+  lieu: string | null;
+  /** `AAAA-MM-JJ`. */
+  publieeLe: string | null;
+  adresse: string | null;
+}
+
+/**
+ * Ce que rend l'extraction d'une offre collée (#46) : les champs proposés ; l'échec et son texte ; le refus du texte,
+ * avant toute demande ; ou le motif d'un refus sans requête (aucune IA prête, une demande en cours). Jamais le texte de
+ * l'IA, ni celui du fournisseur.
+ */
+export type ResultatDeLExtraction =
+  | { issue: "proposee"; champs: ChampsProposes }
+  | { issue: "echec"; message: string }
+  | { issue: "texteRefuse"; refus: string[] }
+  | { issue: "refuse"; motif: string };
+
 /** Ce que rend l'enregistrement d'une clé : l'état à jour, le refus du champ, ou le motif d'un refus. */
 export type ResultatDeLaCle =
   | { issue: "enregistree"; etat: EtatDeLIA }
@@ -603,6 +624,11 @@ export interface ClientDeLApi {
    */
   testerLaCleDIA(): Promise<ResultatDeLEssai>;
   /**
+   * Demande à l'IA réglée de proposer les champs d'une offre collée (#46), sur le seul geste de l'utilisateur : son texte
+   * part comme une donnée à analyser, et rien ne s'enregistre. `annulation` interrompt la demande, quand l'écran se ferme.
+   */
+  extraireUneOffre(texte: string, annulation?: AbortSignal): Promise<ResultatDeLExtraction>;
+  /**
    * Colle une offre (#36) : sa fiche, ou les refus de ses champs, ou l'offre déjà enregistrée du même texte, ou ses
    * doublons possibles. Avec `garderLesDeux`, un doublon possible s'enregistre quand même.
    */
@@ -657,12 +683,12 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
     return reponse.json();
   };
 
-  // Une écriture en JSON, ou sans corps : un envoi (POST), sauf mention d'une autre méthode.
-  const ecrire = (chemin: string, corps?: unknown, method: "POST" | "PUT" | "DELETE" = "POST") =>
+  // Une écriture en JSON, ou sans corps : un envoi (POST), sauf mention d'une autre méthode. `signal` l'interrompt.
+  const ecrire = (chemin: string, corps?: unknown, method: "POST" | "PUT" | "DELETE" = "POST", signal?: AbortSignal) =>
     appeler(
       chemin,
       corps === undefined ? {} : { "Content-Type": "application/json" },
-      corps === undefined ? { method } : { method, body: JSON.stringify(corps) },
+      corps === undefined ? { method, signal } : { method, body: JSON.stringify(corps), signal },
     );
 
   // La fiche à jour (200), ou le motif d'un refus que l'état de la candidature explique (409).
@@ -882,6 +908,31 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
 
       throw new ErreurDeLApi(reponse.status);
     },
+    extraireUneOffre: async (texte, annulation) => {
+      const reponse = await ecrire("/api/offres/extraction", { texte }, "POST", annulation);
+      if (reponse.status === 200) {
+        const resultat = lireLeResultatDeLExtraction(await reponse.json().catch(() => undefined));
+        if (resultat !== undefined) {
+          return resultat;
+        }
+      }
+
+      if (reponse.status === 400) {
+        const refus = lireLesRefus(await reponse.json().catch(() => undefined), ["texte"] as const);
+        if (refus?.texte !== undefined) {
+          return { issue: "texteRefuse", refus: refus.texte };
+        }
+      }
+
+      if (reponse.status === 409) {
+        const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+        if (motif !== undefined) {
+          return { issue: "refuse", motif };
+        }
+      }
+
+      throw new ErreurDeLApi(reponse.status);
+    },
     collerUneOffre: async (saisie, garderLesDeux = false) =>
       enregistrerLOffre(await ecrire("/api/offres", garderLesDeux ? { ...saisie, garderLesDeux: true } : saisie), 201),
     lireUneOffre: async (offre) => (await lire(adresseDeLOffre(offre))) as FicheDUneOffre,
@@ -1085,6 +1136,38 @@ function lireLeResultatDeLEssai(corps: unknown): { reussi: boolean; message: str
   const { reussi, message } = corps as { reussi?: unknown; message?: unknown };
   return typeof reussi === "boolean" && typeof message === "string" && message.length > 0 ? { reussi, message } : undefined;
 }
+
+// Le résultat d'une extraction partie : les cinq champs proposés, chacun un texte ou rien ; ou l'échec et son texte.
+// Rien d'autre n'est lu de la réponse, et une forme inattendue ne propose rien.
+function lireLeResultatDeLExtraction(corps: unknown): ResultatDeLExtraction | undefined {
+  if (typeof corps !== "object" || corps === null) {
+    return undefined;
+  }
+
+  const { issue, champs, message } = corps as { issue?: unknown; champs?: unknown; message?: unknown };
+  if (issue === "Echec") {
+    return typeof message === "string" && message.length > 0 ? { issue: "echec", message } : undefined;
+  }
+
+  if (issue !== "Proposee" || typeof champs !== "object" || champs === null) {
+    return undefined;
+  }
+
+  const lus: Partial<Record<keyof ChampsProposes, string | null>> = {};
+  for (const champ of CHAMPS_PROPOSES) {
+    const valeur = (champs as Record<string, unknown>)[champ];
+    if (valeur !== null && typeof valeur !== "string") {
+      return undefined;
+    }
+
+    lus[champ] = valeur;
+  }
+
+  return { issue: "proposee", champs: lus as ChampsProposes };
+}
+
+// Les champs d'une proposition, dans l'ordre du formulaire.
+const CHAMPS_PROPOSES = ["entreprise", "poste", "lieu", "publieeLe", "adresse"] as const satisfies readonly (keyof ChampsProposes)[];
 
 // L'état de l'IA à jour (200), ou le motif d'un refus (409) : réglages illisibles, clé qui ne s'efface pas.
 async function reglerLIA(reponse: Response): Promise<ResultatDeLIA> {

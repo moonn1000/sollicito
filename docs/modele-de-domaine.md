@@ -308,7 +308,7 @@ Une offre arrive par un connecteur (ADR-0001, D6) : en V1, le texte collé (#36)
 
 ## Coller une offre
 
-L'écran « Coller une offre » (#36) prend le texte d'une offre trouvée ailleurs, gardé tel quel, et ses champs, que l'utilisateur remplit lui-même, sans IA ni aucun appel réseau. Comme pour la saisie d'une candidature, l'écran envoie chaque champ tel que l'utilisateur l'a tapé ; l'API le lit et le valide, et renvoie pour chaque champ refusé un message lisible, qui ne reprend jamais le texte refusé (ADR-0013).
+L'écran « Coller une offre » (#36) prend le texte d'une offre trouvée ailleurs, gardé tel quel, et ses champs, que l'utilisateur remplit lui-même, ou fait proposer par l'IA réglée, sur un clic (#46, ADR-0018) : la proposition ne remplit que les champs vides, chacune de ses valeurs a passé les règles ci-dessous, et elle se relit avant l'enregistrement. Comme pour la saisie d'une candidature, l'écran envoie chaque champ tel que l'utilisateur l'a tapé ; l'API le lit et le valide, et renvoie pour chaque champ refusé un message lisible, qui ne reprend jamais le texte refusé (ADR-0013).
 
 | Champ | Règle |
 | --- | --- |
@@ -476,6 +476,7 @@ Ni les réglages ni les sauvegardes ne sont des entités du domaine : rien d'eux
 | #38 | une offre, au plus une candidature, le lien porté par la candidature ; « Postuler » reprend l'entreprise et le poste, lus en base, et ne prend de l'écran que la date d'envoi ; l'offre sans entreprise, qui reçoit la sienne par sa correction ; le doublon possible déjà postulé, montré ; la liste des offres et ses filtres, dans la page ; le nom corrigé d'une entreprise, qui compte aussi ses offres ; et ce que #25 lui confie, faute d'offres en base : supprimer la candidature laisse son offre, qui peut en recevoir une nouvelle ; de #36, l'entreprise de l'offre, déjà proposée, et ses doublons possibles, relus avec la fiche |
 | #43 | les réglages hors du domaine : le fournisseur d'IA, troisième réglage, « jamais choisi » distinct d'« aucune IA », lu et écrit à part ; la clé, hors du domaine et de la base |
 | #40 | les règles 2 et 3 pour une ligne de CSV, contre la base et dans le fichier, et le sort de chaque ligne ; l'empreinte sur les six champs lus, la date sous sa forme `AAAA-MM-JJ` ; le doublon possible gardé ligne à ligne ; l'entreprise reconnue, ou créée une fois par fichier, sans renommage ; la ligne sans texte ; la copie de la base avant chaque import, de la sorte d'avant une restauration |
+| #46 | l'extraction d'une offre par l'IA, hors du domaine : le texte qu'elle reçoit est celui que le collage garderait, et chaque valeur qu'elle propose passe la règle de son champ, par les validateurs du domaine ; aucune entité ne change, et rien ne s'enregistre sans « Enregistrer l'offre » |
 
 ## En V2
 

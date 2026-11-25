@@ -17,6 +17,7 @@ export function Champ({
   id,
   libelle,
   aide,
+  marque,
   refus,
   children,
 }: {
@@ -24,13 +25,18 @@ export function Champ({
   libelle: string;
   /** Ce qu'il faut savoir avant de remplir le champ, par exemple une limite. */
   aide?: string;
+  /** Ce qui distingue sa valeur, par exemple une valeur que l'IA a proposée et qu'il faut relire (#46). */
+  marque?: string;
   refus: string[] | undefined;
   children: (attributs: AttributsDuChamp) => ReactNode;
 }) {
   const refuse = refus !== undefined && refus.length > 0;
   const idDeLAide = `${id}-aide`;
+  const idDeLaMarque = `${id}-marque`;
   const idDuRefus = `${id}-refus`;
-  const description = [aide === undefined ? undefined : idDeLAide, refuse ? idDuRefus : undefined].filter(Boolean).join(" ");
+  const description = [aide === undefined ? undefined : idDeLAide, marque === undefined ? undefined : idDeLaMarque, refuse ? idDuRefus : undefined]
+    .filter(Boolean)
+    .join(" ");
   return (
     <div className={refuse ? "champ champ-refuse" : "champ"}>
       <label htmlFor={id}>{libelle}</label>
@@ -43,6 +49,11 @@ export function Champ({
       {aide !== undefined && (
         <p className="aide" id={idDeLAide}>
           {aide}
+        </p>
+      )}
+      {marque !== undefined && (
+        <p className="marque" id={idDeLaMarque}>
+          {marque}
         </p>
       )}
       {refuse && (
