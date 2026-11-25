@@ -224,7 +224,7 @@ stateDiagram-v2
 - **Destinataire** : l'utilisateur le choisit parmi les contacts de l'entreprise de la candidature. Si l'entreprise n'en a qu'un, il est proposé d'office ; si elle n'en a aucun, la relance reste sans destinataire, et son brouillon s'ouvre sans (#14). Rattacher la candidature à une autre entreprise (#25) retire le destinataire de sa relance à faire ; les relances closes gardent le leur. Supprimer un contact le retire de toutes ses relances, closes comprises.
 - **Faite ou abandonnée** : c'est définitif, et une clôture de relance, datée par l'horloge, entre dans l'historique de la candidature, avec l'échéance et le destinataire de la relance. Comme tout événement en vigueur, elle borne la date d'envoi corrigée (voir « Modifier ou supprimer une candidature »).
 - **Clore la candidature** abandonne sa relance à faire, avec sa clôture. Corriger ensuite le dernier changement rouvre la candidature, pas sa relance.
-- **Le brouillon** d'une relance à faire s'ouvre dans la messagerie de l'utilisateur, par la fenêtre hôte, à partir de la base : l'utilisateur l'envoie lui-même (ADR-0011).
+- **Le brouillon** d'une relance à faire s'ouvre dans la messagerie de l'utilisateur, par la fenêtre hôte, à partir de la base : l'utilisateur l'envoie lui-même (ADR-0011). Son corps peut être le premier jet que l'IA a rédigé, relu et corrigé par l'utilisateur (#47, ADR-0019) : ce texte, gardé en mémoire et jamais en base, remplace le corps du gabarit ; l'objet et le destinataire restent ceux de la base.
 
 ## Contact
 
@@ -477,6 +477,7 @@ Ni les réglages ni les sauvegardes ne sont des entités du domaine : rien d'eux
 | #43 | les réglages hors du domaine : le fournisseur d'IA, troisième réglage, « jamais choisi » distinct d'« aucune IA », lu et écrit à part ; la clé, hors du domaine et de la base |
 | #40 | les règles 2 et 3 pour une ligne de CSV, contre la base et dans le fichier, et le sort de chaque ligne ; l'empreinte sur les six champs lus, la date sous sa forme `AAAA-MM-JJ` ; le doublon possible gardé ligne à ligne ; l'entreprise reconnue, ou créée une fois par fichier, sans renommage ; la ligne sans texte ; la copie de la base avant chaque import, de la sorte d'avant une restauration |
 | #46 | l'extraction d'une offre par l'IA, hors du domaine : le texte qu'elle reçoit est celui que le collage garderait, et chaque valeur qu'elle propose passe la règle de son champ, par les validateurs du domaine ; aucune entité ne change, et rien ne s'enregistre sans « Enregistrer l'offre » |
+| #47 | le brouillon d'une relance à faire, dont le corps peut être le premier jet relu que l'IA a rédigé : hors du domaine et de la base, en mémoire, à la place du corps du gabarit de #14 ; l'objet et le destinataire, toujours ceux de la base ; ce que la demande à l'IA reprend de la relance, le poste, le nom de l'entreprise et le jour local d'envoi de la candidature, que le domaine exige déjà : une demande sans donnée ne part pas |
 
 ## En V2
 

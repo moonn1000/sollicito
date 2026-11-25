@@ -1,6 +1,6 @@
 # ADR-0011 : relances, contact minimal, brouillon ouvert par l'hôte et délai par défaut
 
-- **Statut** : acceptée
+- **Statut** : acceptée ; « Le brouillon, ouvert par l'hôte à partir de la base » précisé par l'[ADR-0019](0019-brouillon-de-relance-redige-par-l-ia.md) (le texte relu d'un premier jet de l'IA à la place du corps du gabarit, l'objet et le destinataire toujours lus en base, un lien borné)
 - **Date** : 2026-11-21
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D5 (le contact minimal et la règle de son adresse) et D8 (le brouillon : quels champs, quel encodage, aucun autre en-tête) ; [ADR-0003](0003-hote-interface-webview2.md), « Durcissement de la fenêtre », point « Brouillon de relance » (un troisième message de la page à l'hôte, qui ne porte que l'identifiant de la relance) ; [ADR-0004](0004-v1-resserree-paliers.md), « Ce qui quitte la machine » (une messagerie en ligne reçoit le brouillon avant tout envoi) ; [ADR-0008](0008-sauvegardes-de-la-base.md), « Le premier réglage de l'application, hors de la base » (un second réglage, lu et écrit à part)
 

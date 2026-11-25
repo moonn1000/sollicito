@@ -13,9 +13,9 @@ namespace Sollicito.Fenetre;
 /// La fenêtre hôte de l'ADR-0003 : WebView2 dans une fenêtre WinForms, qui n'affiche que l'interface locale et ne
 /// laisse rien sortir vers une autre origine (ADR-0001, D9, « Fenêtre »). Elle remet le jeton à l'interface par son
 /// canal interne, lui ouvre le dialogue de dossier des sauvegardes (#26, ADR-0008), ouvre dans la messagerie le
-/// brouillon d'une relance (#14, ADR-0011), et restaure une copie gardée après le oui de l'utilisateur dans son propre
-/// dialogue (#28, ADR-0012). Le contrôle WebView2 n'est touché que depuis le fil de la fenêtre, où arrivent tous ses
-/// événements.
+/// brouillon d'une relance (#14, ADR-0011), ou le texte relu de son premier jet (#47, ADR-0019), et restaure une copie
+/// gardée après le oui de l'utilisateur dans son propre dialogue (#28, ADR-0012). Le contrôle WebView2 n'est touché que
+/// depuis le fil de la fenêtre, où arrivent tous ses événements.
 /// </summary>
 internal sealed class FenetreHote : Form
 {
@@ -27,9 +27,10 @@ internal sealed class FenetreHote : Form
     private readonly RestaurationDeLaBase _restauration;
     private readonly WebView2 _vue = new() { Dock = DockStyle.Fill };
     private CoreWebView2Environment? _environnement;
-    // Les demandes de brouillon reçues pendant un autre, servies dans l'ordre ; au-delà, une demande est ignorée.
+    // Les demandes de brouillon reçues pendant un autre, servies dans l'ordre ; au-delà, une demande est ignorée. Un
+    // brouillon relu (#47) prend place dans la même file que celui de #14.
     private const int BrouillonsEnAttenteAuPlus = 4;
-    private readonly Queue<int> _brouillonsEnAttente = new();
+    private readonly Queue<(int Relance, bool Relu)> _brouillonsEnAttente = new();
     private bool _choixEnCours;
     private bool _brouillonEnCours;
     // Une restauration à la fois, du message jusqu'à son issue ; la fermeture de la fenêtre l'attend.
@@ -169,7 +170,7 @@ internal sealed class FenetreHote : Form
     }
 
     // Canal du jeton : seul un message dont la source est l'interface le reçoit (ADR-0003, « Canal du jeton »). Le choix
-    // du dossier des sauvegardes (#26) et le brouillon d'une relance (#14) passent par le même contrôle.
+    // du dossier des sauvegardes (#26) et le brouillon d'une relance (#14), relu ou non (#47), passent par le même contrôle.
     private void SurMessage(object? sender, CoreWebView2WebMessageReceivedEventArgs args)
     {
         if (ReglesDeLaFenetre.DemandeLeJeton(args.Source, args.WebMessageAsJson, _origine))
@@ -188,11 +189,13 @@ internal sealed class FenetreHote : Form
         {
             // Un seul brouillon à la fois, ouvert après ce gestionnaire, comme le dialogue : le shell de Windows peut
             // afficher sa propre fenêtre. Une demande faite pendant un brouillon attend son tour, et reçoit sa réponse.
-            _brouillonsEnAttente.Enqueue(relance);
-            if (!_brouillonEnCours)
-            {
-                OuvrirLeBrouillonSuivant();
-            }
+            MettreEnAttente(relance, relu: false);
+        }
+        else if (ReglesDeLaFenetre.DemandeLeBrouillonRelu(args.Source, args.WebMessageAsJson, _origine, out var relanceRelue)
+            && _brouillonsEnAttente.Count < BrouillonsEnAttenteAuPlus)
+        {
+            // Le texte relu d'un premier jet (#47), dans la même file.
+            MettreEnAttente(relanceRelue, relu: true);
         }
         else if (ReglesDeLaFenetre.DemandeLaRestauration(args.Source, args.WebMessageAsJson, _origine, out var copie))
         {
@@ -289,23 +292,36 @@ internal sealed class FenetreHote : Form
         base.OnFormClosing(e);
     }
 
-    private void OuvrirLeBrouillonSuivant()
+    private void MettreEnAttente(int relance, bool relu)
     {
-        if (_brouillonsEnAttente.TryDequeue(out var relance))
+        _brouillonsEnAttente.Enqueue((relance, relu));
+        if (!_brouillonEnCours)
         {
-            _brouillonEnCours = true;
-            BeginInvoke(() => OuvrirLeBrouillon(relance));
+            OuvrirLeBrouillonSuivant();
         }
     }
 
-    // Le brouillon de la relance, construit à partir des champs que l'API lit en base, puis ouvert dans la messagerie.
-    // La page ne reçoit que l'issue, sans rien du brouillon.
-    private async void OuvrirLeBrouillon(int relance)
+    private void OuvrirLeBrouillonSuivant()
+    {
+        if (_brouillonsEnAttente.TryDequeue(out var demande))
+        {
+            _brouillonEnCours = true;
+            BeginInvoke(() => OuvrirLeBrouillon(demande.Relance, demande.Relu));
+        }
+    }
+
+    // Le brouillon de la relance, construit à partir des champs que l'API lit en base, puis ouvert dans la messagerie ;
+    // relu (#47), son corps est le texte que la page a déposé, revérifié. La page ne reçoit que l'issue, sans rien du
+    // brouillon.
+    private async void OuvrirLeBrouillon(int relance, bool relu)
     {
         var issue = IssueDuBrouillon.Refuse;
         try
         {
-            if (await _brouillons.PreparerAsync(relance, CancellationToken.None) is { } brouillon
+            var preparation = relu
+                ? _brouillons.PreparerLeBrouillonReluAsync(relance, CancellationToken.None)
+                : _brouillons.PreparerAsync(relance, CancellationToken.None);
+            if (await preparation is { } brouillon
                 && LienDuBrouillon.Construire(brouillon) is { } lien)
             {
                 issue = _lancement.OuvreurDeBrouillons.Ouvrir(lien) ? IssueDuBrouillon.Ouvert : IssueDuBrouillon.Impossible;
@@ -324,7 +340,7 @@ internal sealed class FenetreHote : Form
 
         if (!IsDisposed && _vue.CoreWebView2 is { } navigateur)
         {
-            navigateur.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDuBrouillon(relance, issue));
+            navigateur.PostWebMessageAsJson(relu ? ReglesDeLaFenetre.MessageDuBrouillonRelu(relance, issue) : ReglesDeLaFenetre.MessageDuBrouillon(relance, issue));
             OuvrirLeBrouillonSuivant();
         }
     }

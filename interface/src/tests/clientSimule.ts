@@ -331,6 +331,11 @@ export function clientSimule(modifications: Partial<ClientDeLApi> = {}) {
       reussi: true,
       message: "Claude a répondu : la clé fonctionne.",
     })),
+    demanderUnPremierJet: vi.fn<ClientDeLApi["demanderUnPremierJet"]>(async () => ({
+      issue: "redige",
+      texte: "Bonjour Jeanne Martin,\n\nJe me permets de revenir vers vous au sujet de ma candidature.\n\nBien cordialement,",
+    })),
+    deposerLeBrouillonRelu: vi.fn<ClientDeLApi["deposerLeBrouillonRelu"]>(async () => ({ issue: "depose" })),
     // L'extraction d'une offre (#46) : l'IA ne trouve rien, tant qu'un test ne lui fait pas proposer de champs.
     extraireUneOffre: vi.fn<ClientDeLApi["extraireUneOffre"]>(async () => ({
       issue: "proposee",

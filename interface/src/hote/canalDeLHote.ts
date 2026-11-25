@@ -100,6 +100,32 @@ export function demanderLeBrouillon(
   relance: number,
   delaiEnMs = DELAI_DU_BROUILLON_EN_MS,
 ): Promise<IssueDuBrouillon> {
+  return demanderUnBrouillon(canal, relance, delaiEnMs, "ouvrirLeBrouillon", "brouillonDeRelance");
+}
+
+/**
+ * Demande à l'hôte d'ouvrir le brouillon relu d'une relance (#47, ADR-0019), puis rend l'issue : le texte que la page
+ * vient de déposer auprès de l'API, avec l'objet et le destinataire que l'hôte lit en base. Le message ne porte que
+ * l'identifiant de la relance, jamais le texte ; la réponse a son propre type, pour ne pas se mêler à celle du brouillon
+ * de #14.
+ */
+export function demanderLeBrouillonRelu(
+  canal: CanalDeLHote,
+  relance: number,
+  delaiEnMs = DELAI_DU_BROUILLON_EN_MS,
+): Promise<IssueDuBrouillon> {
+  return demanderUnBrouillon(canal, relance, delaiEnMs, "ouvrirLeBrouillonRelu", "brouillonRelu");
+}
+
+// Un message qui ne porte que son type et l'identifiant de la relance, puis l'issue que l'hôte rend sous son type de
+// réponse, pour cette relance.
+function demanderUnBrouillon(
+  canal: CanalDeLHote,
+  relance: number,
+  delaiEnMs: number,
+  typeDeLaDemande: "ouvrirLeBrouillon" | "ouvrirLeBrouillonRelu",
+  typeDeLaReponse: "brouillonDeRelance" | "brouillonRelu",
+): Promise<IssueDuBrouillon> {
   if (!Number.isSafeInteger(relance) || relance <= 0) {
     return Promise.reject(new RangeError("Un identifiant est un entier positif."));
   }
@@ -107,7 +133,7 @@ export function demanderLeBrouillon(
   return new Promise((resoudre) => {
     let minuterie: ReturnType<typeof setTimeout> | undefined;
     const ecouter = (evenement: MessageEvent) => {
-      const issue = lireLIssueDuBrouillon(evenement.data, relance);
+      const issue = lireLIssueDuBrouillon(evenement.data, relance, typeDeLaReponse);
       if (issue !== undefined) {
         clearTimeout(minuterie);
         canal.removeEventListener("message", ecouter);
@@ -120,7 +146,7 @@ export function demanderLeBrouillon(
       resoudre("sansReponse");
     }, delaiEnMs);
     canal.addEventListener("message", ecouter);
-    canal.postMessage({ type: "ouvrirLeBrouillon", relance });
+    canal.postMessage({ type: typeDeLaDemande, relance });
   });
 }
 
@@ -203,13 +229,13 @@ function lireLIssueDeLaRestauration(message: unknown, copieAttendue: string): Is
     : undefined;
 }
 
-function lireLIssueDuBrouillon(message: unknown, relanceAttendue: number): IssueDuBrouillon | undefined {
+function lireLIssueDuBrouillon(message: unknown, relanceAttendue: number, typeAttendu: string): IssueDuBrouillon | undefined {
   if (typeof message !== "object" || message === null) {
     return undefined;
   }
 
   const { type, relance, issue } = message as { type?: unknown; relance?: unknown; issue?: unknown };
-  return type === "brouillonDeRelance" && relance === relanceAttendue && ISSUES_DU_BROUILLON.includes(issue as IssueDuBrouillon)
+  return type === typeAttendu && relance === relanceAttendue && ISSUES_DU_BROUILLON.includes(issue as IssueDuBrouillon)
     ? (issue as IssueDuBrouillon)
     : undefined;
 }

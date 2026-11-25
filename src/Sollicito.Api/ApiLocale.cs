@@ -142,6 +142,9 @@ public static class ApiLocale
         builder.Services.AddScoped<RelancesDesCandidatures>();
         builder.Services.AddSingleton<ReglageDesRelances>();
         builder.Services.AddSingleton<BrouillonsDesRelances>();
+        // Le premier jet de l'IA (#47, ADR-0019) et le texte relu, gardé en mémoire pour la fenêtre hôte.
+        builder.Services.AddSingleton<BrouillonsRelus>();
+        builder.Services.AddSingleton<PremiersJetsDesRelances>();
         // Les offres collées (#36) et importées d'un fichier CSV (#40) : les deux connecteurs, le cœur qui dédoublonne et
         // enregistre, son témoin dans le journal, et leurs fiches.
         builder.Services.AddSingleton<ConnecteurDuTexteColle>();

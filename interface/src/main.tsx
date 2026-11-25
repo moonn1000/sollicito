@@ -2,7 +2,13 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import { seConnecter } from "./connexion.ts";
-import { canalDeLaFenetre, demanderLaRestauration, demanderLeBrouillon, demanderLeChoixDuDossier } from "./hote/canalDeLHote.ts";
+import {
+  canalDeLaFenetre,
+  demanderLaRestauration,
+  demanderLeBrouillon,
+  demanderLeBrouillonRelu,
+  demanderLeChoixDuDossier,
+} from "./hote/canalDeLHote.ts";
 import "./styles.css";
 
 const racine = document.getElementById("racine");
@@ -15,6 +21,8 @@ if (racine === null) {
 const canal = canalDeLaFenetre();
 const choisirLeDossierDesSauvegardes = canal === undefined ? undefined : () => demanderLeChoixDuDossier(canal);
 const ouvrirLeBrouillon = canal === undefined ? undefined : (relance: number) => demanderLeBrouillon(canal, relance);
+// Le brouillon relu d'un premier jet de l'IA (#47) : la page dépose le texte auprès de l'API, puis l'hôte l'ouvre.
+const ouvrirLeBrouillonRelu = canal === undefined ? undefined : (relance: number) => demanderLeBrouillonRelu(canal, relance);
 // La restauration d'une copie aussi (#28) : la page n'envoie que son identifiant, et l'hôte demande lui-même le oui.
 const restaurerUneSauvegarde =
   canal === undefined ? undefined : (copie: string, quandEnCours: () => void) => demanderLaRestauration(canal, copie, quandEnCours);
@@ -25,6 +33,7 @@ createRoot(racine).render(
       connecter={seConnecter}
       choisirLeDossierDesSauvegardes={choisirLeDossierDesSauvegardes}
       ouvrirLeBrouillon={ouvrirLeBrouillon}
+      ouvrirLeBrouillonRelu={ouvrirLeBrouillonRelu}
       restaurerUneSauvegarde={restaurerUneSauvegarde}
     />
   </StrictMode>,

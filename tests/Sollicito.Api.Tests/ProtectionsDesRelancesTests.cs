@@ -7,9 +7,9 @@ using static Sollicito.Api.Tests.Outils.AppelsDesRelances;
 namespace Sollicito.Api.Tests;
 
 /// <summary>
-/// Les onze routes de #14, contacts, relances et délai par défaut, passent par les protections de #10 (ADR-0001, D9 ;
-/// ADR-0003) : <c>Host</c> (400), jeton (401), <c>Origin</c> (403), et figurent dans la documentation OpenAPI. Une
-/// requête refusée ne change rien : ni les fiches, ni les contacts, ni le réglage.
+/// Les onze routes de #14, contacts, relances et délai par défaut, et les deux du premier jet de #47, passent par les
+/// protections de #10 (ADR-0001, D9 ; ADR-0003) : <c>Host</c> (400), jeton (401), <c>Origin</c> (403), et figurent dans la
+/// documentation OpenAPI. Une requête refusée ne change rien : ni les fiches, ni les contacts, ni le réglage.
 /// </summary>
 public sealed class ProtectionsDesRelancesTests
 {
@@ -28,6 +28,9 @@ public sealed class ProtectionsDesRelancesTests
         ("PUT", "/api/candidatures/{id}/relances/{relance}", """{"delai":12}""", HttpStatusCode.OK),
         ("POST", "/api/candidatures/{id}/relances/{relance}/faite", null, HttpStatusCode.OK),
         ("POST", "/api/candidatures/{id}/relances/{relance}/abandon", null, HttpStatusCode.OK),
+        // Le premier jet de l'IA (#47) : sans IA réglée, il est refusé sans requête ; le texte relu se dépose.
+        ("POST", "/api/candidatures/{id}/relances/{relance}/premier-jet", null, HttpStatusCode.Conflict),
+        ("PUT", "/api/candidatures/{id}/relances/{relance}/brouillon-relu", """{"texte":"Bonjour,\n\nTexte relu."}""", HttpStatusCode.NoContent),
     ];
 
     public static TheoryData<string, string, string?> Routes
@@ -164,6 +167,8 @@ public sealed class ProtectionsDesRelancesTests
             ("/api/candidatures/{id}/relances/{relance}", "put", "ChangerUneRelance", ["200", "400", "404", "409"]),
             ("/api/candidatures/{id}/relances/{relance}/faite", "post", "MarquerUneRelanceFaite", ["200", "404", "409"]),
             ("/api/candidatures/{id}/relances/{relance}/abandon", "post", "AbandonnerUneRelance", ["200", "404", "409"]),
+            ("/api/candidatures/{id}/relances/{relance}/premier-jet", "post", "RedigerUnPremierJetDeRelance", ["200", "400", "404", "409", "503"]),
+            ("/api/candidatures/{id}/relances/{relance}/brouillon-relu", "put", "DeposerLeBrouillonRelu", ["204", "400", "404", "409", "413"]),
         })
         {
             var route = chemins[chemin]![methode]!.AsObject();

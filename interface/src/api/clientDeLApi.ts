@@ -245,6 +245,20 @@ export type ResultatDeLIA = { issue: "fait"; etat: EtatDeLIA } | { issue: "refus
  */
 export type ResultatDeLEssai = { issue: "fait"; reussi: boolean; message: string } | { issue: "refuse"; motif: string };
 
+/**
+ * Ce que rend la demande d'un premier jet de relance (#47) : la demande est partie, avec le texte à relire (le salut, le
+ * paragraphe de l'IA nettoyé, la formule de politesse) ou le texte d'un échec ; ou elle a été refusée sans requête, avec
+ * son motif (aucune IA prête, une demande déjà en cours, une relance qui n'est plus à faire). Jamais la réponse brute du
+ * fournisseur.
+ */
+export type ResultatDuPremierJet =
+  | { issue: "redige"; texte: string }
+  | { issue: "echoue"; message: string }
+  | { issue: "refuse"; motif: string };
+
+/** Ce que rend le dépôt du texte relu (#47) : déposé pour la fenêtre, le refus du champ, ou le motif d'un refus. */
+export type ResultatDuDepot = { issue: "depose" } | { issue: "refusee"; refus: string[] } | { issue: "refuse"; motif: string };
+
 /** Les champs d'une offre que l'IA propose (#46) : chacun un texte, ou rien s'il n'a pas été trouvé ou a été écarté. */
 export interface ChampsProposes {
   entreprise: string | null;
@@ -624,6 +638,17 @@ export interface ClientDeLApi {
    */
   testerLaCleDIA(): Promise<ResultatDeLEssai>;
   /**
+   * Demande à l'IA réglée le premier jet de la relance à faire (#47), sur le seul geste de l'utilisateur : ne partent
+   * que le poste, l'entreprise et la date d'envoi. Rend le texte à relire, le texte d'un échec, ou le motif d'un refus
+   * sans requête.
+   */
+  demanderUnPremierJet(candidature: number, relance: number): Promise<ResultatDuPremierJet>;
+  /**
+   * Dépose le texte relu de la relance à faire (#47), que la fenêtre hôte ouvrira ensuite dans la messagerie ; l'objet et
+   * le destinataire restent ceux de la relance. Rend le refus du champ, ou le motif d'un refus.
+   */
+  deposerLeBrouillonRelu(candidature: number, relance: number, texte: string): Promise<ResultatDuDepot>;
+  /**
    * Demande à l'IA réglée de proposer les champs d'une offre collée (#46), sur le seul geste de l'utilisateur : son texte
    * part comme une donnée à analyser, et rien ne s'enregistre. `annulation` interrompt la demande, quand l'écran se ferme.
    */
@@ -908,6 +933,47 @@ export function creerClientDeLApi(jeton: string, envoyer: typeof fetch = fetch):
 
       throw new ErreurDeLApi(reponse.status);
     },
+    demanderUnPremierJet: async (candidature, relance) => {
+      // Sans corps : la route du premier jet refuse tout corps.
+      const reponse = await ecrire(`${adresseDeLaFiche(candidature)}/relances/${identifiant(relance)}/premier-jet`);
+      if (reponse.status === 200) {
+        const resultat = lireLePremierJet(await reponse.json().catch(() => undefined));
+        if (resultat !== undefined) {
+          return resultat;
+        }
+      }
+
+      if (reponse.status === 409) {
+        const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+        if (motif !== undefined) {
+          return { issue: "refuse", motif };
+        }
+      }
+
+      throw new ErreurDeLApi(reponse.status);
+    },
+    deposerLeBrouillonRelu: async (candidature, relance, texte) => {
+      const reponse = await ecrire(`${adresseDeLaFiche(candidature)}/relances/${identifiant(relance)}/brouillon-relu`, { texte }, "PUT");
+      if (reponse.status === 204) {
+        return { issue: "depose" };
+      }
+
+      if (reponse.status === 400) {
+        const refus = lireLesRefus(await reponse.json().catch(() => undefined), ["texte"] as const);
+        if (refus?.texte !== undefined && refus.texte.length > 0) {
+          return { issue: "refusee", refus: refus.texte };
+        }
+      }
+
+      if (reponse.status === 409) {
+        const motif = lireLeMotif(await reponse.json().catch(() => undefined));
+        if (motif !== undefined) {
+          return { issue: "refuse", motif };
+        }
+      }
+
+      throw new ErreurDeLApi(reponse.status);
+    },
     extraireUneOffre: async (texte, annulation) => {
       const reponse = await ecrire("/api/offres/extraction", { texte }, "POST", annulation);
       if (reponse.status === 200) {
@@ -1135,6 +1201,21 @@ function lireLeResultatDeLEssai(corps: unknown): { reussi: boolean; message: str
 
   const { reussi, message } = corps as { reussi?: unknown; message?: unknown };
   return typeof reussi === "boolean" && typeof message === "string" && message.length > 0 ? { reussi, message } : undefined;
+}
+
+// Le résultat d'un premier jet parti (#47) : le texte à relire, ou le texte d'un échec ; rien d'autre n'est lu de la
+// réponse, ni la sorte de l'échec.
+function lireLePremierJet(corps: unknown): ResultatDuPremierJet | undefined {
+  if (typeof corps !== "object" || corps === null) {
+    return undefined;
+  }
+
+  const { reussi, texte, message } = corps as { reussi?: unknown; texte?: unknown; message?: unknown };
+  if (reussi === true && typeof texte === "string" && texte.length > 0) {
+    return { issue: "redige", texte };
+  }
+
+  return reussi === false && typeof message === "string" && message.length > 0 ? { issue: "echoue", message } : undefined;
 }
 
 // Le résultat d'une extraction partie : les cinq champs proposés, chacun un texte ou rien ; ou l'échec et son texte.
