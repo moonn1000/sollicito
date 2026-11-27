@@ -1,6 +1,6 @@
 # Documentation d'architecture
 
-- **Mis à jour le** : 2026-11-20, avec #7
+- **Mis à jour le** : 2026-11-27, avec #7, puis avec #49
 - **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D12 (la documentation vit avec le code) ; [ADR-0004](adr/0004-v1-resserree-paliers.md) (la V1 documentée en entier en UML)
 - **Périmètre** : les pages de `docs/`, et ce qui viendra au palier 5
 
@@ -12,6 +12,7 @@ L'architecture de la V1 de Sollicito, telle que la fixe l'ADR-0004 : ce qui est 
 | [Cas d'utilisation](cas-d-utilisation.md) | ce que l'utilisateur fait dans Sollicito, palier par palier | diagramme de cas d'utilisation (UML) |
 | [Modèle de domaine](modele-de-domaine.md) | les entités, leurs liens et leurs règles | diagramme de classes, diagrammes d'états des candidatures et des relances (UML) |
 | [Modèle de menaces](modele-de-menaces.md) | les protections de l'API locale et de la fenêtre, et leurs limites | tableaux des menaces et des parades |
+| [Format de l'export](export.md) | ce que contient l'export de toutes les données, en JSON et en CSV, champ par champ | tableaux des champs |
 | [Décisions d'architecture](adr/README.md) | chaque décision, ses raisons, ses alternatives écartées | index des ADR |
 
 Pour une première lecture : les vues d'architecture, puis les cas d'utilisation, puis le modèle de domaine ; le modèle de menaces et les ADR pour le détail. Le [README du dépôt](../README.md) présente Sollicito et dit comment le construire et le tester.

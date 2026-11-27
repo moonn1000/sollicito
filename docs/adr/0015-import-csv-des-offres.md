@@ -1,6 +1,6 @@
 # ADR-0015 : import d'offres d'un fichier CSV, format fermé, aperçu puis import en une transaction, doublon possible gardé ligne à ligne
 
-- **Statut** : acceptée ; la copie avant l'import tranchée par le mainteneur le 2026-11-24
+- **Statut** : acceptée ; la copie avant l'import tranchée par le mainteneur le 2026-11-24 ; « Le contenu non fiable, et l'export à venir » précisé par l'[ADR-0020](0020-export-des-donnees.md) (l'export CSV fait : une apostrophe en tête de toute cellule qui commence comme une formule)
 - **Date** : 2026-11-24
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D6 (le fichier CSV, second adaptateur du connecteur commun ; le geste par lot) et D10 (le format pour schéma, les bornes, l'entrée non fiable) ; [ADR-0005](0005-modele-de-domaine.md), « Dédoublonner les offres » (le sort d'une ligne de CSV) ; [ADR-0013](0013-offres-collees.md), « Le connecteur commun, en forme minimale » (les champs de l'empreinte, le geste par lot) et son alternative « Enregistrer d'abord, puis signaler le doublon possible, comme le fera l'import CSV » ; [ADR-0012](0012-restauration-d-une-sauvegarde.md), la copie d'avant une restauration, faite aussi avant chaque import, et son libellé
 
