@@ -439,6 +439,12 @@ test("une relance se planifie depuis la fiche, et son brouillon passe par l'hôt
     `mailto:jeanne.martin@exemple.invalid?subject=${encoderStrictement(`Candidature au poste de ${poste}`)}&body=${encoderStrictement(corps)}`,
   ]);
 
+  // L'identifiant de la relance, lu à l'API : le tableau de bord la signale, échue (#93, point 2).
+  const signalees = (await (await fetch(`${fenetre.origineDeLApi}/api/relances`, { headers: { "Sollicito-Jeton": jetonRemis } })).json()) as {
+    echues: { id: number; candidature: { poste: string } }[];
+  };
+  const relance = signalees.echues.find((signalee) => signalee.candidature.poste === poste)!.id;
+
   // Un message d'une autre forme, ou pour une relance inconnue, n'ouvre rien.
   const envoyerALHote = (messages: unknown[]) =>
     page.evaluate((aEnvoyer) => {
@@ -447,18 +453,17 @@ test("une relance se planifie depuis la fiche, et son brouillon passe par l'hôt
         canal.postMessage(message);
       }
     }, messages);
-  await envoyerALHote([{ type: "ouvrirLeBrouillon", relance: "1" }, { type: "ouvrirLeBrouillon" }, { type: "ouvrirLeBrouillon", relance: 999 }]);
+  await envoyerALHote([{ type: "ouvrirLeBrouillon", relance: String(relance) }, { type: "ouvrirLeBrouillon" }, { type: "ouvrirLeBrouillon", relance: 999 }]);
   await attendre(1_500);
   expect(await lignes(brouillons)).toHaveLength(1);
 
-  // Un champ de plus que le type et la relance, et rien ne s'ouvre, même pour une relance à faire : celle de ce test est
-  // la première de la base du dossier de données, neuf.
-  await envoyerALHote([{ type: "ouvrirLeBrouillon", relance: 1, destinataire: "pirate@exemple.invalid", corps: "autre" }]);
+  // Un champ de plus que le type et la relance, et rien ne s'ouvre, même pour cette relance à faire.
+  await envoyerALHote([{ type: "ouvrirLeBrouillon", relance, destinataire: "pirate@exemple.invalid", corps: "autre" }]);
   await attendre(1_500);
   expect(await lignes(brouillons)).toHaveLength(1);
 
   // Réduit à sa forme, le même message rouvre le même brouillon : l'hôte le bâtit à partir de la base.
-  await envoyerALHote([{ type: "ouvrirLeBrouillon", relance: 1 }]);
+  await envoyerALHote([{ type: "ouvrirLeBrouillon", relance }]);
   for (let essai = 1; (await lignes(brouillons)).length < 2; essai++) {
     expect(essai).toBeLessThan(80);
     await attendre(250);

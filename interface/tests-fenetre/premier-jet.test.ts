@@ -187,33 +187,43 @@ test("un message à l'hôte qui porterait le texte, ou d'une autre forme, n'ouvr
   );
   await page.getByRole("button", { name: "Réglages", exact: true }).click();
   const jeton = await jetonLu;
+  // La relance et sa candidature, lues à l'API : le tableau de bord la signale, échue (#93, point 2).
+  const { relance, candidature } = await page.evaluate(
+    async ({ jeton, poste }) => {
+      const reponse = await fetch("/api/relances", { headers: { "Sollicito-Jeton": jeton }, cache: "no-store" });
+      const { echues } = (await reponse.json()) as { echues: { id: number; candidature: { id: number; poste: string } }[] };
+      const signalee = echues.find((echue) => echue.candidature.poste === poste)!;
+      return { relance: signalee.id, candidature: signalee.candidature.id };
+    },
+    { jeton, poste: POSTE },
+  );
   const statut = await page.evaluate(
-    async ({ jeton, texte }) =>
+    async ({ jeton, texte, adresse }) =>
       (
-        await fetch("/api/candidatures/1/relances/1/brouillon-relu", {
+        await fetch(adresse, {
           method: "PUT",
           headers: { "Sollicito-Jeton": jeton, "Content-Type": "application/json" },
           body: JSON.stringify({ texte }),
           cache: "no-store",
         })
       ).status,
-    { jeton, texte: depose },
+    { jeton, texte: depose, adresse: `/api/candidatures/${candidature}/relances/${relance}/brouillon-relu` },
   );
   expect(statut).toBe(204);
 
   // Un texte déposé attend : un champ de plus, ou un identifiant d'une autre forme, n'en ouvre rien.
-  await page.evaluate(() => {
+  await page.evaluate((relance) => {
     const canal = (window as unknown as { chrome: { webview: { postMessage(message: unknown): void } } }).chrome.webview;
-    canal.postMessage({ type: "ouvrirLeBrouillonRelu", relance: 1, texte: "Un autre texte." });
-    canal.postMessage({ type: "ouvrirLeBrouillonRelu", relance: "1" });
-  });
+    canal.postMessage({ type: "ouvrirLeBrouillonRelu", relance, texte: "Un autre texte." });
+    canal.postMessage({ type: "ouvrirLeBrouillonRelu", relance: String(relance) });
+  }, relance);
   await attendre(1_500);
   expect(await lignes(brouillons)).toHaveLength(avant);
 
   // Le même message, réduit à sa forme, ouvre le texte déposé : les refus venaient de la forme, non d'un dépôt vide.
-  await page.evaluate(() => {
-    (window as unknown as { chrome: { webview: { postMessage(message: unknown): void } } }).chrome.webview.postMessage({ type: "ouvrirLeBrouillonRelu", relance: 1 });
-  });
+  await page.evaluate((relance) => {
+    (window as unknown as { chrome: { webview: { postMessage(message: unknown): void } } }).chrome.webview.postMessage({ type: "ouvrirLeBrouillonRelu", relance });
+  }, relance);
   for (let essai = 1; (await lignes(brouillons)).length <= avant; essai++) {
     expect(essai).toBeLessThan(80);
     await attendre(250);
