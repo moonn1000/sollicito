@@ -16,7 +16,7 @@ namespace Sollicito.Api.Offres;
 /// </summary>
 internal static class RoutesDesOffres
 {
-    /// <summary>La borne du corps d'une offre collée : 1 Mio, assez pour 50 000 caractères même tous échappés en <c>\uXXXX</c>.</summary>
+    /// <summary>La borne du corps d'une offre collée, et de sa correction : 1 Mio, assez pour 50 000 caractères même tous échappés en <c>\uXXXX</c>.</summary>
     public const long BorneDuCorps = 1024 * 1024;
 
     /// <summary>Le titre d'une offre refusée à l'enregistrement ; le détail suit, champ par champ.</summary>
@@ -107,9 +107,11 @@ internal static class RoutesDesOffres
             .WithDescription(
                 "Chaque champ s'envoie : un champ facultatif absent vaut un champ vide, comme à la saisie, et sa valeur s'efface. "
                 + "Une entreprise ou un poste changés refont la comparaison des doublons possibles : refusée (409, motif doublonPossible) sans l'accord garderLesDeux. "
-                + "Aucune entreprise n'est renommée.")
+                + "Aucune entreprise n'est renommée. Corps de 1 Mio au plus, comme à la saisie.")
+            .WithMetadata(new RequestSizeLimitAttribute(BorneDuCorps))
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
             .WithTags("Offres");
     }
 

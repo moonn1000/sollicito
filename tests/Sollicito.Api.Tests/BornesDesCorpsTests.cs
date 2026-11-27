@@ -9,8 +9,9 @@ namespace Sollicito.Api.Tests;
 
 /// <summary>
 /// La borne du corps d'une requête (#98, point 3) : 256 Kio faute d'une borne propre à la route. Les routes qui lisent un
-/// long texte gardent la leur : 1 Mio pour un collage et une extraction, 3 Mio pour l'aperçu et l'import d'un fichier CSV.
-/// Aucune saisie de l'interface n'atteint la borne par défaut : ses champs s'arrêtent à 10 000 caractères.
+/// long texte gardent la leur : 1 Mio pour un collage et une extraction, 3 Mio pour l'aperçu et l'import d'un fichier CSV ;
+/// la correction d'une offre prend celle de sa saisie, 1 Mio. Aucune saisie de l'interface n'atteint la borne par défaut :
+/// ses champs s'arrêtent à 10 000 caractères.
 /// </summary>
 public sealed class BornesDesCorpsTests
 {
@@ -26,7 +27,6 @@ public sealed class BornesDesCorpsTests
     [InlineData("POST", "/api/candidatures/1/etapes/1/correction")]
     [InlineData("POST", "/api/entreprises/1/contacts")]
     [InlineData("PUT", "/api/contacts/1")]
-    [InlineData("PUT", "/api/offres/1")]
     [InlineData("PUT", "/api/reglages/relances")]
     public async Task Sans_borne_propre_un_corps_de_plus_de_256_Kio_est_refuse_par_413(string methode, string chemin)
     {
@@ -48,6 +48,22 @@ public sealed class BornesDesCorpsTests
         using var reponse = await api.EcrireAsync(HttpMethod.Post, "/api/offres", Etendu(corps, 1024 * 1024));
 
         Assert.Equal(HttpStatusCode.Created, reponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Une_offre_collee_a_1_Mio_se_corrige_avec_un_corps_de_la_meme_borne()
+    {
+        await using var api = await ApiLancee.LancerAsync(new HorlogeDeTest().Utiliser);
+        var saisie = new JsonObject { ["texte"] = "Offre fictive.", ["poste"] = "Comptable" }.ToJsonString();
+        using var creee = await api.EcrireAsync(HttpMethod.Post, "/api/offres", Etendu(saisie, 1024 * 1024));
+        Assert.Equal(HttpStatusCode.Created, creee.StatusCode);
+        var correction = new JsonObject { ["poste"] = "Comptable principal" }.ToJsonString();
+
+        using var admise = await api.EcrireAsync(HttpMethod.Put, "/api/offres/1", Etendu(correction, 1024 * 1024));
+        using var tropGrosse = await api.EcrireAsync(HttpMethod.Put, "/api/offres/1", Etendu(correction, 1024 * 1024 + 1));
+
+        Assert.Equal(HttpStatusCode.OK, admise.StatusCode);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, tropGrosse.StatusCode);
     }
 
     [Fact]

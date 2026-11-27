@@ -177,7 +177,7 @@ public sealed class ProtectionsDesOffresTests
             ("/api/offres", "post", "CollerUneOffre", ["201", "400", "409", "413"]),
             ("/api/offres", "get", "ListerLesOffres", ["200"]),
             ("/api/offres/{id}", "get", "LireUneOffre", ["200", "404"]),
-            ("/api/offres/{id}", "put", "CorrigerUneOffre", ["200", "400", "404", "409"]),
+            ("/api/offres/{id}", "put", "CorrigerUneOffre", ["200", "400", "404", "409", "413"]),
             ("/api/offres/{id}/candidature", "post", "PostulerAUneOffre", ["201", "400", "404", "409", "413"]),
             ("/api/offres/import/apercu", "post", "ExaminerUnFichierCsv", ["200", "400", "413"]),
             ("/api/offres/import", "post", "ImporterUnFichierCsv", ["200", "400", "409", "413"]),
