@@ -53,7 +53,8 @@ export function SuiviDesRelances({
   /** Relit la fiche ; rend faux si elle n'a pas pu être relue. */
   relire: () => Promise<boolean>;
 }) {
-  const [delaiParDefaut, setDelaiParDefaut] = useState(DELAI_D_USINE);
+  // Rien tant que le réglage n'est pas lu : un formulaire déjà ouvert attend alors son délai (#93, point 7).
+  const [delaiParDefaut, setDelaiParDefaut] = useState<number>();
   const [formulaire, setFormulaire] = useState<Formulaire>({ sorte: "ferme" });
   const [message, setMessage] = useState<Message>();
   const [enCours, setEnCours] = useState(false);
@@ -85,6 +86,9 @@ export function SuiviDesRelances({
       },
       () => {
         // Le délai d'usine reste proposé : l'API applique de toute façon le sien.
+        if (active) {
+          setDelaiParDefaut(DELAI_D_USINE);
+        }
       },
     );
     return () => {
@@ -225,10 +229,20 @@ export function SuiviDesRelances({
           envoyeeLe={fiche.envoyeeLe}
           contacts={contacts}
           delaiDeDepart={
-            formulaire.sorte === "changer" && aFaire !== undefined ? delaiDe(fiche.envoyeeLe, aFaire.echeance) : delaiPropose(fiche, delaiParDefaut)
+            formulaire.sorte === "changer" && aFaire !== undefined
+              ? delaiDe(fiche.envoyeeLe, aFaire.echeance)
+              : delaiParDefaut === undefined
+                ? undefined
+                : delaiPropose(fiche, delaiParDefaut)
           }
           destinataireDeDepart={
-            formulaire.sorte === "changer" ? (aFaire?.destinataire?.id ?? null) : contacts?.length === 1 ? contacts[0]!.id : null
+            formulaire.sorte === "changer"
+              ? (aFaire?.destinataire?.id ?? null)
+              : contacts === undefined
+                ? undefined
+                : contacts.length === 1
+                  ? contacts[0]!.id
+                  : null
           }
           libelleDuBouton={formulaire.sorte === "changer" ? "Enregistrer la relance" : "Planifier la relance"}
           envoyer={async (saisie) => {
@@ -269,6 +283,11 @@ export function SuiviDesRelances({
   );
 }
 
+/** Un destinataire en valeur de la liste : « » pour personne ; rien tant qu'il n'est pas connu. */
+function enValeurDeListe(destinataire: number | null | undefined): string | undefined {
+  return destinataire === undefined ? undefined : destinataire === null ? "" : String(destinataire);
+}
+
 /**
  * Le délai et le destinataire d'une relance. L'échéance qui en résulte s'affiche avant l'envoi ; l'API la calcule
  * elle-même. Un délai hors des bornes est refusé avant l'envoi ; les refus de l'API s'affichent à côté de leur champ.
@@ -284,15 +303,29 @@ function FormulaireDUneRelance({
 }: {
   envoyeeLe: string;
   contacts: ContactConnu[] | undefined;
-  delaiDeDepart: number;
-  destinataireDeDepart: number | null;
+  /** Le délai proposé ; absent tant que le réglage n'est pas lu. */
+  delaiDeDepart: number | undefined;
+  /** Le destinataire proposé, ou personne ; absent tant que les contacts ne sont pas lus. */
+  destinataireDeDepart: number | null | undefined;
   libelleDuBouton: string;
   /** Envoie la saisie ; rend les refus de ses champs, aucun si elle est acceptée. */
   envoyer: (saisie: { delai: number; destinataire: number | null }) => Promise<RefusDeLaRelance>;
   annuler: () => void;
 }) {
-  const [delai, setDelai] = useState(String(delaiDeDepart));
-  const [destinataire, setDestinataire] = useState(destinataireDeDepart === null ? "" : String(destinataireDeDepart));
+  // Chaque proposition se pose dès qu'elle est connue, même après l'ouverture du formulaire, puis ne bouge plus : une
+  // saisie de l'utilisateur ne se remplace jamais.
+  const [delaiPose, setDelai] = useState(delaiDeDepart?.toString());
+  const [destinatairePose, setDestinataire] = useState(enValeurDeListe(destinataireDeDepart));
+  if (delaiPose === undefined && delaiDeDepart !== undefined) {
+    setDelai(String(delaiDeDepart));
+  }
+
+  if (destinatairePose === undefined && destinataireDeDepart !== undefined) {
+    setDestinataire(enValeurDeListe(destinataireDeDepart));
+  }
+
+  const delai = delaiPose ?? String(DELAI_D_USINE);
+  const destinataire = destinatairePose ?? "";
   const [refus, setRefus] = useState<RefusDeLaRelance>({});
   const [envoi, setEnvoi] = useState<"pret" | "en-cours" | "echec">("pret");
   const envoiEnCours = useRef(false);

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { expect, test, vi } from "vitest";
-import type { FicheDUneCandidature } from "../api/clientDeLApi.ts";
+import type { FicheDUneCandidature, ReglageDuDelai } from "../api/clientDeLApi.ts";
 import type { IssueDuBrouillon } from "../hote/canalDeLHote.ts";
 import { clientSimule, contactFictif, ficheFictive, relanceFictive } from "../tests/clientSimule.ts";
 import { MESSAGES_DU_BROUILLON } from "./affichage.ts";
@@ -9,28 +9,30 @@ import { SuiviDesRelances } from "./SuiviDesRelances.tsx";
 // Envoyée le 27 mars 2026 à 23:30, heure de Bruxelles.
 const FICHE = ficheFictive();
 
-function rendre(
-  modifications: {
-    client?: ReturnType<typeof clientSimule>;
-    fiche?: FicheDUneCandidature;
-    contacts?: ReturnType<typeof contactFictif>[];
-    ouvrirLeBrouillon?: (relance: number) => Promise<IssueDuBrouillon>;
-  } = {},
-) {
+type Rendu = {
+  client?: ReturnType<typeof clientSimule>;
+  fiche?: FicheDUneCandidature;
+  /** `null` : les contacts de l'entreprise ne sont pas encore lus. */
+  contacts?: ReturnType<typeof contactFictif>[] | null;
+  ouvrirLeBrouillon?: (relance: number) => Promise<IssueDuBrouillon>;
+};
+
+function rendre(modifications: Rendu = {}) {
   const client = modifications.client ?? clientSimule();
   const montrer = vi.fn();
   const relire = vi.fn(async () => true);
-  render(
+  const section = ({ contacts, fiche, ouvrirLeBrouillon }: Rendu) => (
     <SuiviDesRelances
       client={client}
-      fiche={modifications.fiche ?? FICHE}
-      contacts={modifications.contacts ?? []}
-      ouvrirLeBrouillon={modifications.ouvrirLeBrouillon}
+      fiche={fiche ?? FICHE}
+      contacts={contacts === null ? undefined : (contacts ?? [])}
+      ouvrirLeBrouillon={ouvrirLeBrouillon}
       montrer={montrer}
       relire={relire}
-    />,
+    />
   );
-  return { client, montrer, relire };
+  const { rerender, unmount } = render(section(modifications));
+  return { client, montrer, relire, demonter: unmount, rerendre: (autres: Rendu) => rerender(section(autres)) };
 }
 
 test("une relance se planifie au délai par défaut, avec l'échéance qui en résulte, et le contact unique d'office", async () => {
@@ -68,6 +70,45 @@ test("le délai proposé suit le réglage, et après une relance close, son dél
   // Sans contact, le brouillon s'ouvrira sans destinataire.
   expect((screen.getByLabelText("Destinataire") as HTMLSelectElement).value).toBe("");
   expect(screen.getByText(/ajoutez-en un plus bas/u)).toBeDefined();
+});
+
+test("un formulaire ouvert avant la lecture du réglage prend le délai par défaut à son arrivée, sauf un délai déjà saisi", async () => {
+  // Suites de #14 (#93, point 7).
+  let lu: (reglage: ReglageDuDelai) => void = () => {};
+  const lireLeReglageDesRelances = () => new Promise<ReglageDuDelai>((resoudre) => (lu = resoudre));
+  const premier = rendre({ client: clientSimule({ lireLeReglageDesRelances }) });
+  fireEvent.click(screen.getByRole("button", { name: "Planifier une relance" }));
+  const delai = () => screen.getByLabelText("Relancer après, en jours depuis l'envoi") as HTMLInputElement;
+
+  await act(async () => lu({ delaiParDefaut: 10, delaiLisible: true, fichierLisible: true }));
+
+  expect(delai().value).toBe("10");
+  expect(screen.getByText("Échéance : lundi 6 avril 2026.")).toBeDefined();
+  premier.demonter();
+
+  rendre({ client: clientSimule({ lireLeReglageDesRelances }) });
+  fireEvent.click(screen.getByRole("button", { name: "Planifier une relance" }));
+  fireEvent.change(delai(), { target: { value: "3" } });
+
+  await act(async () => lu({ delaiParDefaut: 10, delaiLisible: true, fichierLisible: true }));
+
+  expect(delai().value).toBe("3");
+});
+
+test("le contact unique est proposé d'office même lu après l'ouverture du formulaire, puis le choix ne bouge plus", () => {
+  // Suites de #14 (#93, point 7, même mécanisme).
+  const client = clientSimule();
+  const { rerendre } = rendre({ client, contacts: null });
+  fireEvent.click(screen.getByRole("button", { name: "Planifier une relance" }));
+  const destinataire = () => screen.getByLabelText("Destinataire") as HTMLSelectElement;
+  expect(destinataire().value).toBe("");
+
+  rerendre({ client, contacts: [contactFictif()] });
+
+  expect(destinataire().value).toBe("4");
+  fireEvent.change(destinataire(), { target: { value: "" } });
+  rerendre({ client, contacts: [contactFictif()] });
+  expect(destinataire().value).toBe("");
 });
 
 test("un délai hors des bornes est refusé avant l'envoi ; les refus de l'API s'affichent à côté de leur champ", async () => {
