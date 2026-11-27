@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Runtime.Versioning;
 using System.Security.AccessControl;
@@ -157,6 +158,43 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Une_base_peuplee_par_main_s_exporte_en_CSV_entiere_et_chaque_debut_de_formule_y_est_neutralise()
+    {
+        await using var api = await LancerSurLaBaseDeMainAsync();
+        var fichier = Path.Combine(Sortie, "sollicito-export-2026-11-27.zip");
+
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Csv, fichier, remplacer: false, Annulation));
+
+        var fichiers = LireLArchive(fichier);
+        Assert.Equal(
+            ["export.csv", "entreprises.csv", "contacts.csv", "offres.csv", "candidatures.csv", "relances.csv", "evenements.csv"],
+            fichiers.Keys);
+        Assert.Equal([["format", "version", "exporteLe"], ["sollicito-export-csv", "1", "2026-11-27T13:00:00Z"]], fichiers["export.csv"]);
+
+        // Des cellules écrites en dur : chaque début de formule de la base de référence reçoit une apostrophe, et le reste
+        // de la valeur ne change pas ; une cellule sur deux lignes reste une seule cellule.
+        var entreprises = fichiers["entreprises.csv"];
+        Assert.Equal(["id", "nom", "cle"], entreprises[0]);
+        Assert.Equal(["3", "'-Moins SA", "moins"], entreprises[3]);
+        Assert.Equal(["4", "'＝Égal SA", "egal"], entreprises[4]);
+        var offres = fichiers["offres.csv"];
+        Assert.Equal("'=Chef de projet", offres[3][3]);
+        Assert.Equal("Texte importé\nsur deux lignes ; avec \"guillemets\"", offres[3][8]);
+        Assert.Equal("'+Plus en tête", offres[4][3]);
+        Assert.Equal("'@Arobase", offres[4][5]);
+        Assert.Equal("'＠Pleine chasse", offres[5][3]);
+        Assert.Equal("'－Lieu plein", offres[5][5]);
+        Assert.Equal("'＋Poste plein", offres[6][3]);
+        Assert.Equal("'－Texte plein", offres[6][8]);
+        Assert.Equal(
+            "Premier entretien : accueil chaleureux.\nDeuxième ligne ; avec « guillemets », des \"guillemets droits\"\tet une tabulation. Merci 🙂",
+            fichiers["evenements.csv"][5][8]);
+
+        // Puis chaque colonne de chaque ligne de chaque table, lue par SQL dans la base elle-même.
+        ComparerAuCsvColonneParColonne(new DossierDeLaBase(Donnees).Fichier, fichiers);
+    }
+
+    [Fact]
     public async Task Ni_la_cle_d_IA_ni_le_jeton_ni_le_trousseau_ne_sont_dans_l_export()
     {
         const string Cle = "sk-ant-cle-fictive-export-49-ABCDEFGHIJKLMNOP";
@@ -167,11 +205,15 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         Assert.True(File.Exists(dossier.FichierDeLaCle));
         var trousseau = Directory.GetFiles(dossier.Trousseau);
         Assert.NotEmpty(trousseau);
-        var fichier = Path.Combine(Sortie, "export.json");
+        var json = Path.Combine(Sortie, "export.json");
+        var csv = Path.Combine(Sortie, "export.zip");
 
-        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, fichier, remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, json, remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Csv, csv, remplacer: false, Annulation));
 
-        var texte = await File.ReadAllTextAsync(fichier, Annulation);
+        // Le JSON, et chaque fichier de l'archive, décompressé : ses octets comprimés ne diraient rien.
+        string[] textes = [await File.ReadAllTextAsync(json, Annulation), .. TextesDeLArchive(csv)];
+        Assert.Equal(8, textes.Length);
         string[] interdits =
         [
             Cle,
@@ -181,10 +223,30 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
             .. trousseau.Select(Path.GetFileNameWithoutExtension).OfType<string>(),
             .. trousseau.SelectMany(cle => Extraits(File.ReadAllText(cle))),
         ];
-        foreach (var interdit in interdits)
+        foreach (var texte in textes)
         {
-            Assert.DoesNotContain(interdit, texte, StringComparison.Ordinal);
+            foreach (var interdit in interdits)
+            {
+                Assert.DoesNotContain(interdit, texte, StringComparison.Ordinal);
+            }
         }
+    }
+
+    [Fact]
+    public async Task L_export_CSV_ne_s_ecrit_qu_en_zip_et_un_disque_plein_n_y_laisse_rien()
+    {
+        var etapes = new EtapesDeTest { Erreur = (EtapeDeLExport.OffresEcrites, new IOException("Disque plein (essai).", unchecked((int)0x80070070))) };
+        await using var api = await LancerSurLaBaseDeMainAsync(etapes.Utiliser);
+
+        Assert.Equal(IssueDeLExport.Extension, await api.Export().ExporterAsync(FormatDExport.Csv, Path.Combine(Sortie, "export.json"), remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Extension, await api.Export().ExporterAsync(FormatDExport.Csv, Path.Combine(Sortie, "export.csv"), remplacer: false, Annulation));
+        Assert.Empty(Directory.GetFileSystemEntries(Sortie));
+
+        var fichier = Path.Combine(Sortie, "export.zip");
+        await File.WriteAllTextAsync(fichier, "contenu d'avant", Annulation);
+        Assert.Equal(IssueDeLExport.PlaceManquante, await api.Export().ExporterAsync(FormatDExport.Csv, fichier, remplacer: true, Annulation));
+        Assert.Equal("contenu d'avant", await File.ReadAllTextAsync(fichier, Annulation));
+        Assert.Equal(["export.zip"], Fichiers(Sortie));
     }
 
     [Fact]
@@ -528,6 +590,152 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
                 Assert.Fail($"La colonne {colonne} porte une valeur d'un type inattendu.");
                 break;
         }
+    }
+
+    // Les onze débuts qu'OWASP demande de neutraliser, écrits ici à part du code de l'export.
+    private const string DebutsDUneFormule = "=+-@\t\r\n＝＋－＠";
+
+    // Les colonnes de l'archive pour les événements : une par champ, vides hors de la sorte de la ligne.
+    private static readonly string[] ColonnesDesEvenementsEnCsv = ["id", "candidatureId", "sorte", "survenuLe", "ancien", "nouveau", "corrigeId", "type", "note", "relanceId"];
+
+    private static void ComparerAuCsvColonneParColonne(string fichier, OrderedDictionary<string, List<string[]>> csv)
+    {
+        using var connexion = Ouvrir(fichier, SqliteOpenMode.ReadOnly);
+        foreach (var (table, (tableau, champs)) in Correspondances)
+        {
+            var lignes = Lignes(connexion, $"SELECT * FROM \"{table}\" ORDER BY \"Id\"");
+            var fichierDeLaTable = csv[tableau + ".csv"];
+            var enTete = fichierDeLaTable[0];
+            Assert.Equal(champs.Values.Order(StringComparer.Ordinal), enTete.Order(StringComparer.Ordinal));
+            Assert.Equal(lignes.Count, fichierDeLaTable.Count - 1);
+            for (var rang = 0; rang < lignes.Count; rang++)
+            {
+                foreach (var (colonne, champ) in champs)
+                {
+                    Assert.Equal(Attendue(lignes[rang][colonne], colonne), fichierDeLaTable[rang + 1][Array.IndexOf(enTete, champ)]);
+                }
+            }
+        }
+
+        var evenements = Lignes(connexion, "SELECT * FROM \"EvenementsDeCandidature\" ORDER BY \"Id\"");
+        var fichierDesEvenements = csv["evenements.csv"];
+        Assert.Equal(ColonnesDesEvenementsEnCsv, fichierDesEvenements[0]);
+        Assert.Equal(evenements.Count, fichierDesEvenements.Count - 1);
+        for (var rang = 0; rang < evenements.Count; rang++)
+        {
+            var sorte = (string)evenements[rang]["Sorte"]!;
+            var siens = ColonnesCommunesDesEvenements.Concat(ColonnesDesSortes[sorte]).ToArray();
+            foreach (var (colonne, champ) in siens)
+            {
+                Assert.Equal(Attendue(evenements[rang][colonne], colonne), fichierDesEvenements[rang + 1][Array.IndexOf(ColonnesDesEvenementsEnCsv, champ)]);
+            }
+
+            foreach (var vide in ColonnesDesEvenementsEnCsv.Except(siens.Select(colonne => colonne.Value)))
+            {
+                Assert.Equal("", fichierDesEvenements[rang + 1][Array.IndexOf(ColonnesDesEvenementsEnCsv, vide)]);
+            }
+        }
+    }
+
+    // La cellule qu'une valeur de la base doit donner : vide pour rien, un instant en ISO 8601, et une apostrophe en tête
+    // d'un texte qui commence comme une formule.
+    private static string Attendue(object? enBase, string colonne) => enBase switch
+    {
+        null => "",
+        long entier => entier.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        string texte when Instants.Contains(colonne) => texte.Replace(' ', 'T') + "Z",
+        string texte when texte.Length > 0 && DebutsDUneFormule.Contains(texte[0], StringComparison.Ordinal) => "'" + texte,
+        string texte => texte,
+        _ => throw new InvalidOperationException($"La colonne {colonne} porte une valeur d'un type inattendu."),
+    };
+
+    // Les fichiers de l'archive, dans son ordre, chacun lu par un lecteur CSV écrit ici, à part du code de l'export.
+    private static OrderedDictionary<string, List<string[]>> LireLArchive(string fichier)
+    {
+        using var archive = ZipFile.OpenRead(fichier);
+        var fichiers = new OrderedDictionary<string, List<string[]>>(StringComparer.Ordinal);
+        foreach (var entree in archive.Entries)
+        {
+            fichiers.Add(entree.FullName, LireLeCsv(TexteDe(entree)));
+        }
+
+        return fichiers;
+    }
+
+    private static string[] TextesDeLArchive(string fichier)
+    {
+        using var archive = ZipFile.OpenRead(fichier);
+        return [.. archive.Entries.Select(TexteDe)];
+    }
+
+    // Le texte d'une entrée de l'archive, en UTF-8, après son BOM.
+    private static string TexteDe(System.IO.Compression.ZipArchiveEntry entree)
+    {
+        using var flux = entree.Open();
+        using var memoire = new MemoryStream();
+        flux.CopyTo(memoire);
+        var octets = memoire.ToArray();
+        Assert.Equal([0xEF, 0xBB, 0xBF], octets[..3]);
+        return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true).GetString(octets, 3, octets.Length - 3);
+    }
+
+    // Un lecteur de la RFC 4180, au point-virgule : guillemets, guillemets doublés, fins de ligne CRLF entre les lignes, et
+    // toute autre fin de ligne gardée dans sa cellule. Chaque ligne a autant de cellules que l'en-tête.
+    private static List<string[]> LireLeCsv(string texte)
+    {
+        var lignes = new List<string[]>();
+        var cellules = new List<string>();
+        var cellule = new StringBuilder();
+        var entreGuillemets = false;
+        for (var rang = 0; rang < texte.Length; rang++)
+        {
+            var caractere = texte[rang];
+            if (entreGuillemets)
+            {
+                if (caractere != '"')
+                {
+                    cellule.Append(caractere);
+                }
+                else if (rang + 1 < texte.Length && texte[rang + 1] == '"')
+                {
+                    cellule.Append('"');
+                    rang++;
+                }
+                else
+                {
+                    entreGuillemets = false;
+                }
+            }
+            else if (caractere == '"' && cellule.Length == 0)
+            {
+                entreGuillemets = true;
+            }
+            else if (caractere == ';')
+            {
+                cellules.Add(cellule.ToString());
+                cellule.Clear();
+            }
+            else if (caractere == '\r' && rang + 1 < texte.Length && texte[rang + 1] == '\n')
+            {
+                cellules.Add(cellule.ToString());
+                cellule.Clear();
+                lignes.Add([.. cellules]);
+                cellules.Clear();
+                rang++;
+            }
+            else
+            {
+                Assert.NotEqual('"', caractere);
+                cellule.Append(caractere);
+            }
+        }
+
+        // Le fichier finit par une fin de ligne : rien ne reste en cours.
+        Assert.False(entreGuillemets);
+        Assert.Empty(cellules);
+        Assert.Equal(0, cellule.Length);
+        Assert.All(lignes, ligne => Assert.Equal(lignes[0].Length, ligne.Length));
+        return lignes;
     }
 
     private static string[] Colonnes(SqliteConnection connexion, string table) =>

@@ -13,12 +13,13 @@ public sealed class ExportDansLaFenetreTests
     private static readonly Uri Origine = new("http://127.0.0.1:52344");
 
     [Theory]
-    [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees","format":"json"}""")]
-    [InlineData("http://127.0.0.1:52344/index.html", """{ "format": "json", "type": "exporterLesDonnees" }""")]
-    public void L_interface_demande_l_export_par_son_seul_format(string source, string message)
+    [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees","format":"json"}""", FormatDExport.Json)]
+    [InlineData("http://127.0.0.1:52344/index.html", """{ "format": "json", "type": "exporterLesDonnees" }""", FormatDExport.Json)]
+    [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees","format":"csv"}""", FormatDExport.Csv)]
+    public void L_interface_demande_l_export_par_son_seul_format(string source, string message, FormatDExport attendu)
     {
         Assert.True(ReglesDeLaFenetre.DemandeLExport(source, message, Origine, out var format));
-        Assert.Equal(FormatDExport.Json, format);
+        Assert.Equal(attendu, format);
         // Ce message n'ouvre aucun autre dialogue, ni ne reçoit le jeton.
         Assert.False(ReglesDeLaFenetre.DemandeLeChoixDuDossier(source, message, Origine));
         Assert.False(ReglesDeLaFenetre.DemandeLaRestauration(source, message, Origine, out _));
@@ -35,6 +36,8 @@ public sealed class ExportDansLaFenetreTests
     [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees","type":"exporterLesDonnees"}""")]
     [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees"}""")]
     [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees","format":"JSON"}""")]
+    [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees","format":"CSV"}""")]
+    [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees","format":"zip"}""")]
     [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees","format":"xml"}""")]
     [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees","format":"C:\\export.json"}""")]
     [InlineData("http://127.0.0.1:52344/", """{"type":"exporterLesDonnees","format":0}""")]
@@ -55,6 +58,8 @@ public sealed class ExportDansLaFenetreTests
     public void La_reponse_ne_porte_que_le_format_et_l_issue()
     {
         Assert.Equal("""{"type":"export","format":"json","issue":"enCours"}""", ReglesDeLaFenetre.MessageDeLExportEnCours(FormatDExport.Json));
+        Assert.Equal("""{"type":"export","format":"csv","issue":"enCours"}""", ReglesDeLaFenetre.MessageDeLExportEnCours(FormatDExport.Csv));
+        Assert.Equal("""{"type":"export","format":"csv","issue":"exporte"}""", ReglesDeLaFenetre.MessageDeLExport(FormatDExport.Csv, IssueDeLExport.Exporte));
         (IssueDeLExport Issue, string Texte)[] cas =
         [
             (IssueDeLExport.Exporte, "exporte"),
@@ -97,5 +102,19 @@ public sealed class ExportDansLaFenetreTests
         Assert.Equal(nom, dialogue.FileName);
         // Le dialogue s'ouvre là où Windows l'a laissé : jamais sur le dossier de données.
         Assert.Equal("", dialogue.InitialDirectory);
+    }
+
+    [Fact]
+    public void Le_dialogue_du_CSV_propose_une_archive_ZIP_et_demande_avant_de_remplacer()
+    {
+        var nom = FormatDeLExport.NomPropose(FormatDExport.Csv, new DateOnly(2026, 11, 27));
+        Assert.Equal("sollicito-export-2026-11-27.zip", nom);
+
+        using var dialogue = ChoixDUnFichierParLeDialogue.Construire(FormatDExport.Csv, nom);
+
+        Assert.True(dialogue.OverwritePrompt);
+        Assert.Equal("zip", dialogue.DefaultExt);
+        Assert.Equal("Archive ZIP de fichiers CSV (*.zip)|*.zip", dialogue.Filter);
+        Assert.Equal(nom, dialogue.FileName);
     }
 }

@@ -14,7 +14,7 @@ import {
 /** Où en est un export demandé depuis la section : en attente du dialogue de l'hôte, puis en cours. */
 type Etape = "repos" | "choix" | "enCours";
 
-const FORMATS: readonly FormatDExport[] = ["json"];
+const FORMATS: readonly FormatDExport[] = ["json", "csv"];
 
 /**
  * La section « Exporter vos données » des réglages (#49, ADR-0020) : ce que contient l'export, qu'il n'est pas chiffré, et

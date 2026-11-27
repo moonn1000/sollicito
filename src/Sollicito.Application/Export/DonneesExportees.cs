@@ -1,12 +1,16 @@
 namespace Sollicito.Application.Export;
 
 /// <summary>
-/// Les formes de l'export (#49, ADR-0020) : le JSON, qui garde chaque valeur telle qu'en base.
+/// Les deux formes de l'export (#49, ADR-0020) : le JSON, qui garde chaque valeur telle qu'en base, et l'archive de
+/// fichiers CSV, pour un tableur, qui peut passer en V2 seule (ADR-0004, « Règle de coupe »).
 /// </summary>
 public enum FormatDExport
 {
     /// <summary>Un seul fichier JSON.</summary>
     Json,
+
+    /// <summary>Une archive ZIP d'un fichier CSV par entité.</summary>
+    Csv,
 }
 
 /// <summary>Une entreprise, telle qu'en base.</summary>

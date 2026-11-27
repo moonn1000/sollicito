@@ -9,7 +9,8 @@ export const AVERTISSEMENT_DE_L_EXPORT =
   "L'export n'est pas chiffré : toute personne qui accède au fichier peut le lire. Enregistré dans un dossier synchronisé, comme OneDrive, il part là où ce dossier l'envoie.";
 
 /** Ce que donne chaque forme de l'export. */
-export const FORMES_DE_L_EXPORT = "JSON : un seul fichier, qui garde chaque valeur telle quelle.";
+export const FORMES_DE_L_EXPORT =
+  "JSON : un seul fichier, qui garde chaque valeur telle quelle. CSV : une archive ZIP d'un fichier par sorte de données, à ouvrir dans un tableur ; une cellule qui commencerait comme une formule y reçoit une apostrophe en tête.";
 
 /** Ce que dit l'écran pendant un export : en attente du dialogue de l'hôte, puis en cours. */
 export const ATTENTE_DU_CHOIX = "Choisissez où enregistrer l'export dans la fenêtre de Sollicito.";
@@ -18,10 +19,12 @@ export const EXPORT_EN_COURS = "Export en cours : ne fermez pas Sollicito.";
 /** Les boutons, un par forme. */
 export const BOUTONS_DE_L_EXPORT: Record<FormatDExport, string> = {
   json: "Exporter en JSON…",
+  csv: "Exporter en CSV…",
 };
 
 const EXTENSIONS: Record<FormatDExport, string> = {
   json: ".json",
+  csv: ".zip",
 };
 
 /** Vrai pour une issue qui s'annonce, et faux pour un échec, qui s'affiche en alerte. */

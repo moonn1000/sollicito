@@ -214,8 +214,8 @@ export function demanderLaRestauration(canal: CanalDeLHote, copie: string, quand
   });
 }
 
-/** Les formes de l'export (#49, ADR-0020) : le JSON. */
-export type FormatDExport = "json";
+/** Les formes de l'export (#49, ADR-0020) : le JSON, et l'archive de fichiers CSV. */
+export type FormatDExport = "json" | "csv";
 
 /**
  * L'issue d'un export (#49), telle que l'hôte la rend : seule « exporte » a écrit un fichier sous le nom choisi ; aucune

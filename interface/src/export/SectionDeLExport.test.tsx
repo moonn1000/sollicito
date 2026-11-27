@@ -8,14 +8,31 @@ const CONTENU =
 const AVERTISSEMENT =
   "L'export n'est pas chiffré : toute personne qui accède au fichier peut le lire. Enregistré dans un dossier synchronisé, comme OneDrive, il part là où ce dossier l'envoie.";
 
-test("la section dit ce que contient l'export, qu'il n'est pas chiffré, et propose l'export en JSON", () => {
+test("la section dit ce que contient l'export, qu'il n'est pas chiffré, et propose l'export en JSON et en CSV", () => {
   render(<SectionDeLExport exporter={vi.fn()} />);
 
   const section = screen.getByRole("region", { name: "Exporter vos données" });
   expect(within(section).getByText(CONTENU)).toBeDefined();
   expect(within(section).getByText(AVERTISSEMENT)).toBeDefined();
-  expect(within(section).getByText("JSON : un seul fichier, qui garde chaque valeur telle quelle.")).toBeDefined();
-  expect(within(section).getAllByRole("button").map((bouton) => bouton.textContent)).toEqual(["Exporter en JSON…"]);
+  expect(
+    within(section).getByText(
+      "JSON : un seul fichier, qui garde chaque valeur telle quelle. CSV : une archive ZIP d'un fichier par sorte de données, à ouvrir dans un tableur ; une cellule qui commencerait comme une formule y reçoit une apostrophe en tête.",
+    ),
+  ).toBeDefined();
+  expect(within(section).getAllByRole("button").map((bouton) => bouton.textContent)).toEqual(["Exporter en JSON…", "Exporter en CSV…"]);
+});
+
+test("l'export en CSV ne demande que son format, et son refus d'extension nomme le .zip", async () => {
+  const exporter = vi.fn(async (_format: FormatDExport, _quandEnCours: () => void): Promise<IssueDeLExport> => "extension");
+  render(<SectionDeLExport exporter={exporter} />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Exporter en CSV…" }));
+
+  expect((await screen.findByRole("alert")).textContent).toBe(
+    "Le nom du fichier doit finir par .zip : rien n'a été enregistré. Exportez de nouveau sans changer l'extension.",
+  );
+  expect(exporter).toHaveBeenCalledOnce();
+  expect(exporter.mock.calls[0]?.[0]).toBe("csv");
 });
 
 test("hors de la fenêtre, la section ne propose aucun export", () => {

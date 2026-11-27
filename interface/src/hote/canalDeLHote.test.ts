@@ -214,3 +214,15 @@ test("chaque issue d'un export que l'hôte rend est reçue telle quelle (#49)", 
     await expect(issue).resolves.toBe(attendue);
   }
 });
+
+test("l'export en CSV ne demande que son format, et n'écoute que la réponse de ce format (#49)", async () => {
+  const canal = new CanalSimule();
+
+  const issue = demanderLExport(canal, "csv");
+  expect(canal.messagesRecus).toEqual([{ type: "exporterLesDonnees", format: "csv" }]);
+  canal.envoyer({ type: "export", format: "json", issue: "exporte" });
+  expect(canal.abonnes).toBe(1);
+  canal.envoyer({ type: "export", format: "csv", issue: "exporte" });
+
+  await expect(issue).resolves.toBe("exporte");
+});

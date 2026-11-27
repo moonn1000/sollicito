@@ -12,7 +12,10 @@ public static class FormatDeLExport
     /// <summary>Le nom du format JSON, écrit dans le champ <c>format</c> du fichier.</summary>
     public const string NomDuJson = "sollicito-export";
 
-    /// <summary>La version du format.</summary>
+    /// <summary>Le nom du format CSV, écrit dans le fichier <c>export.csv</c> de l'archive.</summary>
+    public const string NomDuCsv = "sollicito-export-csv";
+
+    /// <summary>La version du format, la même pour ses deux formes.</summary>
     public const int Version = 1;
 
     /// <summary>La taille du tampon : l'écriture suit la lecture, et ni une table ni le fichier ne restent en mémoire.</summary>
@@ -27,10 +30,11 @@ public static class FormatDeLExport
     /// <inheritdoc cref="ChangementDeStatut"/>
     public const string ClotureDeRelance = nameof(Domain.Candidatures.ClotureDeRelance);
 
-    /// <summary>L'extension du fichier de cette forme, avec son point : <c>.json</c>.</summary>
+    /// <summary>L'extension du fichier de cette forme, avec son point : <c>.json</c> ou <c>.zip</c>.</summary>
     public static string Extension(FormatDExport format) => format switch
     {
         FormatDExport.Json => ".json",
+        FormatDExport.Csv => ".zip",
         _ => throw new ArgumentOutOfRangeException(nameof(format)),
     };
 

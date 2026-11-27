@@ -30,6 +30,7 @@ internal static class TextesDeLExport
     public static string Filtre(FormatDExport format) => format switch
     {
         FormatDExport.Json => "Export JSON (*.json)|*.json",
+        FormatDExport.Csv => "Archive ZIP de fichiers CSV (*.zip)|*.zip",
         _ => throw new ArgumentOutOfRangeException(nameof(format)),
     };
 }

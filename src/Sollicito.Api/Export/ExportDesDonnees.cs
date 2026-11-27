@@ -96,6 +96,7 @@ public sealed partial class ExportDesDonnees(
                     comptes = format switch
                     {
                         FormatDExport.Json => await EcrivainJson.EcrireAsync(instantane, flux, maintenant.UtcDateTime, etapes.Atteinte, annulation),
+                        FormatDExport.Csv => await EcrivainCsv.EcrireAsync(instantane, flux, maintenant.UtcDateTime, horloge.LocalTimeZone, etapes.Atteinte, annulation),
                         _ => throw new ArgumentOutOfRangeException(nameof(format)),
                     };
                 }

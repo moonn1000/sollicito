@@ -239,7 +239,7 @@ internal static class ReglesDeLaFenetre
     });
 
     // Les formats que la page peut demander, sous leur nom dans les messages.
-    private static readonly (string Nom, FormatDExport Format)[] FormatsDansLaFenetre = [("json", FormatDExport.Json)];
+    private static readonly (string Nom, FormatDExport Format)[] FormatsDansLaFenetre = [("json", FormatDExport.Json), ("csv", FormatDExport.Csv)];
 
     private static string MessageDeLExport(FormatDExport format, string issue) => JsonSerializer.Serialize(new
     {

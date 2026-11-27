@@ -97,6 +97,36 @@ test("un export JSON s'enregistre dans le fichier choisi, sans que la page ni le
   }
 });
 
+test("un export CSV s'enregistre en archive ZIP d'un fichier par entité", async () => {
+  const donnees = await nouveauDossier("sollicito-fenetre-");
+  const sortie = await nouveauDossier("sollicito-export-");
+  const fichier = join(sortie, "export.zip");
+  const fenetre = await lancerLaFenetre({ dossierDeDonnees: donnees });
+  try {
+    const { page } = fenetre;
+    await page.getByText(CONNECTEE).waitFor();
+    await saisir(page, "=Atelier fictif", "Comptable");
+    await writeFile(join(donnees, "export-a-choisir.txt"), fichier, "utf8");
+
+    await page.getByRole("button", { name: "Réglages" }).click();
+    await page.getByRole("region", { name: "Exporter vos données" }).getByRole("button", { name: "Exporter en CSV…" }).click();
+    await page.getByText(EXPORTE).waitFor();
+
+    // Une archive ZIP, dont l'annuaire nomme les sept fichiers ; leur contenu se vérifie dans les tests de l'API.
+    const octets = await readFile(fichier);
+    expect(octets.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+    for (const nom of ["export.csv", "entreprises.csv", "contacts.csv", "offres.csv", "candidatures.csv", "relances.csv", "evenements.csv"]) {
+      expect(octets.includes(Buffer.from(nom, "ascii"))).toBe(true);
+    }
+    expect(await fichiers(sortie)).toEqual(["export.zip"]);
+    const demandes = await readFile(join(donnees, "exports-demandes.txt"), "utf8");
+    expect(demandes).toMatch(/^Csv sollicito-export-\d{4}-\d{2}-\d{2}\.zip\r?\n$/u);
+    expect(await fenetre.fermer()).toBe(0);
+  } finally {
+    await fenetre.nettoyer();
+  }
+});
+
 test("sans choix l'export est annulé ; un fichier existant n'est remplacé qu'avec le oui", async () => {
   const donnees = await nouveauDossier("sollicito-fenetre-");
   const sortie = await nouveauDossier("sollicito-export-");
