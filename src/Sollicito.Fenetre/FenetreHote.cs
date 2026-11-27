@@ -234,8 +234,14 @@ internal sealed class FenetreHote : Form
         {
             if (_exportEnCours)
             {
-                // Un seul export à la fois. Pas de réponse : la page qui attend le sien en recevra la vraie issue, et une
-                // réponse ici, du même format, la clorait trop tôt.
+                // Un seul export à la fois. Une demande du même format ne reçoit rien : la page qui attend le sien en
+                // recevra la vraie issue, et une réponse ici la clorait trop tôt. Une demande de l'autre format n'attend que
+                // sa propre réponse : elle apprend que Sollicito est occupé.
+                if (format != _formatEnCours)
+                {
+                    _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDeLExport(format, IssueDeLExport.Occupe));
+                }
+
                 return;
             }
 
@@ -270,7 +276,8 @@ internal sealed class FenetreHote : Form
             }
             else if (IsDisposed || _fermeture.IsCancellationRequested)
             {
-                // La fenêtre se ferme : rien ne s'écrit.
+                // La fenêtre se ferme : rien ne s'écrit, et le journal le dit.
+                _export.NoterLInterruption(format);
                 issue = IssueDeLExport.Annule;
             }
             else

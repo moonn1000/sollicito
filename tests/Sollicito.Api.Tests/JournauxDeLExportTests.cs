@@ -98,6 +98,33 @@ public sealed class JournauxDeLExportTests : IAsyncLifetime
             Assert.Equal(IssueDeLExport.PlaceManquante, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
             _etapes.Erreur = (EtapeDeLExport.ContactsEcrits, new InvalidOperationException($"Erreur imprévue (essai) : {fichier} {Donnee}"));
             Assert.Equal(IssueDeLExport.Impossible, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
+
+            // Un provisoire tenu par un autre programme au moment de l'effacer : il reste, et le journal le dit, sans chemin.
+            FileStream? tenu = null;
+            _etapes.Action = etape =>
+            {
+                if (etape == EtapeDeLExport.FichierEcrit)
+                {
+                    var provisoire = Directory.GetFiles(documents, ExportDesDonnees.PrefixeDuProvisoire + "*" + ExportDesDonnees.SuffixeDuProvisoire).Single();
+                    tenu = new FileStream(provisoire, FileMode.Open, FileAccess.Read, FileShare.None);
+                }
+            };
+            _etapes.Erreur = (EtapeDeLExport.FichierEcrit, new IOException($"Erreur imprévue (essai) : {fichier} {Donnee}"));
+            try
+            {
+                Assert.Equal(IssueDeLExport.Impossible, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
+            }
+            finally
+            {
+                var resteDuProvisoire = tenu?.Name;
+                tenu?.Dispose();
+                if (resteDuProvisoire is not null)
+                {
+                    File.Delete(resteDuProvisoire);
+                }
+            }
+
+            _etapes.Action = null;
             _etapes.Erreur = null;
 
             // Interrompu, la fenêtre qui se ferme ; puis l'annulation dans le dialogue, et une fermeture sans attendre.
@@ -131,6 +158,7 @@ public sealed class JournauxDeLExportTests : IAsyncLifetime
         Assert.Contains(entrees, entree => entree.Contains("(Ecriture, InvalidOperationException, Impossible)", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("Export Json interrompu par la fermeture de la fenêtre", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("Export Json annulé dans le dialogue", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("Le fichier provisoire d'un export Json n'a pas pu être effacé (IOException)", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("La fenêtre s'est fermée avant la fin d'un export Json", StringComparison.Ordinal));
 
         // Ni le compte, ni un dossier, ni le nom du fichier, ni la donnée, ni l'identifiant d'installation, ni le message

@@ -297,6 +297,9 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
             Path.Combine(Donnees, "WebView2", "export.json"),
             Path.Combine(Sortie, "..", "donnees", "export.json"),
             Path.Combine(Donnees.ToUpperInvariant(), "export.json"),
+            // Un chemin de périphérique, que GetFullPath garde tel quel : comparé sans son préfixe.
+            @"\\?\" + Path.Combine(Donnees, "export.json"),
+            @"\\.\" + Path.Combine(Donnees, "export.json"),
             // Le nom même de la base, d'une extension que l'export n'écrit pas : refusé avant le dossier.
             dossier.Fichier,
         ];

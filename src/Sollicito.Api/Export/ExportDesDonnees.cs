@@ -156,13 +156,35 @@ public sealed partial class ExportDesDonnees(
     /// </summary>
     public void NoterLaFermetureAvantLaFin(FormatDExport format) => FermetureAvantLaFin(journal, format);
 
+    /// <summary>
+    /// Note que la fenêtre s'est fermée pendant le dialogue, avant que l'export ne commence : rien n'a été écrit.
+    /// </summary>
+    public void NoterLInterruption(FormatDExport format) => ExportInterrompu(journal, format);
+
     // Le dossier de données, sous-dossiers compris, après normalisation : un oui à l'écrasement y remplacerait la base, les
     // réglages ou la clé.
     private bool EstDansLeDossierDeDonnees(string cible)
     {
         var donnees = Path.TrimEndingDirectorySeparator(Path.GetFullPath(dossier.Chemin));
-        return string.Equals(cible, donnees, StringComparison.OrdinalIgnoreCase)
-            || cible.StartsWith(donnees + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        var comparee = SansPrefixeDePeripherique(cible);
+        return string.Equals(comparee, donnees, StringComparison.OrdinalIgnoreCase)
+            || comparee.StartsWith(donnees + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Un chemin de périphérique (« \\?\C:\… », « \\.\C:\… », « \\?\UNC\serveur\… ») désigne le même fichier que sans son
+    // préfixe, que GetFullPath garde tel quel : il se compare sans lui, normalisé.
+    private static string SansPrefixeDePeripherique(string chemin)
+    {
+        foreach (var prefixe in new[] { @"\\?\", @"\\.\" })
+        {
+            if (chemin.StartsWith(prefixe, StringComparison.Ordinal))
+            {
+                var reste = chemin[prefixe.Length..];
+                return Path.GetFullPath(reste.StartsWith(@"UNC\", StringComparison.OrdinalIgnoreCase) ? @"\\" + reste[4..] : reste);
+            }
+        }
+
+        return chemin;
     }
 
     private static string NomDUnProvisoire() =>

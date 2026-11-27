@@ -13,8 +13,9 @@ namespace Sollicito.Application.Export;
 public static class EcrivainJson
 {
     // Le fichier se lit tel quel, dans un éditeur ou par un autre outil, et ne s'insère jamais dans une page : les lettres
-    // accentuées et les signes (« & », « + », « < ») s'écrivent tels quels, et seuls s'échappent les caractères que JSON
-    // impose (le guillemet, la barre oblique inverse, les caractères de contrôle). L'encodeur par défaut de .NET les
+    // accentuées et les signes (« & », « + », « < ») s'écrivent tels quels. Seuls s'échappent les caractères que JSON
+    // impose (le guillemet, la barre oblique inverse, les caractères de contrôle) et ceux hors du plan de base d'Unicode,
+    // comme un émoji, que cet encodeur écrit en une paire de \uXXXX. L'encodeur par défaut de .NET les
     // échapperait tous en \uXXXX, par prudence pour une page HTML : la valeur relue serait la même, mais illisible.
     private static readonly JsonWriterOptions Options = new()
     {

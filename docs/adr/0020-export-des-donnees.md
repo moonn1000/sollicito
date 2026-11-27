@@ -54,7 +54,7 @@ Six faits, relevés le 2026-11-27, pèsent sur la façon de faire :
 ### La destination
 
 - **Le oui à remplacer un fichier vient du dialogue de Windows**, qui le demande lui-même (`OverwritePrompt`) ; un test vérifie que le dialogue le demande. Le choix porte ce oui : vrai si le fichier existait au retour du dialogue. Le renommage ne remplace un fichier qu'avec lui ; un fichier apparu entre-temps n'est pas remplacé (issue `existe`).
-- **Refusé avant toute écriture**, dans cet ordre : un nom qui ne finit pas par l'extension du format, `.json` ou `.zip` (issue `extension`) ; un chemin relatif (issue `impossible`) ; un fichier dans le dossier de données de Sollicito, sous-dossiers compris, après normalisation (issue `dossierDeDonnees`). Sinon, un oui à l'écrasement remplacerait la base, les réglages ou la clé. La règle compare les chemins complets, sans tenir compte de la casse ; elle ne suit pas les jonctions, puisque le chemin vient de l'utilisateur, dans le dialogue.
+- **Refusé avant toute écriture**, dans cet ordre : un nom qui ne finit pas par l'extension du format, `.json` ou `.zip` (issue `extension`) ; un chemin relatif (issue `impossible`) ; un fichier dans le dossier de données de Sollicito, sous-dossiers compris, après normalisation (issue `dossierDeDonnees`). Sinon, un oui à l'écrasement remplacerait la base, les réglages ou la clé. La règle compare les chemins complets, sans tenir compte de la casse, et un chemin de périphérique (`\\?\…`, `\\.\…`) sans son préfixe ; elle ne suit pas les jonctions, puisque le chemin vient de l'utilisateur, dans le dialogue.
 - **Le dossier des sauvegardes** : celui par défaut est refusé, puisqu'il est sous le dossier de données ; un dossier choisi ailleurs, sur un NAS ou dans OneDrive, ne l'est pas. Les copies y sont toutes en `.db` : le contrôle de l'extension les protège.
 
 ### L'écriture : rien de partiel
@@ -73,7 +73,7 @@ Six faits, relevés le 2026-11-27, pèsent sur la façon de faire :
 ### Un seul dialogue de l'hôte à la fois
 
 - Une demande d'export pendant un choix de dossier ou une restauration reçoit « occupé ».
-- Une demande pendant un autre export ne reçoit rien, pour que la page qui attend le sien en reçoive la vraie issue.
+- Une demande du même format pendant un export ne reçoit rien, pour que la page qui attend le sien en reçoive la vraie issue ; une demande de l'autre format reçoit « occupé ».
 - Pendant un export, une restauration reçoit « occupée », et un choix de dossier n'ouvre rien.
 
 ### La fermeture de la fenêtre
