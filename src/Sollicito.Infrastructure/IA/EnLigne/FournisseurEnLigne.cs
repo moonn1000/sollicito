@@ -291,7 +291,9 @@ public abstract partial class FournisseurEnLigne : IFournisseurDIA
     [LoggerMessage(EventId = 93, Level = LogLevel.Warning, Message = "Demande à l'IA : {Fournisseur} n'a pas pu être joint ({TypeDErreur}) en {Duree} ms.")]
     private partial void FournisseurInjoignable(FournisseurDIA fournisseur, string typeDErreur, long duree);
 
-    [LoggerMessage(EventId = 94, Level = LogLevel.Information, Message = "Demande à l'IA refusée : une autre est en cours ({Fournisseur}).")]
+    // Un échec, rendu par le port : Warning, comme les échecs d'une demande partie. L'entrée 95, sans clé prête, dit un état,
+    // et reste en Information (#108, point 4).
+    [LoggerMessage(EventId = 94, Level = LogLevel.Warning, Message = "Demande à l'IA refusée : une autre est en cours ({Fournisseur}).")]
     private partial void DemandeDejaEnCours(FournisseurDIA fournisseur);
 
     [LoggerMessage(EventId = 95, Level = LogLevel.Information, Message = "Demande à l'IA sans clé prête : {Fournisseur} ({Raison}).")]
