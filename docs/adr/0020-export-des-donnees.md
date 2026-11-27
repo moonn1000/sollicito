@@ -128,7 +128,7 @@ Suivent ce que donne chaque forme, les boutons « Exporter en JSON… » et « E
 - **Négatives** :
   - l'export n'est pas chiffré : qui accède au fichier le lit, et, rangé dans un dossier synchronisé, il part là où ce dossier l'envoie ;
   - après un arrêt brutal, ou au-delà des cinq secondes de la fermeture, le provisoire, partiel et non chiffré, peut rester dans le dossier choisi, où Sollicito ne le retrouve pas ; son nom le fait reconnaître, et il s'efface à la main ;
-  - la règle du dossier de données compare les chemins tels qu'ils s'écrivent : un chemin qui y mène par une jonction, un lien, un nom court ou un partage n'est pas reconnu, alors que `reglages.json` et `cle-ia.json` ont l'extension admise. Le dialogue demande encore le oui avant de remplacer un fichier ;
+  - la règle du dossier de données compare les chemins tels qu'ils s'écrivent : un chemin qui y mène par une jonction, un lien ou un partage n'est pas reconnu (un nom court et un chemin de périphérique, eux, le sont), alors que `reglages.json` et `cle-ia.json` ont l'extension admise. Le dialogue demande encore le oui avant de remplacer un fichier ;
   - un script injecté qui aurait le jeton peut rouvrir le dialogue après chaque annulation ; il ne choisit pas le fichier, et ne reçoit ni son chemin ni son contenu ;
   - le CSV ne se relit pas à l'identique, un tableur qui le réenregistre peut retirer l'apostrophe, et une cellule de plus de 32 767 caractères ne se lit pas entière dans Excel ;
   - recharger un export attend la V2.
