@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Text;
 using Sollicito.Domain.Textes;
 
 namespace Sollicito.Domain.Offres;
@@ -42,7 +41,7 @@ public static class TexteDUneOffre
     public static bool EssayerDeLire(string? saisie, [NotNullWhen(true)] out string? texte, [NotNullWhen(false)] out string? erreur)
     {
         texte = null;
-        var lignes = AvecDesFinsDeLigneUniques(saisie ?? "");
+        var lignes = FinsDeLigne.Uniques(saisie ?? "");
 
         // La ligne se compte avant le retrait des blancs de bord : c'est celle du texte tel que l'écran le montre.
         var refuse = TexteDUneLigne.PremierCaractereInterdit(lignes, sautsDeLigneEtTabulationsAdmis: true);
@@ -77,24 +76,6 @@ public static class TexteDUneOffre
     public static int LongueurMesuree(string texte)
     {
         ArgumentNullException.ThrowIfNull(texte);
-        return AvecDesFinsDeLigneUniques(texte).Trim().Length;
-    }
-
-    /// <summary>Le texte, chaque fin de ligne écrite U+000A : CRLF en compte une seule.</summary>
-    internal static string AvecDesFinsDeLigneUniques(string texte)
-    {
-        var lignes = new StringBuilder(texte.Length);
-        for (var i = 0; i < texte.Length; i++)
-        {
-            var caractere = texte[i];
-            if (caractere == '\r' && i + 1 < texte.Length && texte[i + 1] == '\n')
-            {
-                continue;
-            }
-
-            lignes.Append(caractere is '\r' or '\v' or '\f' or '\u0085' or (char)0x2028 or (char)0x2029 ? '\n' : caractere);
-        }
-
-        return lignes.ToString();
+        return FinsDeLigne.Uniques(texte).Trim().Length;
     }
 }
