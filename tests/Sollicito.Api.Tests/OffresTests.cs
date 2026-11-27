@@ -287,6 +287,24 @@ public sealed class OffresTests
     }
 
     [Fact]
+    public async Task A_la_correction_un_champ_facultatif_absent_vaut_un_champ_vide_et_efface()
+    {
+        // Suites de #36 (#98, point 9) : comme à la saisie ; le comportement gardé, dit dans la description de la route.
+        await using var api = await LancerAsync();
+        var offre = await api.CollerAvecSuccesAsync(Texte, "Comptable", entreprise: "Lumière Verte SA", lieu: "Liège", publieeLe: "2026-11-17", adresse: "https://exemple.invalid/1");
+
+        using var reponse = await api.CorrigerLOffreAsync(Id(offre), "Comptable");
+
+        Assert.Equal(HttpStatusCode.OK, reponse.StatusCode);
+        var fiche = (await AppelsDesCandidatures.LireAsync(reponse)).AsObject();
+        foreach (var champ in new[] { "entreprise", "lieu", "publieeLe", "adresse" })
+        {
+            Assert.True(fiche.ContainsKey(champ), champ);
+            Assert.Null(fiche[champ]);
+        }
+    }
+
+    [Fact]
     public async Task Une_correction_qui_porte_un_texte_ou_un_champ_inconnu_est_illisible_et_ne_change_rien()
     {
         await using var api = await LancerAsync();

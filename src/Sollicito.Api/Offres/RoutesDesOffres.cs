@@ -105,7 +105,8 @@ internal static class RoutesDesOffres
             .WithName("CorrigerUneOffre")
             .WithSummary("Corriger les champs d'une offre, jamais son texte")
             .WithDescription(
-                "Une entreprise ou un poste changés refont la comparaison des doublons possibles : refusée (409, motif doublonPossible) sans l'accord garderLesDeux. "
+                "Chaque champ s'envoie : un champ facultatif absent vaut un champ vide, comme à la saisie, et sa valeur s'efface. "
+                + "Une entreprise ou un poste changés refont la comparaison des doublons possibles : refusée (409, motif doublonPossible) sans l'accord garderLesDeux. "
                 + "Aucune entreprise n'est renommée.")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)

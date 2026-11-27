@@ -81,7 +81,9 @@ internal static class RoutesDesRelances
         routes.MapPut("/api/candidatures/{id:int}/relances/{relance:int}", ChangerAsync)
             .WithName("ChangerUneRelance")
             .WithSummary("Changer le délai et le destinataire de la relance à faire d'une candidature")
-            .WithDescription("Mêmes champs qu'à la planification. Refusé (409) si la relance n'est plus à faire.")
+            .WithDescription(
+                "Mêmes champs qu'à la planification, traités de même : sans délai, le délai par défaut ; sans destinataire, "
+                + "personne. Refusé (409) si la relance n'est plus à faire.")
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithTags("Relances");
