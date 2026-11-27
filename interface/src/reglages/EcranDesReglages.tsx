@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ClientDeLApi, CopieGardee } from "../api/clientDeLApi.ts";
 import type { IssueDeLaRestauration, IssueDuChoixDuDossier } from "../hote/canalDeLHote.ts";
 import { SectionDeLIA } from "../ia/SectionDeLIA.tsx";
@@ -31,6 +31,8 @@ export function EcranDesReglages({
   allerALIA?: boolean;
 }) {
   const titre = useRef<HTMLHeadingElement>(null);
+  // Un dossier choisi réécrit reglages.json (ADR-0008) : les sections qui en lisent un réglage le relisent (#93, point 12).
+  const [reecritures, setReecritures] = useState(0);
 
   useEffect(() => {
     if (prendreLeFocus) {
@@ -39,6 +41,17 @@ export function EcranDesReglages({
     // Au montage seulement : le focus suit un changement d'écran.
   }, []);
 
+  const choisirLeDossier =
+    choisirLeDossierDesSauvegardes === undefined
+      ? undefined
+      : async () => {
+          const issue = await choisirLeDossierDesSauvegardes();
+          if (issue === "choisi") {
+            setReecritures((nombre) => nombre + 1);
+          }
+          return issue;
+        };
+
   return (
     <section aria-labelledby="titre-des-reglages">
       <h2 id="titre-des-reglages" ref={titre} tabIndex={-1}>
@@ -46,12 +59,12 @@ export function EcranDesReglages({
       </h2>
       <SectionDesSauvegardes
         client={client}
-        choisirLeDossier={choisirLeDossierDesSauvegardes}
+        choisirLeDossier={choisirLeDossier}
         restaurer={restaurerUneSauvegarde}
         quandRestauree={quandRestauree}
       />
-      <SectionDesRelances client={client} />
-      <SectionDeLIA client={client} prendreLeFocus={allerALIA} />
+      <SectionDesRelances client={client} reecritures={reecritures} />
+      <SectionDeLIA client={client} prendreLeFocus={allerALIA} reecritures={reecritures} />
     </section>
   );
 }
