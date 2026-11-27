@@ -34,6 +34,13 @@ namespace Sollicito.Api;
 public static class ApiLocale
 {
     /// <summary>
+    /// La borne du corps d'une requête, faute d'une borne propre à sa route : 256 Kio, au-delà des plus longues saisies
+    /// que l'interface envoie hors d'un long texte, ses champs s'arrêtant à 10 000 caractères (#98, point 3). Les routes
+    /// qui lisent un long texte, ou qui veulent moins, posent la leur.
+    /// </summary>
+    public const long BorneDuCorpsParDefaut = 256 * 1024;
+
+    /// <summary>
     /// Construit l'API seule, prête à démarrer, sans les fichiers de l'interface. Sa base vit dans le dossier de
     /// données de l'utilisateur (<see cref="DossierDeDonnees"/>), développement compris.
     /// </summary>
@@ -108,6 +115,7 @@ public static class ApiLocale
         {
             kestrel.Configure(new ConfigurationBuilder().Build(), reloadOnChange: false);
             kestrel.Listen(IPAddress.Loopback, 0);
+            kestrel.Limits.MaxRequestBodySize = BorneDuCorpsParDefaut;
         });
         ReglesDesJournaux.Appliquer(builder.Logging);
         // Ni « Content root path » ni « Hosting environment » : le premier écrit un chemin du profil Windows, donc le

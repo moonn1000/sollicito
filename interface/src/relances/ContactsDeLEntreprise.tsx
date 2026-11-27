@@ -7,7 +7,7 @@ import type {
   ResultatDUnContact,
   SaisieDUnContact,
 } from "../api/clientDeLApi.ts";
-import { Champ, sansLeChamp } from "../formulaires/Champ.tsx";
+import { Champ, LONGUEUR_AU_PLUS_D_UN_CHAMP, sansLeChamp } from "../formulaires/Champ.tsx";
 
 const REESSAYER = "Réessayez ; si l'erreur revient, fermez Sollicito, puis relancez-le.";
 
@@ -290,6 +290,7 @@ function FormulaireDUnContact({
             {...attributs}
             ref={champs.nom}
             type="text"
+            maxLength={LONGUEUR_AU_PLUS_D_UN_CHAMP}
             autoComplete="off"
             value={nom}
             onChange={(evenement) => {
@@ -305,6 +306,7 @@ function FormulaireDUnContact({
             {...attributs}
             ref={champs.email}
             type="email"
+            maxLength={LONGUEUR_AU_PLUS_D_UN_CHAMP}
             autoComplete="off"
             spellCheck={false}
             value={email}

@@ -6,7 +6,7 @@ import type {
   RefusDeLaSaisie,
   SaisieDUneCandidature,
 } from "../api/clientDeLApi.ts";
-import { Champ, sansLeChamp } from "../formulaires/Champ.tsx";
+import { Champ, LONGUEUR_AU_PLUS_D_UN_CHAMP, sansLeChamp } from "../formulaires/Champ.tsx";
 import { proposerDesEntreprises } from "./affichage.ts";
 
 type Envoi = "pret" | "en-cours" | "echec";
@@ -137,6 +137,7 @@ export function FormulaireDUneCandidature({
             {...attributs}
             ref={champs.entreprise}
             type="text"
+            maxLength={LONGUEUR_AU_PLUS_D_UN_CHAMP}
             autoComplete="off"
             value={entreprise}
             onChange={(evenement) => modifier("entreprise", setEntreprise)(evenement.target.value)}
@@ -163,6 +164,7 @@ export function FormulaireDUneCandidature({
             {...attributs}
             ref={champs.poste}
             type="text"
+            maxLength={LONGUEUR_AU_PLUS_D_UN_CHAMP}
             autoComplete="off"
             value={poste}
             onChange={(evenement) => modifier("poste", setPoste)(evenement.target.value)}

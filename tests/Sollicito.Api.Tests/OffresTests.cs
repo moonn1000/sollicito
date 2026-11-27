@@ -151,9 +151,9 @@ public sealed class OffresTests
 
         using var tropGros = await api.EcrireAsync(HttpMethod.Post, Route, Corps(new string('a', BorneDuCorps), "Chauffeur"));
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, tropGros.StatusCode);
-        // La correction, qui ne porte pas de texte, garde la borne ordinaire : un corps de plus de 1 Mio y est seulement refusé par ses champs.
+        // La correction, qui ne porte pas de texte, garde la borne par défaut, 256 Kio (#98, point 3 ; BornesDesCorpsTests).
         using var correction = await api.EcrireAsync(HttpMethod.Put, AdresseDeLOffre(1), Corps(texte: null, poste: new string('p', 1_100_000)));
-        Assert.Equal(HttpStatusCode.BadRequest, correction.StatusCode);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, correction.StatusCode);
     }
 
     [Fact]

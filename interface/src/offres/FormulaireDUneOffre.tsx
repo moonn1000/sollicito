@@ -11,7 +11,7 @@ import type {
   SaisieDUneOffre,
 } from "../api/clientDeLApi.ts";
 import { proposerDesEntreprises } from "../candidatures/affichage.ts";
-import { Champ, sansLeChamp } from "../formulaires/Champ.tsx";
+import { Champ, LONGUEUR_AU_PLUS_D_UN_CHAMP, sansLeChamp } from "../formulaires/Champ.tsx";
 import { AIDE_DU_TEXTE, decrireLeDoublon, MARQUE_DE_L_IA, MESSAGE_DU_DOUBLON, messageDejaEnregistree } from "./affichage.ts";
 import { ApercuDUneOffre } from "./ApercuDUneOffre.tsx";
 import { PropositionDeLIA } from "./PropositionDeLIA.tsx";
@@ -270,6 +270,7 @@ export function FormulaireDUneOffre({
           {...attributs}
           ref={champs[champ]}
           type={type}
+          maxLength={type === "date" ? undefined : LONGUEUR_AU_PLUS_D_UN_CHAMP}
           autoComplete="off"
           value={saisie[champ]}
           onChange={(evenement) => modifier(champ)(evenement.target.value)}

@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
 
+/**
+ * La longueur au plus d'un champ de texte court ou d'une note, en unités UTF-16 (`maxLength`) : bien au-delà de toute
+ * limite de l'API (2 000 caractères au plus), si bien qu'un texte collé trop long garde son refus lisible, et assez basse
+ * pour qu'aucune saisie n'atteigne la borne des corps, 256 Kio (#98, point 3). Le texte d'une offre et le texte relu d'un
+ * brouillon ont les leurs.
+ */
+export const LONGUEUR_AU_PLUS_D_UN_CHAMP = 10_000;
+
 /** Les attributs qu'un champ de formulaire reçoit de son cadre : son nom, et son aide et ses refus comme description. */
 export interface AttributsDuChamp {
   id: string;
