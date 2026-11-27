@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json.Nodes;
+using Microsoft.Data.Sqlite;
 using Sollicito.Api.Tests.Outils;
 using static Sollicito.Api.Tests.Outils.AppelsDesOffres;
 using static Sollicito.Api.Tests.Outils.AppelsDesRelances;
@@ -222,6 +223,23 @@ public sealed class PostulerTests
         Assert.Equal(TitreDuPosteARevoir, probleme["title"]!.GetValue<string>());
         Assert.Equal("posteARevoir", probleme["motif"]!.GetValue<string>());
         Assert.Empty(await api.ListerAsync());
+    }
+
+    [Fact]
+    public async Task La_base_refuse_seule_une_seconde_candidature_de_la_meme_offre()
+    {
+        // Suites de #38 (#98, point 21) : sans passer par l'API, une copie de la candidature se heurte à l'index unique.
+        await using var api = await LancerAsync();
+        var offre = Id(await api.CollerAvecSuccesAsync("Offre fictive.", "Comptable", entreprise: "Lumière Verte SA"));
+        var candidature = Id(await api.PostulerAvecSuccesAsync(offre));
+
+        var refus = await Assert.ThrowsAsync<SqliteException>(() => api.ExecuterAsync(
+            $"CREATE TEMP TABLE Copie AS SELECT * FROM Candidatures WHERE Id = {candidature}; UPDATE Copie SET Id = NULL; "
+            + "INSERT INTO Candidatures SELECT * FROM Copie"));
+
+        Assert.Equal(19, refus.SqliteErrorCode);
+        Assert.Contains("UNIQUE constraint failed: Candidatures.OffreId", refus.Message, StringComparison.Ordinal);
+        Assert.Single(await api.ListerAsync());
     }
 
     [Fact]
