@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, expect, test } from "vitest";
 import { lancerLaFenetre, type FenetreLancee } from "./outils/fenetre.ts";
-import { fichiersQuiContiennent } from "./outils/fichiers.ts";
+import { fichiersQuiContiennent, profilRelache } from "./outils/fichiers.ts";
 
 const CONNECTEE = "Connectée à l'API locale.";
 // Les marques fictives, en ASCII : la sortie de l'exe est dans la page de code OEM.
@@ -240,6 +240,9 @@ test("fermée, la fenêtre ne laisse ni la clé ni les données dans les journau
     expect(sortie.toLowerCase()).not.toContain(marque.toLowerCase());
   }
 
+  // Le profil du navigateur intégré, une fois relâché : il écrit encore pendant que l'exe s'arrête.
+  expect(await fichiersQuiContiennent(await profilRelache(dossier), PARTIE)).toEqual([]);
+  // La base, ses copies, les réglages, le trousseau, et le fichier de la clé, qui ne la porte que chiffrée.
   expect(await fichiersQuiContiennent(dossier, PARTIE)).toEqual([]);
 });
 
