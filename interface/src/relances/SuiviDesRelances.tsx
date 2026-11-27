@@ -53,7 +53,8 @@ export function SuiviDesRelances({
   /** Relit la fiche ; rend faux si elle n'a pas pu être relue. */
   relire: () => Promise<boolean>;
 }) {
-  // Rien tant que le réglage n'est pas lu : un formulaire déjà ouvert attend alors son délai (#93, point 7).
+  // Rien tant que le réglage n'est pas lu : un formulaire déjà ouvert propose en attendant le délai d'usine, ajouté au
+  // dernier délai après une relance close, puis prend le réglage à son arrivée (#93, point 7).
   const [delaiParDefaut, setDelaiParDefaut] = useState<number>();
   const [formulaire, setFormulaire] = useState<Formulaire>({ sorte: "ferme" });
   const [message, setMessage] = useState<Message>();
@@ -235,6 +236,7 @@ export function SuiviDesRelances({
                 ? undefined
                 : delaiPropose(fiche, delaiParDefaut)
           }
+          delaiEnAttente={delaiPropose(fiche, DELAI_D_USINE)}
           destinataireDeDepart={
             formulaire.sorte === "changer"
               ? (aFaire?.destinataire?.id ?? null)
@@ -296,6 +298,7 @@ function FormulaireDUneRelance({
   envoyeeLe,
   contacts,
   delaiDeDepart,
+  delaiEnAttente,
   destinataireDeDepart,
   libelleDuBouton,
   envoyer,
@@ -305,6 +308,8 @@ function FormulaireDUneRelance({
   contacts: ContactConnu[] | undefined;
   /** Le délai proposé ; absent tant que le réglage n'est pas lu. */
   delaiDeDepart: number | undefined;
+  /** Le délai affiché tant qu'aucun n'est proposé ni saisi : celui que donne le délai d'usine. */
+  delaiEnAttente: number;
   /** Le destinataire proposé, ou personne ; absent tant que les contacts ne sont pas lus. */
   destinataireDeDepart: number | null | undefined;
   libelleDuBouton: string;
@@ -324,7 +329,7 @@ function FormulaireDUneRelance({
     setDestinataire(enValeurDeListe(destinataireDeDepart));
   }
 
-  const delai = delaiPose ?? String(DELAI_D_USINE);
+  const delai = delaiPose ?? String(delaiEnAttente);
   const destinataire = destinatairePose ?? "";
   const [refus, setRefus] = useState<RefusDeLaRelance>({});
   const [envoi, setEnvoi] = useState<"pret" | "en-cours" | "echec">("pret");

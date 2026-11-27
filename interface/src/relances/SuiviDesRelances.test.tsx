@@ -95,6 +95,22 @@ test("un formulaire ouvert avant la lecture du réglage prend le délai par déf
   expect(delai().value).toBe("3");
 });
 
+test("après une relance close, un formulaire ouvert avant la lecture du réglage propose en attendant son délai plus le délai d'usine", async () => {
+  // Suites de #14 (#93, point 7) : en attendant le réglage, la relance suivante part toujours du dernier délai.
+  let lu: (reglage: ReglageDuDelai) => void = () => {};
+  const client = clientSimule({ lireLeReglageDesRelances: () => new Promise<ReglageDuDelai>((resoudre) => (lu = resoudre)) });
+  // Envoyée le 27 mars, relance close à l'échéance du 3 avril : 7 jours.
+  rendre({ client, fiche: ficheFictive({ relances: [relanceFictive({ etat: "Faite" })] }) });
+  fireEvent.click(screen.getByRole("button", { name: "Planifier une relance" }));
+  const delai = screen.getByLabelText("Relancer après, en jours depuis l'envoi") as HTMLInputElement;
+
+  expect(delai.value).toBe("14");
+
+  await act(async () => lu({ delaiParDefaut: 10, delaiLisible: true, fichierLisible: true }));
+
+  expect(delai.value).toBe("17");
+});
+
 test("le contact unique est proposé d'office même lu après l'ouverture du formulaire, puis le choix ne bouge plus", () => {
   // Suites de #14 (#93, point 7, même mécanisme).
   const client = clientSimule();
