@@ -1,9 +1,14 @@
+using System.Diagnostics;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Sollicito.Api.Sauvegardes;
+using Sollicito.Api.Securite;
 using Sollicito.Api.Tests.Outils;
 using Sollicito.Application.IA;
 using Sollicito.Domain.Offres;
@@ -354,6 +359,55 @@ public sealed class ExtractionDUneOffreTests
 
         Assert.Equal(HttpStatusCode.OK, reponse.StatusCode);
         Assert.Single(api.FauxFournisseur.Recues);
+    }
+
+    [Fact]
+    public async Task Quitter_l_ecran_interrompt_l_appel_au_fournisseur_et_libere_l_IA()
+    {
+        // Suites de #46 (#112, point 2) : la page abandonne sa requête quand l'utilisateur quitte « Coller une offre ».
+        // L'API interrompt alors l'appel au fournisseur, et la demande suivante à l'IA passe.
+        var journal = new CaptureDesJournaux();
+        await using var api = await ApiLancee.LancerAsync(builder =>
+        {
+            new HorlogeDeTest().Utiliser(builder);
+            builder
+                .ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Logging:LogLevel:Default"] = "Trace",
+                    [$"Logging:{typeof(CaptureDesJournaux).FullName}:LogLevel:Default"] = "Trace",
+                }))
+                .ConfigureLogging(journaux => journaux.AddProvider(journal));
+        });
+        await api.ChoisirLIAAvecSuccesAsync("Claude");
+        await api.EnregistrerLaCleAvecSuccesAsync(CleDeClaude);
+        var arrivee = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var interrompu = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        api.FauxFournisseur.Repondre(async (_, annulation) =>
+        {
+            arrivee.TrySetResult();
+            using var ecoute = annulation.Register(() => interrompu.TrySetResult());
+            await Task.Delay(Timeout.Infinite, annulation);
+            throw new UnreachableException();
+        });
+
+        using var depart = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        using var requete = new HttpRequestMessage(HttpMethod.Post, AdresseDeLExtraction);
+        requete.Headers.Add(JetonDeLancement.EnTete, api.Jeton);
+        requete.Headers.Add("Origin", api.Origine);
+        requete.Content = new StringContent(new JsonObject { ["texte"] = Texte }.ToJsonString(), Encoding.UTF8, "application/json");
+        var abandonnee = api.Client.SendAsync(requete, depart.Token);
+        await arrivee.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await depart.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => abandonnee);
+        await interrompu.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        await AttendreAsync(() => journal.Entrees.Any(entree => entree.Contains("Requête abandonnée par le client.", StringComparison.Ordinal)));
+        // La porte des demandes à l'IA est rendue : la suivante part, sans « une demande est déjà en cours ».
+        api.FauxFournisseur.RepondreTexte(ReponseDeLIA);
+        Assert.Equal(Proposition, (await api.ExtraireAvecResultatAsync(Texte)).ToJsonString());
+        Assert.Equal(2, api.FauxFournisseur.Recues.Count);
+        Assert.DoesNotContain(journal.Entrees, entree => entree.StartsWith(nameof(LogLevel.Error) + " ", StringComparison.Ordinal));
+        Assert.DoesNotContain(journal.Entrees, entree => entree.Contains(Marque, StringComparison.Ordinal));
     }
 
     [Fact]

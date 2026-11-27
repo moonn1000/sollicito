@@ -217,9 +217,11 @@ public sealed class AppelsEnLigneTests
         Assert.Contains("échec CleRefusee (statut 401)", entrees[1], StringComparison.Ordinal);
         Assert.StartsWith("Warning 93 : ", entrees[2], StringComparison.Ordinal);
         Assert.Contains("HttpRequestException", entrees[2], StringComparison.Ordinal);
+        // Sans clé prête, c'est un état : Information. Une demande refusée parce qu'une autre est en cours rend un échec :
+        // Warning (suites de #48, #108, point 4).
         Assert.StartsWith("Information 95 : ", entrees[3], StringComparison.Ordinal);
         Assert.Contains("CleAbsente", entrees[3], StringComparison.Ordinal);
-        Assert.StartsWith("Information 94 : ", entrees[4], StringComparison.Ordinal);
+        Assert.StartsWith("Warning 94 : ", entrees[4], StringComparison.Ordinal);
         foreach (var interdit in new[] { PartieReconnaissable, MessageDuFournisseur, "SOLLICITO-CONSIGNE-48", "SOLLICITO-DONNEE-48", "SOLLICITO-REPONSE-48", "api.anthropic.com", "api.openai.com" })
         {
             Assert.All(entrees, entree => Assert.DoesNotContain(interdit, entree, StringComparison.Ordinal));
