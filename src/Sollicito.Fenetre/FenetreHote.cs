@@ -2,9 +2,11 @@ using System.Data.Common;
 using System.Runtime.InteropServices;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using Sollicito.Api.Export;
 using Sollicito.Api.Relances;
 using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Securite;
+using Sollicito.Application.Export;
 using Sollicito.Application.Sauvegardes;
 
 namespace Sollicito.Fenetre;
@@ -13,18 +15,23 @@ namespace Sollicito.Fenetre;
 /// La fenêtre hôte de l'ADR-0003 : WebView2 dans une fenêtre WinForms, qui n'affiche que l'interface locale et ne
 /// laisse rien sortir vers une autre origine (ADR-0001, D9, « Fenêtre »). Elle remet le jeton à l'interface par son
 /// canal interne, lui ouvre le dialogue de dossier des sauvegardes (#26, ADR-0008), ouvre dans la messagerie le
-/// brouillon d'une relance (#14, ADR-0011), ou le texte relu de son premier jet (#47, ADR-0019), et restaure une copie
-/// gardée après le oui de l'utilisateur dans son propre dialogue (#28, ADR-0012). Le contrôle WebView2 n'est touché que
-/// depuis le fil de la fenêtre, où arrivent tous ses événements.
+/// brouillon d'une relance (#14, ADR-0011), ou le texte relu de son premier jet (#47, ADR-0019), restaure une copie
+/// gardée après le oui de l'utilisateur dans son propre dialogue (#28, ADR-0012), et exporte toutes les données dans le
+/// fichier que l'utilisateur choisit dans le dialogue « Enregistrer sous » (#49, ADR-0020). Le contrôle WebView2 n'est
+/// touché que depuis le fil de la fenêtre, où arrivent tous ses événements.
 /// </summary>
 internal sealed class FenetreHote : Form
 {
+    /// <summary>Le temps que la fermeture laisse à un export interrompu pour effacer son fichier provisoire.</summary>
+    public static readonly TimeSpan AttenteDeLExportALaFermeture = TimeSpan.FromSeconds(5);
+
     private readonly Uri _origine;
     private readonly JetonDeLancement _jeton;
     private readonly Lancement _lancement;
     private readonly SauvegardesDeLaBase _sauvegardes;
     private readonly BrouillonsDesRelances _brouillons;
     private readonly RestaurationDeLaBase _restauration;
+    private readonly ExportDesDonnees _export;
     private readonly WebView2 _vue = new() { Dock = DockStyle.Fill };
     private CoreWebView2Environment? _environnement;
     // Les demandes de brouillon reçues pendant un autre, servies dans l'ordre ; au-delà, une demande est ignorée. Un
@@ -36,9 +43,14 @@ internal sealed class FenetreHote : Form
     // Une restauration à la fois, du message jusqu'à son issue ; la fermeture de la fenêtre l'attend.
     private bool _restaurationEnCours;
     private Task? _remplacementEnCours;
+    // Un export à la fois, du message jusqu'à son issue ; la fermeture de la fenêtre l'interrompt, puis l'attend un peu.
+    private bool _exportEnCours;
+    private FormatDExport _formatEnCours;
+    private Task<IssueDeLExport>? _ecritureEnCours;
+    private bool _fermetureSansAttendre;
     private readonly CancellationTokenSource _fermeture = new();
 
-    public FenetreHote(Uri origine, JetonDeLancement jeton, Lancement lancement, SauvegardesDeLaBase sauvegardes, BrouillonsDesRelances brouillons, RestaurationDeLaBase restauration)
+    public FenetreHote(Uri origine, JetonDeLancement jeton, Lancement lancement, SauvegardesDeLaBase sauvegardes, BrouillonsDesRelances brouillons, RestaurationDeLaBase restauration, ExportDesDonnees export)
     {
         _origine = origine;
         _jeton = jeton;
@@ -46,6 +58,7 @@ internal sealed class FenetreHote : Form
         _sauvegardes = sauvegardes;
         _brouillons = brouillons;
         _restauration = restauration;
+        _export = export;
         Text = "Sollicito";
         ClientSize = new Size(1200, 800);
         MinimumSize = new Size(640, 480);
@@ -177,7 +190,7 @@ internal sealed class FenetreHote : Form
         {
             _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDuJeton(_jeton.Valeur()));
         }
-        else if (ReglesDeLaFenetre.DemandeLeChoixDuDossier(args.Source, args.WebMessageAsJson, _origine) && !_choixEnCours && !_restaurationEnCours)
+        else if (ReglesDeLaFenetre.DemandeLeChoixDuDossier(args.Source, args.WebMessageAsJson, _origine) && !_choixEnCours && !_restaurationEnCours && !_exportEnCours)
         {
             // Un seul dialogue à la fois, ouvert après ce gestionnaire : un dialogue modal ouvert pendant un événement de
             // WebView2 relancerait la boucle des messages au milieu de cet événement (modèle de threads de WebView2).
@@ -206,7 +219,7 @@ internal sealed class FenetreHote : Form
                 return;
             }
 
-            if (_choixEnCours)
+            if (_choixEnCours || _exportEnCours)
             {
                 // Un seul dialogue de l'hôte à la fois : la page apprend que Sollicito est occupé.
                 _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDeLaRestauration(copie, IssueDansLaFenetre.Occupee));
@@ -216,6 +229,84 @@ internal sealed class FenetreHote : Form
             // Le dialogue s'ouvre après ce gestionnaire, comme celui du choix d'un dossier.
             _restaurationEnCours = true;
             BeginInvoke(() => RestaurerLaCopie(copie));
+        }
+        else if (ReglesDeLaFenetre.DemandeLExport(args.Source, args.WebMessageAsJson, _origine, out var format))
+        {
+            if (_exportEnCours)
+            {
+                // Un seul export à la fois. Une demande du même format ne reçoit rien : la page qui attend le sien en
+                // recevra la vraie issue, et une réponse ici la clorait trop tôt. Une demande de l'autre format n'attend que
+                // sa propre réponse : elle apprend que Sollicito est occupé.
+                if (format != _formatEnCours)
+                {
+                    _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDeLExport(format, IssueDeLExport.Occupe));
+                }
+
+                return;
+            }
+
+            if (_choixEnCours || _restaurationEnCours)
+            {
+                // Un seul dialogue de l'hôte à la fois : la page apprend que Sollicito est occupé.
+                _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDeLExport(format, IssueDeLExport.Occupe));
+                return;
+            }
+
+            // Le dialogue s'ouvre après ce gestionnaire, comme celui du choix d'un dossier.
+            _exportEnCours = true;
+            _formatEnCours = format;
+            BeginInvoke(() => Exporter(format));
+        }
+    }
+
+    // L'export de toutes les données (#49) : le dialogue « Enregistrer sous », où l'utilisateur seul choisit le fichier,
+    // puis l'export, hors du fil de la fenêtre, qui reste vivante. La page reçoit « en cours », puis l'issue, sans chemin ni
+    // nom de fichier.
+    private async void Exporter(FormatDExport format)
+    {
+        var issue = IssueDeLExport.Impossible;
+        try
+        {
+            var nom = FormatDeLExport.NomPropose(format, DateOnly.FromDateTime(DateTime.Now));
+            var choisi = _lancement.ChoixDUnFichierDExport.Choisir(this, format, nom);
+            if (choisi is null)
+            {
+                _export.NoterLAnnulation(format);
+                issue = IssueDeLExport.Annule;
+            }
+            else if (IsDisposed || _fermeture.IsCancellationRequested)
+            {
+                // La fenêtre se ferme : rien ne s'écrit, et le journal le dit.
+                _export.NoterLInterruption(format);
+                issue = IssueDeLExport.Annule;
+            }
+            else
+            {
+                PosterLExport(ReglesDeLaFenetre.MessageDeLExportEnCours(format));
+                var ecriture = Task.Run(() => _export.ExporterAsync(format, choisi.Chemin, choisi.Remplacer, _fermeture.Token));
+                _ecritureEnCours = ecriture;
+                issue = await ecriture;
+            }
+        }
+        catch (Exception erreur) when (erreur is IOException or UnauthorizedAccessException or InvalidOperationException
+            or ArgumentException or ExternalException or System.Security.SecurityException)
+        {
+            // Rien ne s'écrit : le dialogue de Windows qui échoue ne ferme pas Sollicito. ObjectDisposedException, une
+            // fenêtre fermée entre-temps, est une InvalidOperationException.
+        }
+        finally
+        {
+            _exportEnCours = false;
+        }
+
+        PosterLExport(ReglesDeLaFenetre.MessageDeLExport(format, issue));
+    }
+
+    private void PosterLExport(string message)
+    {
+        if (!IsDisposed && _vue.CoreWebView2 is { } navigateur)
+        {
+            navigateur.PostWebMessageAsJson(message);
         }
     }
 
@@ -284,6 +375,30 @@ internal sealed class FenetreHote : Form
             e.Cancel = true;
             _fermeture.Cancel();
             restauration.ContinueWith(_ => BeginInvoke(Close), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+            return;
+        }
+
+        // Un export en cours s'interrompt, et la fermeture attend qu'il efface son fichier provisoire, quelques secondes au
+        // plus ; au-delà, la fenêtre se ferme quand même, et le journal dit que le provisoire a pu rester.
+        if (_ecritureEnCours is { IsCompleted: false } export && !_fermetureSansAttendre)
+        {
+            e.Cancel = true;
+            _fermeture.Cancel();
+            var format = _formatEnCours;
+            export.WaitAsync(AttenteDeLExportALaFermeture).ContinueWith(
+                attente =>
+                {
+                    if (attente.IsFaulted)
+                    {
+                        _fermetureSansAttendre = true;
+                        _export.NoterLaFermetureAvantLaFin(format);
+                    }
+
+                    BeginInvoke(Close);
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.Default);
             return;
         }
 

@@ -45,7 +45,7 @@ Sollicito ne fera jamais :
 Les échanges prévus en V1 :
 
 - **l'IA en ligne, si vous en configurez une** : seulement quand vous le demandez, ce que vous confiez à l'IA, le texte d'une offre ou, pour une relance, le poste, l'entreprise et la date d'envoi de la candidature, part chez Anthropic (Claude) ou chez OpenAI, avec votre clé et les consignes de Sollicito ; ce fournisseur le traite selon ses propres conditions. « Tester la clé » n'envoie qu'une courte question fixe, sans aucune de vos données. Un modèle Ollama qui tourne sur votre ordinateur ne fait rien sortir ;
-- **vos sauvegardes, si vous les rangez dans un dossier en réseau ou synchronisé** (un NAS, OneDrive…) : chaque copie de votre base, non chiffrée, part là où ce dossier l'envoie ;
+- **vos sauvegardes et vos exports, si vous les rangez dans un dossier en réseau ou synchronisé** (un NAS, OneDrive…) : chaque copie de votre base, et chaque export, non chiffrés, partent là où ce dossier les envoie ;
 - **le brouillon d'une relance, si votre messagerie est en ligne ou range vos brouillons sur un serveur** : son destinataire, son objet et son texte partent chez votre fournisseur de messagerie dès l'ouverture du brouillon ou à son enregistrement, même si vous ne l'envoyez pas ;
 - **la télémétrie du runtime WebView2**, le composant de Windows qui affiche l'interface dans la fenêtre de Sollicito : il envoie à Microsoft des données de diagnostic, les facultatives seulement si vous les autorisez dans le réglage « Données de diagnostic » de Windows, les obligatoires quel que soit ce réglage, et par défaut un rapport à chaque plantage de l'un de ses processus ;
 - **les mises à jour de ce runtime**, qu'il télécharge seul auprès de Microsoft.
@@ -77,7 +77,7 @@ Les protections prévues dès la conception, détaillées dans l'[ADR-0001](docs
 
 - l'API locale refuse les appels venus d'autres pages web, d'autres appareils ou d'autres comptes du PC (voir le [modèle de menaces](docs/modele-de-menaces.md)) : écoute sur 127.0.0.1 seulement, jeton aléatoire à chaque lancement transmis par un en-tête, refus par le serveur des origines et des en-têtes `Host` inattendus ; ses journaux ne contiennent ni le jeton ni vos données ;
 - la fenêtre n'affiche que l'interface de Sollicito, sous une politique de sécurité du contenu stricte ; les liens externes s'ouvrent dans votre navigateur ;
-- les clés d'API d'IA sont chiffrées par l'API Data Protection d'ASP.NET Core, protégée par DPAPI et liée à votre compte Windows ; jamais stockées en clair, jamais dans les sauvegardes, et l'export ne les emportera pas ; chaque clé ne part que vers l'adresse officielle de son fournisseur, en HTTPS ;
+- les clés d'API d'IA sont chiffrées par l'API Data Protection d'ASP.NET Core, protégée par DPAPI et liée à votre compte Windows ; jamais stockées en clair, jamais dans les sauvegardes, et l'export ne les emporte pas ; chaque clé ne part que vers l'adresse officielle de son fournisseur, en HTTPS ;
 - le contenu des offres est traité comme non fiable : affichage échappé ; le texte d'une offre n'est transmis à l'IA que comme une donnée à analyser, jamais comme une consigne ; l'IA n'a aucun outil et ne peut rien déclencher d'elle-même ; les champs qu'elle propose sont vérifiés par Sollicito, et rien n'est enregistré sans votre confirmation ;
 - aucun secret dans ce dépôt.
 

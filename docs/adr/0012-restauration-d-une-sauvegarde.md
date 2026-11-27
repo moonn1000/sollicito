@@ -1,6 +1,6 @@
 # ADR-0012 : restauration d'une sauvegarde, confirmée par l'hôte, vérifiée sur une copie, base copiée d'abord
 
-- **Statut** : acceptée ; la copie d'avant une restauration, faite aussi avant chaque import d'un fichier CSV, et son libellé « Avant une restauration ou un import », précisés par l'[ADR-0015](0015-import-csv-des-offres.md)
+- **Statut** : acceptée ; la copie d'avant une restauration, faite aussi avant chaque import d'un fichier CSV, et son libellé « Avant une restauration ou un import », précisés par l'[ADR-0015](0015-import-csv-des-offres.md) ; un seul dialogue de l'hôte à la fois, étendu à l'export par l'[ADR-0020](0020-export-des-donnees.md) (une demande d'export pendant une restauration reçoit « occupé », une restauration demandée pendant un export reçoit « occupée »)
 - **Date** : 2026-11-21
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D10 (la restauration depuis l'application) ; [ADR-0003](0003-hote-interface-webview2.md), « Durcissement de la fenêtre » (une quatrième demande de la page à l'hôte, et un dialogue de l'hôte pour la confirmer) ; [ADR-0008](0008-sauvegardes-de-la-base.md) (la liste des copies, la copie d'avant une restauration, les restes d'un arrêt, et la phrase « Avant la troisième étape, la base n'est jamais écrite », hors retrait d'un verrou des migrations abandonné)
 

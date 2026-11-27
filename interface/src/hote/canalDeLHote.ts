@@ -214,6 +214,75 @@ export function demanderLaRestauration(canal: CanalDeLHote, copie: string, quand
   });
 }
 
+/** Les formes de l'export (#49, ADR-0020) : le JSON, et l'archive de fichiers CSV. */
+export type FormatDExport = "json" | "csv";
+
+/**
+ * L'issue d'un export (#49), telle que l'hôte la rend : seule « exporte » a écrit un fichier sous le nom choisi ; aucune
+ * autre n'y a rien laissé, ni remplacé un fichier.
+ */
+export type IssueDeLExport =
+  | "exporte"
+  | "annule"
+  | "occupe"
+  | "existe"
+  | "extension"
+  | "dossierDeDonnees"
+  | "accesRefuse"
+  | "placeManquante"
+  | "dossierIntrouvable"
+  | "impossible";
+
+const ISSUES_DE_L_EXPORT: readonly IssueDeLExport[] = [
+  "exporte",
+  "annule",
+  "occupe",
+  "existe",
+  "extension",
+  "dossierDeDonnees",
+  "accesRefuse",
+  "placeManquante",
+  "dossierIntrouvable",
+  "impossible",
+];
+
+/**
+ * Demande à l'hôte d'exporter toutes les données dans ce format (#49, ADR-0020). L'hôte ouvre le dialogue « Enregistrer
+ * sous » de Windows, où l'utilisateur choisit seul le fichier, signale que l'export est en cours (`quandEnCours`), puis
+ * rend son issue. Le message ne porte que le format, jamais un chemin ni un nom de fichier, et la réponse non plus. Pas
+ * de délai : l'utilisateur prend le temps qu'il veut dans le dialogue. Une réponse d'une autre forme, ou pour un autre
+ * format, est ignorée.
+ */
+export function demanderLExport(canal: CanalDeLHote, format: FormatDExport, quandEnCours?: () => void): Promise<IssueDeLExport> {
+  return new Promise((resoudre) => {
+    const ecouter = (evenement: MessageEvent) => {
+      const issue = lireLIssueDeLExport(evenement.data, format);
+      if (issue === "enCours") {
+        quandEnCours?.();
+      } else if (issue !== undefined) {
+        canal.removeEventListener("message", ecouter);
+        resoudre(issue);
+      }
+    };
+
+    canal.addEventListener("message", ecouter);
+    canal.postMessage({ type: "exporterLesDonnees", format });
+  });
+}
+
+function lireLIssueDeLExport(message: unknown, formatAttendu: FormatDExport): IssueDeLExport | "enCours" | undefined {
+  if (typeof message !== "object" || message === null) {
+    return undefined;
+  }
+
+  const { type, format, issue } = message as { type?: unknown; format?: unknown; issue?: unknown };
+  if (type !== "export" || format !== formatAttendu) {
+    return undefined;
+  }
+
+  return issue === "enCours" || ISSUES_DE_L_EXPORT.includes(issue as IssueDeLExport) ? (issue as IssueDeLExport | "enCours") : undefined;
+}
+
 function lireLIssueDeLaRestauration(message: unknown, copieAttendue: string): IssueDeLaRestauration | "enCours" | undefined {
   if (typeof message !== "object" || message === null) {
     return undefined;

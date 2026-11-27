@@ -6,6 +6,7 @@ using Sollicito.Api.Candidatures;
 using Sollicito.Api.Contacts;
 using Sollicito.Api.Donnees;
 using Sollicito.Api.Erreurs;
+using Sollicito.Api.Export;
 using Sollicito.Api.IA;
 using Sollicito.Api.Interface;
 using Sollicito.Api.Journaux;
@@ -176,6 +177,10 @@ public static class ApiLocale
         builder.Services.AddSingleton<OpenAIEnLigne>();
         // L'extraction d'une offre collée (#46, ADR-0018) : sur un clic, par le port ; elle ne touche pas la base.
         builder.Services.AddSingleton<ExtractionDesOffres>();
+        // L'export de toutes les données (#49, ADR-0020), que seule la fenêtre hôte demande, dans le fichier choisi dans son
+        // dialogue : aucune route ne le sert. Les étapes ne servent qu'aux tests.
+        builder.Services.AddSingleton<ExportDesDonnees>();
+        builder.Services.TryAddSingleton<IEtapesDeLExport>(AucuneEtapeDExport.Instance);
 
         // Les statuts s'écrivent en toutes lettres. Un champ inconnu du corps rend la requête illisible plutôt que
         // d'être ignoré : le statut, par exemple, ne vient jamais de l'interface. Un champ répété aussi (#36) : sans

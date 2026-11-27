@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState } from "react";
 import type { ClientDeLApi, CopieGardee } from "../api/clientDeLApi.ts";
-import type { IssueDeLaRestauration, IssueDuChoixDuDossier } from "../hote/canalDeLHote.ts";
+import { SectionDeLExport } from "../export/SectionDeLExport.tsx";
+import type { FormatDExport, IssueDeLaRestauration, IssueDeLExport, IssueDuChoixDuDossier } from "../hote/canalDeLHote.ts";
 import { SectionDeLIA } from "../ia/SectionDeLIA.tsx";
 import { SectionDesRelances } from "../relances/SectionDesRelances.tsx";
 import { SectionDesSauvegardes } from "../sauvegardes/SectionDesSauvegardes.tsx";
 
 /**
- * L'écran des réglages (#26) : la section « Sauvegardes », puis celle des relances et de leur délai par défaut (#14),
- * puis celle de l'IA (#43). Les réglages vivent hors de la base, dans le dossier de données (ADR-0008) ; la clé d'IA,
- * chiffrée, aussi, à part d'eux (ADR-0016).
+ * L'écran des réglages (#26) : la section « Sauvegardes », puis l'export de toutes les données (#49), puis celle des
+ * relances et de leur délai par défaut (#14), puis celle de l'IA (#43). Les réglages vivent hors de la base, dans le
+ * dossier de données (ADR-0008) ; la clé d'IA, chiffrée, aussi, à part d'eux (ADR-0016).
  */
 export function EcranDesReglages({
   client,
   choisirLeDossierDesSauvegardes,
   restaurerUneSauvegarde,
+  exporterLesDonnees,
   quandRestauree,
   prendreLeFocus = false,
   allerALIA = false,
@@ -23,6 +25,8 @@ export function EcranDesReglages({
   choisirLeDossierDesSauvegardes?: () => Promise<IssueDuChoixDuDossier>;
   /** Demande à la fenêtre hôte de restaurer une copie ; absent hors de la fenêtre (#28). */
   restaurerUneSauvegarde?: (copie: string, quandEnCours: () => void) => Promise<IssueDeLaRestauration>;
+  /** Demande à la fenêtre hôte d'exporter toutes les données ; absent hors de la fenêtre (#49). */
+  exporterLesDonnees?: (format: FormatDExport, quandEnCours: () => void) => Promise<IssueDeLExport>;
   /** Une copie vient de remplacer la base (#28). */
   quandRestauree?: (issue: "restauree" | "restaureeDepuisUneBaseAbimee", copie: CopieGardee) => void;
   /** Vrai quand l'utilisateur vient d'y être mené : son titre reçoit alors le focus. */
@@ -63,6 +67,7 @@ export function EcranDesReglages({
         restaurer={restaurerUneSauvegarde}
         quandRestauree={quandRestauree}
       />
+      <SectionDeLExport exporter={exporterLesDonnees} />
       <SectionDesRelances client={client} reecritures={reecritures} />
       <SectionDeLIA client={client} prendreLeFocus={allerALIA} reecritures={reecritures} />
     </section>

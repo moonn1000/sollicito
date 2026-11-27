@@ -11,6 +11,7 @@ namespace Sollicito.Fenetre;
 /// <param name="ConfirmationDeLaRestauration">Ce qui demande le oui d'une restauration : le dialogue de Windows dans la version publiée (#28).</param>
 /// <param name="EtapesDeLaRestauration">Ce qui voit passer les étapes d'une restauration : rien dans la version publiée.</param>
 /// <param name="FaussesReponsesDeLIA">Ce qui répond à la place des fournisseurs d'IA en ligne : rien dans la version publiée, qui les appelle (#48).</param>
+/// <param name="ChoixDUnFichierDExport">Ce qui fait choisir le fichier d'un export : le dialogue « Enregistrer sous » de Windows dans la version publiée (#49).</param>
 internal sealed record Lancement(
     string DossierDeDonnees,
     string? ArgumentsDuNavigateur,
@@ -21,7 +22,8 @@ internal sealed record Lancement(
     IOuvreurDeBrouillons OuvreurDeBrouillons,
     IConfirmationDeLaRestauration ConfirmationDeLaRestauration,
     Api.Sauvegardes.IEtapesDeLaRestauration? EtapesDeLaRestauration,
-    Func<HttpMessageHandler>? FaussesReponsesDeLIA)
+    Func<HttpMessageHandler>? FaussesReponsesDeLIA,
+    IChoixDUnFichierDExport ChoixDUnFichierDExport)
 {
     /// <summary>Le lancement de cet exe.</summary>
     public static Lancement Lire()
@@ -39,7 +41,8 @@ internal sealed record Lancement(
             new OuvreurDeBrouillonsParLeShell(),
             new ConfirmationParLeDialogue(),
             EtapesDeLaRestauration: null,
-            FaussesReponsesDeLIA: null);
+            FaussesReponsesDeLIA: null,
+            new ChoixDUnFichierParLeDialogue());
 #endif
     }
 }

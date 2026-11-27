@@ -1,6 +1,6 @@
 # Cas d'utilisation de la V1
 
-- **Mis à jour le** : 2026-11-24, avec #38, puis avec #40
+- **Mis à jour le** : 2026-11-27, avec #38, puis avec #40, puis avec #49
 - **Décisions** : [ADR-0004](adr/0004-v1-resserree-paliers.md) (ce que livre la V1, ses paliers, sa règle de coupe) ; [ADR-0001](adr/0001-cadrage-architecture-v1.md), D7 et D8 (IA facultative, l'humain valide chaque envoi) ; [ADR-0011](adr/0011-relances-et-brouillon.md) (relances, contacts, brouillon et délai par défaut)
 - **Périmètre** : ce que la personne en recherche d'emploi fait dans Sollicito en V1, palier par palier. Les règles de chaque cas sont dans le [modèle de domaine](modele-de-domaine.md), leurs protections dans le [modèle de menaces](modele-de-menaces.md) ; les systèmes extérieurs sont ceux des [vues d'architecture](vues-d-architecture.md).
 
@@ -118,7 +118,7 @@ postuler ..> : include enregistrer
 | IA facultative | Faire rédiger par l'IA un brouillon de relance ‡, relu avant l'ouverture dans la messagerie | [#47](https://github.com/moonn1000/sollicito/issues/47) | P4 |
 | Données | Sauvegarder la base automatiquement : les sept dernières sauvegardes, plus une avant chaque migration | [#26](https://github.com/moonn1000/sollicito/issues/26) | P2 |
 | Données | Restaurer une sauvegarde | [#28](https://github.com/moonn1000/sollicito/issues/28) | P3 |
-| Données | Exporter toutes ses données, en JSON ou en CSV ‡ | [#49](https://github.com/moonn1000/sollicito/issues/49) | P5 |
+| Données | Exporter toutes ses données, en JSON ou en CSV ‡, dans un fichier choisi dans le dialogue de Windows, hors du dossier de données, sans la clé d'IA ni les réglages | [#49](https://github.com/moonn1000/sollicito/issues/49) | P5 |
 
 Sans IA configurée, tous les cas hors du domaine « IA facultative » fonctionnent (ADR-0001, D7). Aucun cas n'envoie quoi que ce soit à la place de l'utilisateur : le brouillon d'une relance s'ouvre dans sa messagerie, et c'est lui qui l'envoie (ADR-0001, D8).
 

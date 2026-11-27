@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Sollicito.Application.Export;
 using Sollicito.Application.Sauvegardes;
 
 namespace Sollicito.Fenetre;
@@ -185,6 +186,66 @@ internal static class ReglesDeLaFenetre
             IssueDuBrouillon.Impossible => "impossible",
             _ => "refuse",
         },
+    });
+
+    /// <summary>
+    /// Vrai si le message vient de l'interface et demande l'export de toutes les données (#49, ADR-0020) : la fenêtre ouvre
+    /// alors le dialogue « Enregistrer sous » de Windows. Sous le même contrôle de la source que le canal du jeton. Le
+    /// message porte son type et le format, et rien d'autre : jamais un chemin ni un nom de fichier, que seul le dialogue
+    /// donne. Un champ de plus, répété compris, un format inconnu, un message mal formé ou d'un autre type n'ouvre rien.
+    /// </summary>
+    public static bool DemandeLExport(string? source, string? messageEnJson, Uri origine, out FormatDExport format)
+    {
+        format = default;
+        if (!EstUnMessageDeLInterface(source, messageEnJson, origine, "exporterLesDonnees", champs: 2))
+        {
+            return false;
+        }
+
+        using var message = JsonDocument.Parse(messageEnJson!, new JsonDocumentOptions { MaxDepth = 8 });
+        if (!message.RootElement.TryGetProperty("format", out var valeur) || valeur.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        foreach (var (nom, connu) in FormatsDansLaFenetre)
+        {
+            if (valeur.ValueEquals(nom))
+            {
+                format = connu;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Le message qui dit à l'interface que l'export de ce format est en cours, une fois le fichier choisi.</summary>
+    public static string MessageDeLExportEnCours(FormatDExport format) => MessageDeLExport(format, "enCours");
+
+    /// <summary>Le message qui rend à l'interface l'issue de l'export de ce format, sans chemin ni nom de fichier.</summary>
+    public static string MessageDeLExport(FormatDExport format, IssueDeLExport issue) => MessageDeLExport(format, issue switch
+    {
+        IssueDeLExport.Exporte => "exporte",
+        IssueDeLExport.Annule => "annule",
+        IssueDeLExport.Occupe => "occupe",
+        IssueDeLExport.Existe => "existe",
+        IssueDeLExport.Extension => "extension",
+        IssueDeLExport.DossierDeDonnees => "dossierDeDonnees",
+        IssueDeLExport.AccesRefuse => "accesRefuse",
+        IssueDeLExport.PlaceManquante => "placeManquante",
+        IssueDeLExport.DossierIntrouvable => "dossierIntrouvable",
+        _ => "impossible",
+    });
+
+    // Les formats que la page peut demander, sous leur nom dans les messages.
+    private static readonly (string Nom, FormatDExport Format)[] FormatsDansLaFenetre = [("json", FormatDExport.Json), ("csv", FormatDExport.Csv)];
+
+    private static string MessageDeLExport(FormatDExport format, string issue) => JsonSerializer.Serialize(new
+    {
+        type = "export",
+        format = FormatsDansLaFenetre.Single(connu => connu.Format == format).Nom,
+        issue,
     });
 
     /// <summary>Le message qui rend à l'interface l'issue du choix du dossier, sans chemin : la page relit l'état par l'API.</summary>

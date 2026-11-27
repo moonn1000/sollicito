@@ -243,12 +243,12 @@ if ($cheminsDeSymboles -eq 0) {
     Signaler "aucun chemin de symboles lu dans les assemblies de Sollicito : le contrôle ne voit pas l'intérieur du paquet"
 }
 
-# --- Aucune marque de la version de test de la restauration (#28) ---
-# Le remplaçant du dialogue de la restauration et son point d'arrêt ne se compilent que dans la version de test : leurs
-# marques ne se lisent nulle part dans l'exe publié, ni dans ses fichiers décompressés. Les marques des autres écarts de
-# la version de test attendent #91. Témoin : le type du message de la restauration, que la version publiée porte, se lit
-# dans Sollicito.dll décompressé.
-$marquesDeTest = @('restauration-a-confirmer.txt', 'SOLLICITO_TEST_ARRET_RESTAURATION')
+# --- Aucune marque de la version de test de la restauration (#28) ni de l'export (#49) ---
+# Le remplaçant du dialogue de la restauration et son point d'arrêt, comme celui du dialogue de l'export, ne se compilent
+# que dans la version de test : leurs marques ne se lisent nulle part dans l'exe publié, ni dans ses fichiers
+# décompressés. Les marques des autres écarts de la version de test attendent #91. Témoin : le type du message de la
+# restauration, que la version publiée porte, se lit dans Sollicito.dll décompressé.
+$marquesDeTest = @('restauration-a-confirmer.txt', 'SOLLICITO_TEST_ARRET_RESTAURATION', 'export-a-choisir.txt')
 $temoinPublie = 'restaurerUneSauvegarde'
 $temoinLu = $false
 $lectures = @([pscustomobject]@{ Nom = 'Sollicito.exe'; Contenu = $octets })
