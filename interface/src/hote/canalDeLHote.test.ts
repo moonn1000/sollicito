@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { CanalSimule, JETON_FICTIF } from "../tests/canalSimule.ts";
-import { demanderLaRestauration, demanderLeBrouillon, demanderLeChoixDuDossier, demanderLeJeton } from "./canalDeLHote.ts";
+import { demanderLaRestauration, demanderLeBrouillon, demanderLeChoixDuDossier, demanderLeJeton, demanderLExport } from "./canalDeLHote.ts";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -158,4 +158,59 @@ test("un identifiant de copie d'une autre forme ne part pas : jamais un chemin",
     await expect(demanderLaRestauration(canal, copie)).rejects.toThrow(RangeError);
   }
   expect(canal.messagesRecus).toEqual([]);
+});
+
+test("l'export ne demande à l'hôte que son format, signale qu'il est en cours, puis rend son issue (#49)", async () => {
+  const canal = new CanalSimule();
+  const quandEnCours = vi.fn();
+
+  const issue = demanderLExport(canal, "json", quandEnCours);
+  expect(canal.messagesRecus).toEqual([{ type: "exporterLesDonnees", format: "json" }]);
+  canal.envoyer({ type: "export", format: "json", issue: "enCours" });
+  expect(quandEnCours).toHaveBeenCalledOnce();
+  expect(canal.abonnes).toBe(1);
+  canal.envoyer({ type: "export", format: "json", issue: "exporte" });
+
+  await expect(issue).resolves.toBe("exporte");
+  expect(canal.abonnes).toBe(0);
+});
+
+test("une réponse à l'export d'une autre forme, ou pour un autre format, est ignorée (#49)", async () => {
+  const canal = new CanalSimule();
+  const quandEnCours = vi.fn();
+
+  const issue = demanderLExport(canal, "json", quandEnCours);
+  canal.envoyer({ type: "export", format: "csv", issue: "exporte" });
+  canal.envoyer({ type: "export", format: "csv", issue: "enCours" });
+  canal.envoyer({ type: "export", format: "json", issue: String.raw`C:\Users\Compte.Fictif\export.json` });
+  canal.envoyer({ type: "export", issue: "exporte" });
+  canal.envoyer({ type: "restauration", format: "json", issue: "exporte" });
+  canal.envoyer({ type: "dossierDesSauvegardes", issue: "choisi" });
+  canal.envoyer("exporte");
+  canal.envoyer(null);
+  expect(quandEnCours).not.toHaveBeenCalled();
+  expect(canal.abonnes).toBe(1);
+  canal.envoyer({ type: "export", format: "json", issue: "placeManquante" });
+
+  await expect(issue).resolves.toBe("placeManquante");
+});
+
+test("chaque issue d'un export que l'hôte rend est reçue telle quelle (#49)", async () => {
+  for (const attendue of [
+    "exporte",
+    "annule",
+    "occupe",
+    "existe",
+    "extension",
+    "dossierDeDonnees",
+    "accesRefuse",
+    "placeManquante",
+    "dossierIntrouvable",
+    "impossible",
+  ] as const) {
+    const canal = new CanalSimule();
+    const issue = demanderLExport(canal, "json");
+    canal.envoyer({ type: "export", format: "json", issue: attendue });
+    await expect(issue).resolves.toBe(attendue);
+  }
 });

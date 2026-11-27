@@ -8,6 +8,8 @@ import {
   demanderLeBrouillon,
   demanderLeBrouillonRelu,
   demanderLeChoixDuDossier,
+  demanderLExport,
+  type FormatDExport,
 } from "./hote/canalDeLHote.ts";
 import "./styles.css";
 
@@ -26,6 +28,9 @@ const ouvrirLeBrouillonRelu = canal === undefined ? undefined : (relance: number
 // La restauration d'une copie aussi (#28) : la page n'envoie que son identifiant, et l'hôte demande lui-même le oui.
 const restaurerUneSauvegarde =
   canal === undefined ? undefined : (copie: string, quandEnCours: () => void) => demanderLaRestauration(canal, copie, quandEnCours);
+// L'export aussi (#49) : la page n'envoie que le format, et l'hôte fait choisir le fichier dans son dialogue.
+const exporterLesDonnees =
+  canal === undefined ? undefined : (format: FormatDExport, quandEnCours: () => void) => demanderLExport(canal, format, quandEnCours);
 
 createRoot(racine).render(
   <StrictMode>
@@ -35,6 +40,7 @@ createRoot(racine).render(
       ouvrirLeBrouillon={ouvrirLeBrouillon}
       ouvrirLeBrouillonRelu={ouvrirLeBrouillonRelu}
       restaurerUneSauvegarde={restaurerUneSauvegarde}
+      exporterLesDonnees={exporterLesDonnees}
     />
   </StrictMode>,
 );

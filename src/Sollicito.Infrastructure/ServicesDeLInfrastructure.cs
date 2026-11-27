@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Sollicito.Application.Candidatures;
+using Sollicito.Application.Export;
 using Sollicito.Application.Offres;
 using Sollicito.Infrastructure.Persistance;
 
@@ -25,6 +26,8 @@ public static class ServicesDeLInfrastructure
             options.UseSqlite(fournisseur.GetRequiredService<DossierDeLaBase>().ChaineDeConnexion()));
         services.AddScoped<IDepotDesCandidatures, DepotDesCandidatures>();
         services.AddScoped<IDepotDesOffres, DepotDesOffres>();
+        // L'export (#49) lit la base sur sa propre connexion, en lecture seule, dans une seule transaction.
+        services.AddSingleton<ISourceDeLExport, SourceDeLExport>();
         return services;
     }
 }

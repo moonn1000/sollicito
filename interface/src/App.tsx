@@ -5,7 +5,7 @@ import { ModificationDUneCandidature } from "./candidatures/ModificationDUneCand
 import { SaisieDUneCandidature } from "./candidatures/SaisieDUneCandidature.tsx";
 import { TableauDeBord } from "./candidatures/TableauDeBord.tsx";
 import { HorsDeLaFenetre } from "./connexion.ts";
-import type { IssueDeLaRestauration, IssueDuBrouillon, IssueDuChoixDuDossier } from "./hote/canalDeLHote.ts";
+import type { FormatDExport, IssueDeLaRestauration, IssueDeLExport, IssueDuBrouillon, IssueDuChoixDuDossier } from "./hote/canalDeLHote.ts";
 import { MiseEnPage, type Ecran } from "./miseEnPage/MiseEnPage.tsx";
 import { ANNONCE_DU_RENONCEMENT, annonceDeLaPostulation, annonceDeLOffre, AUCUN_FILTRE, type FiltresDesOffres } from "./offres/affichage.ts";
 import { FicheDUneOffre } from "./offres/FicheDUneOffre.tsx";
@@ -41,6 +41,7 @@ export function App({
   ouvrirLeBrouillon,
   ouvrirLeBrouillonRelu,
   restaurerUneSauvegarde,
+  exporterLesDonnees,
 }: {
   connecter: () => Promise<ClientDeLApi>;
   /** Ouvre le dialogue de dossier de la fenêtre hôte ; absent hors de la fenêtre. */
@@ -51,6 +52,8 @@ export function App({
   ouvrirLeBrouillonRelu?: (relance: number) => Promise<IssueDuBrouillon>;
   /** Demande à la fenêtre hôte de restaurer une copie gardée ; absent hors de la fenêtre (#28). */
   restaurerUneSauvegarde?: (copie: string, quandEnCours: () => void) => Promise<IssueDeLaRestauration>;
+  /** Demande à la fenêtre hôte d'exporter toutes les données ; absent hors de la fenêtre (#49). */
+  exporterLesDonnees?: (format: FormatDExport, quandEnCours: () => void) => Promise<IssueDeLExport>;
 }) {
   const [connexion, setConnexion] = useState<Connexion>({ etat: "connexion" });
   const [ecran, setEcran] = useState<Ecran>({ nom: "tableau" });
@@ -146,6 +149,7 @@ export function App({
             client={connexion.client}
             choisirLeDossierDesSauvegardes={choisirLeDossierDesSauvegardes}
             restaurerUneSauvegarde={restaurerUneSauvegarde}
+            exporterLesDonnees={exporterLesDonnees}
             quandRestauree={quandRestauree}
             prendreLeFocus={navigue && ecran.section !== "ia"}
             allerALIA={navigue && ecran.section === "ia"}

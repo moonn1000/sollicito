@@ -1,5 +1,6 @@
 #if VERSION_DE_TEST
 using System.Globalization;
+using Sollicito.Application.Export;
 using Sollicito.Application.Sauvegardes;
 
 namespace Sollicito.Fenetre;
@@ -28,7 +29,11 @@ namespace Sollicito.Fenetre;
 /// <item>les fournisseurs d'IA en ligne remplacés par un faux (#48), qui ne touche jamais le réseau : il répond selon le
 /// scénario qu'un fichier de ce dossier donne (« réseau absent » sans lui), et note chaque demande dans un autre, avec
 /// l'empreinte SHA-256 de l'en-tête qui porte la clé, jamais sa valeur. Le scénario « texte » rend, comme texte de l'IA,
-/// le contenu d'un troisième fichier de ce dossier (#46).</item>
+/// le contenu d'un troisième fichier de ce dossier (#46) ;</item>
+/// <item>le dialogue « Enregistrer sous » d'un export remplacé par le fichier que le test écrit dans un fichier de ce
+/// dossier, et le oui à remplacer un fichier existant par une seconde ligne, « remplacer » (#49) ; sans ce fichier, ou
+/// devant un fichier existant sans ce oui, l'export est annulé, comme dans le vrai dialogue. Chaque demande est notée dans
+/// un autre fichier, avec le format et le nom proposé.</item>
 /// </list>
 /// </summary>
 internal static class VersionDeTest
@@ -47,6 +52,8 @@ internal static class VersionDeTest
     public const string FichierDuScenarioDeLIA = "ia-scenario.txt";
     public const string FichierDuTexteDeLIA = "ia-texte.txt";
     public const string FichierDesDemandesALIA = "ia-demandes.txt";
+    public const string FichierDeLExportAChoisir = "export-a-choisir.txt";
+    public const string FichierDesExportsDemandes = "exports-demandes.txt";
 
     public static Lancement Lancement()
     {
@@ -78,7 +85,36 @@ internal static class VersionDeTest
             () => new FauxFournisseurDeLIA(
                 Path.Combine(dossier, FichierDuScenarioDeLIA),
                 Path.Combine(dossier, FichierDuTexteDeLIA),
-                Path.Combine(dossier, FichierDesDemandesALIA)));
+                Path.Combine(dossier, FichierDesDemandesALIA)),
+            new ExportLuDansUnFichier(Path.Combine(dossier, FichierDeLExportAChoisir), Path.Combine(dossier, FichierDesExportsDemandes)));
+    }
+
+    /// <summary>
+    /// Le fichier d'un export, lu dans celui que le test écrit : le chemin sur la première ligne, et « remplacer » sur la
+    /// seconde pour accepter de remplacer un fichier existant. Sans ce fichier, ou devant un fichier existant sans ce oui,
+    /// le choix est annulé : le vrai dialogue ne rend jamais un fichier existant sans le oui de l'utilisateur. Chaque
+    /// demande note le format et le nom proposé, pour que le test les vérifie.
+    /// </summary>
+    private sealed class ExportLuDansUnFichier(string choix, string demandes) : IChoixDUnFichierDExport
+    {
+        public FichierChoisi? Choisir(IWin32Window proprietaire, FormatDExport format, string nomPropose)
+        {
+            File.AppendAllText(demandes, format + " " + nomPropose + Environment.NewLine);
+            if (!File.Exists(choix))
+            {
+                return null;
+            }
+
+            var lignes = File.ReadAllLines(choix);
+            var chemin = lignes.Length > 0 ? lignes[0].Trim() : "";
+            var oui = lignes.Length > 1 && lignes[1].Trim() == "remplacer";
+            if (chemin.Length == 0 || (File.Exists(chemin) && !oui))
+            {
+                return null;
+            }
+
+            return new FichierChoisi(chemin, Remplacer: File.Exists(chemin));
+        }
     }
 
     /// <summary>
