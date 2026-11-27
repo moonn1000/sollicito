@@ -47,7 +47,8 @@ test("un doublon possible attend l'accord ; « Ne pas modifier » revient à la 
   const { revenir, quandModifiee } = afficher(clientSimule({ corrigerUneOffre }));
 
   fireEvent.click(await screen.findByRole("button", { name: "Enregistrer les modifications" }));
-  const signal = await screen.findByRole("alert");
+  // Le signal est le bloc ; son titre seul est l'alerte (#98, point 20).
+  const signal = (await screen.findByRole("alert")).closest<HTMLElement>(".signal-de-l-offre")!;
   fireEvent.click(within(signal).getByRole("button", { name: "Ne pas modifier" }));
   expect(revenir).toHaveBeenCalledOnce();
 

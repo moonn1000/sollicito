@@ -17,6 +17,11 @@ function afficher(client: ClientDeLApi = clientSimule()) {
   return { client, quandEnregistree, renoncer };
 }
 
+// Le signal est le bloc ; son titre seul est l'alerte (#98, point 20).
+async function signalDeLOffre() {
+  return (await screen.findByRole("alert")).closest<HTMLElement>(".signal-de-l-offre")!;
+}
+
 test("l'écran demande le texte collé, puis les champs à remplir à la main, sans borne de longueur sur le texte", () => {
   afficher();
 
@@ -100,7 +105,7 @@ test("le même texte recollé dit que l'offre est déjà enregistrée, et l'ouvr
   remplir("Lieu", "Namur");
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer l'offre" }));
 
-  const signal = await screen.findByRole("alert");
+  const signal = await signalDeLOffre();
   const titre = within(signal).getByRole("heading", { level: 3 });
   expect(titre.textContent).toBe("Cette offre est déjà enregistrée : vous l'avez collée le mercredi 18 novembre 2026. Rien n'a été ajouté.");
   await waitFor(() => expect(document.activeElement).toBe(titre));
@@ -108,6 +113,9 @@ test("le même texte recollé dit que l'offre est déjà enregistrée, et l'ouvr
 
   // L'offre enregistrée s'ouvre dans la saisie (suites de #36) : le texte collé et les champs restent.
   const apercu = await within(signal).findByRole("region", { name: "Comptable enregistrée" });
+  // L'aperçu reste hors de l'alerte, qui ne porte que le titre (#98, point 20).
+  expect(apercu.closest('[role="alert"]')).toBeNull();
+  expect(screen.getByRole("alert").textContent).toBe(titre.textContent);
   expect(client.lireUneOffre).toHaveBeenCalledWith(7);
   expect(apercu.querySelector(".texte-de-l-offre")?.textContent).toBe("Offre fictive.");
   expect(screen.getByLabelText<HTMLTextAreaElement>("Texte de l'offre").value).toBe("Offre fictive.");
@@ -131,7 +139,7 @@ test("un doublon possible se montre avant tout enregistrement : garder les deux 
   remplir("Poste", "Développeur .NET");
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer l'offre" }));
 
-  const signal = await screen.findByRole("alert");
+  const signal = await signalDeLOffre();
   expect(within(signal).getByRole("heading", { level: 3 }).textContent).toBe(
     "Doublon possible : une offre du même poste, dans la même entreprise, est déjà enregistrée.",
   );
@@ -141,6 +149,8 @@ test("un doublon possible se montre avant tout enregistrement : garder les deux 
 
   // Le doublon s'ouvre sur place, échappé, et la saisie reste telle quelle (suites de #36).
   const apercu = await within(signal).findByRole("region", { name: PIEGE });
+  expect(apercu.closest('[role="alert"]')).toBeNull();
+  expect(screen.getByRole("alert").textContent).toBe(within(signal).getAllByRole("heading", { level: 3 })[0]!.textContent);
   expect(lireUneOffre).toHaveBeenCalledWith(2);
   expect(apercu.querySelector(".texte-de-l-offre")?.textContent).toBe(`${PIEGE}\nTexte de l'autre offre.`);
   expect(signal.querySelector("img, script, b")).toBeNull();
@@ -166,7 +176,7 @@ test("l'aperçu ne vaut que pour son signal : modifier la saisie le referme, et 
   expect(screen.queryByRole("alert")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Enregistrer l'offre" }));
 
-  const signal = await screen.findByRole("alert");
+  const signal = await signalDeLOffre();
   expect(within(signal).getByRole("button", { name: "Voir cette offre" })).toBeDefined();
   expect(within(signal).queryByRole("region")).toBeNull();
 });

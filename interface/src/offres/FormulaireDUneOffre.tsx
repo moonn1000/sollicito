@@ -322,11 +322,15 @@ export function FormulaireDUneOffre({
       {champDeTexte("lieu", "Lieu", "text", "Facultatif.")}
       {champDeTexte("publieeLe", "Date de publication", "date", "Facultative.")}
       {champDeTexte("adresse", "Adresse de l'annonce", "url", "Facultative : elle commence par http:// ou https://.")}
+      {/* Seul le titre d'un signal est une alerte : l'aperçu d'une autre offre, ouvert sous lui, jusqu'à 50 000 caractères,
+          ne se lit pas à voix haute de lui-même (#98, point 20). */}
       {conflit?.sorte === "dejaEnregistree" && (
-        <div className="signal-de-l-offre" role="alert">
-          <h3 ref={titreDuConflit} tabIndex={-1}>
-            {messageDejaEnregistree(conflit.ajouteeLe)}
-          </h3>
+        <div className="signal-de-l-offre">
+          <div role="alert">
+            <h3 ref={titreDuConflit} tabIndex={-1}>
+              {messageDejaEnregistree(conflit.ajouteeLe)}
+            </h3>
+          </div>
           {ouverte(conflit.id) ? (
             <ApercuDUneOffre client={client} offre={conflit.id} masquer={() => setApercu(undefined)} />
           ) : (
@@ -339,10 +343,12 @@ export function FormulaireDUneOffre({
         </div>
       )}
       {conflit?.sorte === "doublonPossible" && (
-        <div className="signal-de-l-offre" role="alert">
-          <h3 ref={titreDuConflit} tabIndex={-1}>
-            {MESSAGE_DU_DOUBLON}
-          </h3>
+        <div className="signal-de-l-offre">
+          <div role="alert">
+            <h3 ref={titreDuConflit} tabIndex={-1}>
+              {MESSAGE_DU_DOUBLON}
+            </h3>
+          </div>
           <ul>
             {conflit.doublons.map((doublon) => (
               <li key={doublon.id}>
