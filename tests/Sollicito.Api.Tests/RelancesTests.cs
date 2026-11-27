@@ -226,13 +226,17 @@ public sealed class RelancesTests
     public async Task Clore_la_candidature_abandonne_sa_relance_a_faire()
     {
         await using var api = await ApiLancee.LancerAsync(new HorlogeDeTest().Utiliser);
-        var candidature = await EnregistrerAsync(api);
-        await api.PlanifierAvecSuccesAsync(candidature);
+        var (candidature, entreprise) = await EnregistrerAvecSonEntrepriseAsync(api);
+        var contact = await api.AjouterUnContactAvecSuccesAsync(entreprise, "Jeanne Martin", "jeanne@exemple.invalid");
+        await api.PlanifierAvecSuccesAsync(candidature, destinataire: Id(contact));
 
         var fiche = await api.ChangerLeStatutAvecSuccesAsync(candidature, "SansReponse");
 
         Assert.Equal("Abandonnee", fiche["relances"]![0]!["etat"]!.GetValue<string>());
         Assert.Equal(["changementDeStatut", "clotureDeRelance"], fiche["historique"]!.AsArray().Select(evenement => evenement!["sorte"]!.GetValue<string>()));
+        // La clôture que pose la candidature close garde le destinataire de la relance (#93, point 15).
+        Assert.Equal(contact.ToJsonString(), fiche["relances"]![0]!["destinataire"]!.ToJsonString());
+        Assert.Equal(contact.ToJsonString(), fiche["historique"]![1]!["destinataire"]!.ToJsonString());
 
         // Corriger le changement rouvre la candidature, pas sa relance.
         var corrigee = await api.CorrigerAvecSuccesAsync(candidature);
@@ -276,6 +280,31 @@ public sealed class RelancesTests
         var fiche = await api.ModifierAvecSuccesAsync(candidature, "Lumière Verte SA", "Comptable", "2026-11-03T09:00");
 
         Assert.Equal("2026-11-17", RelanceAFaire(fiche)!["echeance"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Une_cloture_borne_la_date_d_envoi_corrigee_par_l_API()
+    {
+        // Suites de #14 (#93, point 15) : la relance marquée faite le 18/11 à 14:30 borne l'envoi corrigé.
+        var horloge = new HorlogeDeTest();
+        await using var api = await ApiLancee.LancerAsync(horloge.Utiliser);
+        var candidature = await EnregistrerAsync(api);
+        var relance = Id(RelanceAFaire(await api.PlanifierAvecSuccesAsync(candidature)));
+        using (var faite = await api.MarquerFaiteAsync(candidature, relance))
+        {
+            Assert.Equal(HttpStatusCode.OK, faite.StatusCode);
+        }
+
+        horloge.Avancer(TimeSpan.FromMinutes(5));
+
+        using (var apres = await api.ModifierAsync(candidature, "Lumière Verte SA", "Comptable", "2026-11-18T14:31"))
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, apres.StatusCode);
+            var erreurs = (await AppelsDesCandidatures.LireAsync(apres))["errors"]!;
+            Assert.Equal(DateDEnvoi.ApresLePremierEvenement, erreurs["envoyeeLe"]![0]!.GetValue<string>());
+        }
+
+        await api.ModifierAvecSuccesAsync(candidature, "Lumière Verte SA", "Comptable", "2026-11-18T14:30");
     }
 
     [Fact]

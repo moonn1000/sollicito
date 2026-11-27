@@ -70,6 +70,9 @@ public sealed class JournauxDesRelancesTests
                 await StatutAsync(api.EcrireAsync(HttpMethod.Post, AdresseDesRelances(id), $$"""{"delai":"{{Donnee}}"}""")),
                 await StatutAsync(api.EcrireAsync(HttpMethod.Put, "/api/reglages/relances", $$"""{"delaiParDefaut":"{{Donnee}}"}""")),
                 await StatutAsync(api.ChangerLeDelaiParDefautAsync(400)),
+                // Le réglage lu, puis changé avec succès (#93, point 16).
+                await StatutAsync(api.EnvoyerAsync(HttpMethod.Get, "/api/reglages/relances", jeton: true)),
+                await StatutAsync(api.ChangerLeDelaiParDefautAsync(10)),
                 await StatutAsync(api.ChangerLaRelanceAsync(id, relance, delai: 10, destinataire: contact)),
                 await StatutAsync(api.MarquerFaiteAsync(id, relance)),
                 await StatutAsync(api.AbandonnerAsync(id, relance)),
@@ -88,6 +91,7 @@ public sealed class JournauxDesRelancesTests
                     HttpStatusCode.BadRequest, HttpStatusCode.NotFound, HttpStatusCode.NotFound,
                     HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.Conflict, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest,
                     HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.BadRequest, HttpStatusCode.OK, HttpStatusCode.OK,
+                    HttpStatusCode.OK, HttpStatusCode.OK,
                     HttpStatusCode.Conflict, HttpStatusCode.NotFound, HttpStatusCode.Forbidden,
                     HttpStatusCode.NoContent, HttpStatusCode.NotFound,
                 ],
@@ -114,6 +118,8 @@ public sealed class JournauxDesRelancesTests
     [InlineData("DELETE", "/api/contacts/1", null)]
     [InlineData("POST", "/api/candidatures/1/relances", """{"delai":7}""")]
     [InlineData("POST", "/api/candidatures/1/relances/1/faite", null)]
+    [InlineData("PUT", "/api/candidatures/1/relances/1", """{"delai":7}""")]
+    [InlineData("POST", "/api/candidatures/1/relances/1/abandon", null)]
     public async Task Une_exception_pendant_une_route_des_relances_n_ecrit_que_son_type(string methode, string chemin, string? corps)
     {
         var capture = new CaptureDesJournaux();
