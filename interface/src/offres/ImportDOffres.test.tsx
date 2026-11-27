@@ -138,6 +138,35 @@ test("le compte rendu dit ce qui a été importé, mène à chaque offre import�
   expect(revenir).toHaveBeenCalledOnce();
 });
 
+test("le compte rendu affiche lui aussi les cellules piégées en texte", async () => {
+  // Suites de #40 (#98, point 27) : le tableau est celui de l'aperçu, éprouvé ici après l'import.
+  const formule = `=HYPERLINK("http://exemple.invalid")`;
+  afficher(
+    clientSimule({
+      examinerUnFichierCsv: vi.fn(async () => ({ issue: "lu" as const, compteRendu: APERCU })),
+      importerUnFichierCsv: vi.fn(async () => ({
+        issue: "lu" as const,
+        compteRendu: compteRenduFictif({
+          lignes: [
+            ligneDuCompteRenduFictive({ ligne: 2, sort: "importee", offre: 21, poste: PIEGE, entreprise: formule, lieu: PIEGE }),
+            ligneDuCompteRenduFictive({ ligne: 3, sort: "doublonPossible", poste: PIEGE, doublons: [offreSignaleeFictive({ id: 7, poste: PIEGE, lieu: formule })], lignesDuFichier: [] }),
+          ],
+          comptes: comptesFictifs({ lignes: 2, aImporter: 0, importees: 1, doublonsPossibles: 1 }),
+        }),
+      })),
+    }),
+  );
+  choisir(fichier());
+  fireEvent.click(await screen.findByRole("button", { name: "Importer 1 offre" }));
+
+  expect(await screen.findByRole("heading", { level: 3, name: "Compte rendu" })).toBeDefined();
+  const tableau = screen.getByRole("table");
+  expect(within(tableau).getAllByText(PIEGE, { exact: false }).length).toBeGreaterThanOrEqual(3);
+  expect(within(tableau).getByText(formule)).toBeDefined();
+  expect(tableau.textContent).toContain(`${PIEGE}, chez`);
+  expect(document.querySelector("table img, table script, table b, table a")).toBeNull();
+});
+
 test("si la base a changé depuis l'aperçu, le compte rendu le dit", async () => {
   afficher(
     clientSimule({
