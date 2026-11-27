@@ -156,6 +156,24 @@ public sealed class TransportDeLIATests
     }
 
     [Fact]
+    public async Task Une_connexion_coupee_apres_la_requete_ne_se_reprend_pas()
+    {
+        // Suites de #48 (#108, point 7) : l'écoute reçoit la requête entière, puis coupe sans répondre. Chaque appel coûte :
+        // ni .NET ni l'envoi borné ne la rejouent.
+        await using var fournisseur = new EcouteLocale(_ => null, couper: true);
+        using var transport = new TransportDeLIA();
+
+        var premiere = await EnvoyerAsync(transport, fournisseur.Port);
+        var seconde = await EnvoyerAsync(transport, fournisseur.Port);
+
+        Assert.All(new[] { premiere, seconde }, brute => Assert.Equal(EchecDuTransport.Injoignable, brute.Echec));
+        // Une requête reçue, sur une connexion, par demande.
+        Assert.Equal(2, fournisseur.Requetes.Count);
+        Assert.All(fournisseur.Requetes, requete => Assert.StartsWith("POST /v1/messages HTTP/1.1", requete, StringComparison.Ordinal));
+        Assert.Equal(2, fournisseur.Connexions);
+    }
+
+    [Fact]
     public async Task Une_connexion_refusee_rend_injoignable()
     {
         int port;
@@ -187,7 +205,8 @@ public sealed class TransportDeLIATests
 
     /// <summary>
     /// Une écoute sur 127.0.0.1 qui lit chaque requête (en-têtes, puis corps selon sa longueur), la note, et écrit la
-    /// réponse que le test lui donne : rien (elle se tait), des octets, ou des octets suivis d'un corps sans fin.
+    /// réponse que le test lui donne : rien (elle se tait, ou coupe la connexion), des octets, ou des octets suivis d'un
+    /// corps sans fin.
     /// </summary>
     private sealed class EcouteLocale : IAsyncDisposable
     {
@@ -196,13 +215,15 @@ public sealed class TransportDeLIATests
         private readonly ConcurrentQueue<string> _requetes = new();
         private readonly Func<string, byte[]?> _repondre;
         private readonly bool _sansFin;
+        private readonly bool _couper;
         private readonly Task _boucle;
         private int _connexions;
 
-        public EcouteLocale(Func<string, byte[]?> repondre, bool sansFin = false)
+        public EcouteLocale(Func<string, byte[]?> repondre, bool sansFin = false, bool couper = false)
         {
             _repondre = repondre;
             _sansFin = sansFin;
+            _couper = couper;
             _ecoute.Start();
             _boucle = AccepterAsync();
         }
@@ -251,7 +272,12 @@ public sealed class TransportDeLIATests
                     var reponse = _repondre(requete);
                     if (reponse is null)
                     {
-                        await Task.Delay(Timeout.Infinite, _fin.Token);
+                        // Coupée, la connexion se ferme sans un octet de réponse ; sinon, l'écoute se tait.
+                        if (!_couper)
+                        {
+                            await Task.Delay(Timeout.Infinite, _fin.Token);
+                        }
+
                         return;
                     }
 
