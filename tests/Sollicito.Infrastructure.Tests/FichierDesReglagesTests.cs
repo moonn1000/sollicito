@@ -68,6 +68,46 @@ public sealed class FichierDesReglagesTests : IDisposable
     }
 
     [Fact]
+    public async Task Des_ecritures_simultanees_du_dossier_et_du_delai_ne_se_perdent_pas()
+    {
+        // Suites de #14 (#93, point 15). Chaque écrivain a son instance, comme dans l'API : sauvegardes et relances. Tous
+        // deux relisent le fichier sous un verrou commun ; sans lui, une écriture rendrait à l'autre réglage sa valeur d'avant.
+        var annulation = TestContext.Current.CancellationToken;
+        var sauvegardes = new FichierDesReglages(Base);
+        var relances = new FichierDesReglages(Base);
+        await sauvegardes.EcrireLeDossierAsync(Path.Combine(_dossier, "Copies 0"));
+
+        var dossier = Task.Run(
+            async () =>
+            {
+                for (var numero = 1; numero <= 200; numero++)
+                {
+                    var choisi = Path.Combine(_dossier, $"Copies {numero}");
+                    await sauvegardes.EcrireLeDossierAsync(choisi);
+                    var lus = await sauvegardes.SousLeVerrouAsync(Task.FromResult);
+                    Assert.Equal(choisi, lus.Reglages.DossierDesSauvegardes);
+                }
+            },
+            annulation);
+        var delai = Task.Run(
+            async () =>
+            {
+                for (var jours = 1; jours <= 200; jours++)
+                {
+                    Assert.True(await relances.EcrireLeDelaiDesRelancesAsync(jours));
+                    var lus = await relances.SousLeVerrouAsync(Task.FromResult);
+                    Assert.Equal(jours, lus.Reglages.DelaiDesRelances);
+                }
+            },
+            annulation);
+        await Task.WhenAll(dossier, delai);
+
+        var fin = sauvegardes.Lire();
+        Assert.Equal(Path.Combine(_dossier, "Copies 200"), fin.Reglages.DossierDesSauvegardes);
+        Assert.Equal(200, fin.Reglages.DelaiDesRelances);
+    }
+
+    [Fact]
     public async Task Un_fichier_de_plus_de_64_kio_ne_se_lit_pas_mais_un_fichier_de_64_kio_se_lit()
     {
         var fichier = new FichierDesReglages(Base);

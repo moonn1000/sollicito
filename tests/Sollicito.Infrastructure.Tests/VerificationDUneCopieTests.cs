@@ -146,6 +146,19 @@ public sealed class VerificationDUneCopieTests : IDisposable
         Assert.NotEqual(SorteDeVerdict.Saine, (await VerifierAsync()).Sorte);
     }
 
+    [Fact]
+    public async Task Une_valeur_de_plus_de_10_Mo_dans_une_table_indexee_fait_refuser_la_copie()
+    {
+        // Suites de #28 (#95, point 2). Le schéma est celui de Sollicito : seul le réglage d'une connexion à un fichier non
+        // sûr refuse cette valeur, qu'integrity_check lit par l'index unique de la clé. Sans lui, la copie serait saine.
+        await CreerUneBaseAsync(Copie, migration: null);
+        Executer(Copie, "INSERT INTO Entreprises (Nom, Cle) VALUES ('Atelier fictif', replace(hex(zeroblob(5000001)), '00', 'aa'))");
+        Assert.Equal(["10000002"], Lire(Copie, "SELECT length(Cle) FROM Entreprises"));
+        Assert.Equal(["ok"], Lire(Copie, "PRAGMA integrity_check"));
+
+        Assert.Equal(new VerdictDUneCopie(SorteDeVerdict.Etrangere, 0), await VerifierAsync());
+    }
+
     [Theory]
     [InlineData("contrainte CHECK ajoutée")]
     [InlineData("contrainte CHECK avec une fonction")]

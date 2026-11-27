@@ -110,6 +110,15 @@ public sealed class JournauxDesOffresTests
                 ],
                 statutsDePostuler);
 
+            // Un poste retouché hors de Sollicito, que la candidature ne reprend pas : « poste à revoir » (#98, point 22).
+            var retouchee = Id(await api.CollerAvecSuccesAsync($"Offre retouchée de {Donnee}.", $"Poste retouché de {Donnee}", entreprise: $"Entreprise {Donnee}"));
+            await api.ExecuterAsync($"UPDATE Offres SET Poste = 'Poste de {Donnee}' || char(7) WHERE Id = {retouchee}");
+            using (var aRevoir = await api.PostulerAsync(retouchee, "2026-11-18T10:00"))
+            {
+                Assert.Equal(HttpStatusCode.Conflict, aRevoir.StatusCode);
+                Assert.Equal("posteARevoir", (await AppelsDesCandidatures.LireAsync(aRevoir))["motif"]!.GetValue<string>());
+            }
+
             // Une date refusée, sur une offre qui a son entreprise et pas de candidature.
             var libre = Id(await api.CollerAvecSuccesAsync($"Offre libre de {Donnee}.", $"Poste libre de {Donnee}", entreprise: $"Entreprise {Donnee}"));
             Assert.Equal(HttpStatusCode.BadRequest, await StatutAsync(api.PostulerAsync(libre, Donnee)));

@@ -1,6 +1,6 @@
 # Vues d'architecture de la V1
 
-- **Mis à jour le** : 2026-11-21, avec #14
+- **Mis à jour le** : 2026-11-27, avec #14, puis avec ses suites (#93)
 - **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md) (D1 à D4, D6 à D10, D12), en partie remplacé par l'[ADR-0003](adr/0003-hote-interface-webview2.md) (hôte de l'interface) et l'[ADR-0004](adr/0004-v1-resserree-paliers.md) (V1 resserrée, livrée en paliers) ; [ADR-0006](adr/0006-requetes-et-liens-de-la-fenetre.md) (requêtes et liens de la fenêtre) ; [ADR-0008](adr/0008-sauvegardes-de-la-base.md) (sauvegardes de la base) ; [ADR-0011](adr/0011-relances-et-brouillon.md) (brouillon d'une relance)
 - **Périmètre** : la V1 que fixe l'ADR-0004, en deux vues du modèle C4 : le contexte (niveau 1) et les conteneurs (niveau 2). La vue des composants (niveau 3) et les diagrammes de séquence s'y ajouteront au palier 5 (#59). Ce que l'utilisateur fait dans Sollicito : [cas d'utilisation](cas-d-utilisation.md).
 
@@ -116,6 +116,8 @@ flowchart TB
 
     ia["<b>IA en ligne</b><br>[Système extérieur, facultatif]<br>Claude (Anthropic) ou OpenAI<br>P4"]
     microsoft["<b>Microsoft</b><br>[Système extérieur]<br>P1"]
+    distant["<b>Dossier en réseau ou synchronisé</b><br>[Système extérieur, facultatif]<br>P2"]
+    fournisseur["<b>Fournisseur de messagerie</b><br>[Système extérieur, facultatif]<br>P3"]
     forem["<b>Le Forem</b><br>[Système extérieur, V2]<br>V2"]
 
     personne -- "se sert des écrans" --> interface
@@ -132,6 +134,8 @@ flowchart TB
     fenetre -- "brouillon (mailto), P3" --> messagerie
     api -- "texte à analyser, P4" --> ollama
     api -- "① HTTPS, P4" --> ia
+    sauvegardes -- "② copies, si ce dossier est en réseau<br>ou synchronisé, P2" --> distant
+    messagerie -- "③ brouillon, avant tout envoi, si elle est<br>en ligne ou le range sur un serveur, P3" --> fournisseur
     runtime -- "④ diagnostic, ⑤ mises à jour" --> microsoft
     api -. "ingestion en tâche de fond, V2" .-> forem
     base ~~~ cles ~~~ profil
@@ -143,7 +147,7 @@ flowchart TB
     classDef v2 fill:#ffffff,stroke:#6b6b6b,color:#3d3d3d,stroke-dasharray:6 4
     class personne personne
     class fenetre,api,interface,base,profil,cles,sauvegardes conteneur
-    class runtime,navigateur,messagerie,ollama,ia,microsoft exterieur
+    class runtime,navigateur,messagerie,ollama,ia,microsoft,distant,fournisseur exterieur
     class forem v2
     style poste fill:none,stroke:#888888,stroke-dasharray:6 4
     style sollicito fill:none,stroke:#1168bd,stroke-dasharray:6 4
@@ -161,7 +165,7 @@ flowchart TB
 | Cadre pointillé bleu | la limite de Sollicito |
 | Cadre en pointillé fin | un processus, ou un dossier |
 | Trait plein, trait pointillé | un échange de la V1, un échange de la V2 |
-| ①, ④, ⑤ | trois des cinq échanges qui quittent le poste ; ② part du dossier des sauvegardes, ③ de la messagerie (voir la vue de contexte) |
+| ① à ⑤ | les cinq échanges qui quittent le poste ; ② part du dossier des sauvegardes, ③ de la messagerie |
 | P1 à P5 | le palier qui amène un élément ; sur un trait, celui qui amène l'échange, s'il vient après le palier 1 |
 
 ### Les conteneurs
@@ -200,4 +204,4 @@ Supprimer l'exe laisse toutes ces données en place (ADR-0004, « Conséquences 
 Comme l'ADR-0001 (D4) le veut pour l'ingestion des offres, une tâche de fond tourne dans le processus de l'API, sans conteneur à elle.
 
 - **Aucun conteneur d'ingestion des offres.** L'ingestion en tâche de fond attend la V2, avec le Forem (ADR-0004, D4) : seul le trait pointillé « API locale → Le Forem » la représente.
-- **La sauvegarde automatique** (palier 2) est une responsabilité de l'API. Son déclenchement relève de #26, qui l'a fixé ainsi : une minuterie, dans le processus de l'API, fait la copie au lancement et à la fermeture ; une fois par heure, elle fait la copie du nouveau jour et réessaie un dossier de sauvegarde manquant. L'ADR-0008, qui arrive avec #26, consignera ce choix.
+- **La sauvegarde automatique** (palier 2) est une responsabilité de l'API. Son déclenchement relève de #26, qui l'a fixé ainsi : une minuterie, dans le processus de l'API, fait la copie au lancement et à la fermeture ; une fois par heure, elle fait la copie du nouveau jour et réessaie un dossier de sauvegarde manquant. L'[ADR-0008](adr/0008-sauvegardes-de-la-base.md) consigne ce choix.

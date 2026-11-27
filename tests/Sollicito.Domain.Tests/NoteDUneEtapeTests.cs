@@ -69,8 +69,8 @@ public sealed class NoteDUneEtapeTests
         "" + (char)0x2029,
     ];
 
-    // La fonction des fins de ligne est écrite deux fois, pour la note et pour le texte d'une offre : ce test garde
-    // qu'elles disent la même chose, tant que l'offre ne reprend pas la fonction commune (#82, point 10).
+    // La note et le texte d'une offre ramènent leurs fins de ligne par la même fonction, FinsDeLigne : ce test garde
+    // leur résultat commun (#82, point 10 ; #98, point 25).
     [Theory]
     [MemberData(nameof(LesFinsDeLigne))]
     public void Une_note_et_un_texte_d_offre_ramenent_une_fin_de_ligne_de_la_meme_facon(string fin)

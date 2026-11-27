@@ -40,6 +40,34 @@ function Signaler([string]$ecart) {
     Write-Host "ÉCART : $ecart"
 }
 
+# --- La recherche d'une marque, et son autotest ---
+# Vrai si le texte se lit dans les octets : tels quels (UTF-8 et ASCII), ou en UTF-16 à l'un des deux alignements.
+function Contient-Texte([byte[]]$contenu, [string]$texte) {
+    $latin1 = [Text.Encoding]::GetEncoding(28591)
+    $enOctets = $latin1.GetString([Text.Encoding]::UTF8.GetBytes($texte))
+    return $latin1.GetString($contenu).IndexOf($enOctets, [StringComparison]::Ordinal) -ge 0 -or
+        [Text.Encoding]::Unicode.GetString($contenu).IndexOf($texte, [StringComparison]::Ordinal) -ge 0 -or
+        ($contenu.Length -gt 1 -and [Text.Encoding]::Unicode.GetString($contenu, 1, $contenu.Length - 1).IndexOf($texte, [StringComparison]::Ordinal) -ge 0)
+}
+
+# Le témoin de la version publiée, plus bas, ne prouve que la lecture qui l'a trouvé (#95, point 8) : chacune des trois
+# se vérifie d'abord ici, sur un texte rangé comme elle seule le voit ; un texte absent ne se trouve pas.
+$sonde = 'sonde-de-la-recherche'
+$rangements = [ordered]@{
+    'octets'                        = [Text.Encoding]::UTF8.GetBytes("ab$sonde")
+    'UTF-16, à un alignement pair'  = [Text.Encoding]::Unicode.GetBytes("a$sonde")
+    'UTF-16, à un alignement impair' = [byte[]](@([byte]0x61) + [Text.Encoding]::Unicode.GetBytes("a$sonde"))
+}
+foreach ($rangement in $rangements.GetEnumerator()) {
+    if (-not (Contient-Texte $rangement.Value $sonde)) {
+        Signaler "la recherche d'une marque ne voit pas un texte rangé en $($rangement.Key)"
+    }
+    if (Contient-Texte $rangement.Value 'texte-absent-de-la-sonde') {
+        Signaler "la recherche d'une marque trouve un texte absent ($($rangement.Key))"
+    }
+}
+Write-Host "Lectures de la recherche des marques vérifiées : $($rangements.Count)."
+
 # --- Le dossier de publication ne contient que l'exe ---
 $fichiersPublies = @(Get-ChildItem -LiteralPath $Dossier -Recurse -File | ForEach-Object { $_.Name })
 if ($fichiersPublies.Count -ne 1 -or $fichiersPublies[0] -ne 'Sollicito.exe') {
@@ -222,12 +250,6 @@ if ($cheminsDeSymboles -eq 0) {
 # dans Sollicito.dll décompressé.
 $marquesDeTest = @('restauration-a-confirmer.txt', 'SOLLICITO_TEST_ARRET_RESTAURATION')
 $temoinPublie = 'restaurerUneSauvegarde'
-function Contient-Texte([byte[]]$contenu, [string]$texte) {
-    $enOctets = $latin1.GetString([Text.Encoding]::UTF8.GetBytes($texte))
-    return $latin1.GetString($contenu).IndexOf($enOctets, [StringComparison]::Ordinal) -ge 0 -or
-        [Text.Encoding]::Unicode.GetString($contenu).IndexOf($texte, [StringComparison]::Ordinal) -ge 0 -or
-        ($contenu.Length -gt 1 -and [Text.Encoding]::Unicode.GetString($contenu, 1, $contenu.Length - 1).IndexOf($texte, [StringComparison]::Ordinal) -ge 0)
-}
 $temoinLu = $false
 $lectures = @([pscustomobject]@{ Nom = 'Sollicito.exe'; Contenu = $octets })
 foreach ($entree in $entrees) {

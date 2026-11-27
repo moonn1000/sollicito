@@ -69,6 +69,38 @@ public sealed class RemplacementDeLaBaseTests : IDisposable
         Assert.Equal("wal", Lire(Base, "PRAGMA journal_mode"));
     }
 
+    [Fact]
+    public async Task Un_arret_quand_le_journal_porte_des_pages_non_validees_laisse_la_base_d_avant()
+    {
+        // Suites de #28 (#95, point 10). Une grosse copie déborde le cache de SQLite : des pages de la transaction vont au
+        // journal -wal avant qu'elle soit validée. La base et son journal, pris tels qu'un arrêt les laisserait à cet
+        // instant, se relisent à l'état d'avant.
+        var grosse = Path.Combine(_dossier, "grosse.db");
+        Creer(grosse, lignes: 20_000, poste: "Poste fictif restauré");
+        var apresArret = Path.Combine(_dossier, "apres-arret.db");
+        long octetsDuJournal = 0;
+
+        await CopieDeLaBase.RemplacerAsync(grosse, Base, TestContext.Current.CancellationToken, () =>
+        {
+            var journal = new FileInfo(Base + "-wal");
+            // Plus que l'en-tête de 32 octets : au moins une page, que la transaction n'a pas validée.
+            if (octetsDuJournal == 0 && journal.Exists && journal.Length > 32 + TailleDePage)
+            {
+                CopierOuvert(Base, apresArret);
+                CopierOuvert(Base + "-wal", apresArret + "-wal");
+                octetsDuJournal = journal.Length;
+            }
+        });
+
+        Assert.True(octetsDuJournal > 0, "Aucune page au journal avant la validation.");
+        Assert.True(new FileInfo(apresArret + "-wal").Length > 32 + TailleDePage);
+        Assert.Equal("ok", Lire(apresArret, "PRAGMA integrity_check"));
+        Assert.Equal("400", Compter(apresArret));
+        Assert.Equal("0", Lire(apresArret, "SELECT COUNT(*) FROM Candidatures WHERE Poste LIKE 'Poste fictif restauré%'"));
+        // Le témoin : le remplacement, validé, a bien changé la base.
+        Assert.Equal("20000", Compter(Base));
+    }
+
     [Theory]
     [InlineData("racine de la table", 2, 0x5A)]
     [InlineData("page du milieu", 0, 0x5A)]
@@ -136,6 +168,14 @@ public sealed class RemplacementDeLaBaseTests : IDisposable
         var octets = new byte[TailleDePage];
         Array.Fill(octets, valeur);
         flux.Write(octets);
+    }
+
+    // Une copie d'un fichier que SQLite tient ouvert, partagé en lecture et en écriture.
+    private static void CopierOuvert(string source, string destination)
+    {
+        using var lu = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var ecrit = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+        lu.CopyTo(ecrit);
     }
 
     private static string Compter(string fichier) => Lire(fichier, "SELECT COUNT(*) FROM Candidatures");

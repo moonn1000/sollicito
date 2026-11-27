@@ -44,6 +44,12 @@ public abstract class ContratDUnConnecteurDOffres<TEntree>
     /// <summary>Une entrée vide : rien de saisi, ou une ligne sans aucune cellule remplie.</summary>
     protected abstract TEntree EntreeVide();
 
+    /// <summary>
+    /// Combien d'offres le connecteur fait d'une entrée vide : le banc ne passe pas d'office pour un connecteur qui n'en
+    /// rendrait aucune (#98, point 28).
+    /// </summary>
+    protected abstract int OffresDUneEntreeVide { get; }
+
     [Fact]
     public void Chaque_offre_recue_porte_la_source_du_connecteur()
     {
@@ -93,6 +99,7 @@ public abstract class ContratDUnConnecteurDOffres<TEntree>
     {
         var offres = Connecteur.Recevoir(EntreeVide());
 
+        Assert.Equal(OffresDUneEntreeVide, offres.Count);
         Assert.All(offres, offre =>
         {
             Assert.Equal(SourceAttendue, offre.Source);
@@ -117,6 +124,9 @@ public sealed class ConnecteurDuTexteColleTests : ContratDUnConnecteurDOffres<Sa
     protected override IReadOnlyList<ChampDeLEmpreinte> ChampsDeLEmpreinteAttendus => [ChampDeLEmpreinte.Texte];
 
     protected override SaisieDUneOffre EntreeVide() => new(null, null, null, null, null, null);
+
+    // La saisie vide fait une offre, que le cœur refuse.
+    protected override int OffresDUneEntreeVide => 1;
 
     [Fact]
     public void L_accord_garder_les_deux_n_entre_pas_dans_l_offre_recue()
@@ -169,6 +179,9 @@ public sealed class ConnecteurDuFichierCsvTests : ContratDUnConnecteurDOffres<Fi
     // Une ligne dont aucune cellule n'est remplie : le lecteur l'ignore, et le cœur la refuserait.
     protected override FichierCsv EntreeVide() =>
         new([ColonneDuFichier.Poste], [new LigneDuFichier(2, new Dictionary<ColonneDuFichier, string> { [ColonneDuFichier.Poste] = "" })], 0);
+
+    // Une ligne bien formée aux cellules vides fait une offre, que le cœur refuse.
+    protected override int OffresDUneEntreeVide => 1;
 
     [Fact]
     public void L_ordre_des_colonnes_du_fichier_ne_change_ni_les_champs_ni_l_empreinte()

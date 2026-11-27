@@ -39,7 +39,16 @@ function prendUneCle(fournisseur: FournisseurDIA): fournisseur is "Claude" | "Op
  * (#48) ne part que sur le clic de « Tester la clé » : une courte question fixe, sans aucune donnée de l'utilisateur, dont
  * l'écran ne montre que le résultat, jamais la réponse du fournisseur.
  */
-export function SectionDeLIA({ client, prendreLeFocus = false }: { client: ClientDeLApi; prendreLeFocus?: boolean }) {
+export function SectionDeLIA({
+  client,
+  prendreLeFocus = false,
+  reecritures = 0,
+}: {
+  client: ClientDeLApi;
+  prendreLeFocus?: boolean;
+  /** Le nombre de réécritures de reglages.json depuis l'ouverture de l'écran : à chacune, la section relit l'état. */
+  reecritures?: number;
+}) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
   const [choix, setChoix] = useState<FournisseurDIA>("Aucun");
   const [confirmation, setConfirmation] = useState<"aucune" | "changement" | "retrait">("aucune");
@@ -53,8 +62,11 @@ export function SectionDeLIA({ client, prendreLeFocus = false }: { client: Clien
   const champ = useRef<HTMLInputElement>(null);
   const envoiEnCours = useRef(false);
   const affichee = useRef(true);
+  // Le dernier état adopté, pour ne rien toucher quand une relecture le retrouve.
+  const etatAdopte = useRef("");
 
   function adopter(etat: EtatDeLIA) {
+    etatAdopte.current = JSON.stringify(etat);
     setChargement({ etape: "pret", etat });
     setChoix(etat.fournisseur);
     // La clé tapée mais non envoyée ne survit pas à un nouvel état : le champ est le même pour Claude et pour OpenAI.
@@ -91,6 +103,28 @@ export function SectionDeLIA({ client, prendreLeFocus = false }: { client: Clien
     }
     // Au montage seulement : le focus suit l'arrivée depuis la carte du tableau de bord.
   }, []);
+
+  // Un dossier des sauvegardes choisi a réécrit reglages.json (#93, point 12). Un état inchangé laisse la saisie en cours.
+  useEffect(() => {
+    if (reecritures === 0) {
+      return;
+    }
+
+    client.lireLEtatDeLIA().then(
+      (etat) => {
+        if (affichee.current && JSON.stringify(etat) !== etatAdopte.current) {
+          setConfirmation("aucune");
+          setRemplacement(false);
+          setRefus(undefined);
+          setMessage(undefined);
+          adopter(etat);
+        }
+      },
+      () => {
+        // La section garde ce qu'elle montrait.
+      },
+    );
+  }, [reecritures]);
 
   // Une écriture à la fois : un ref, et non l'état, pour que deux clics dans le même rendu n'envoient qu'une fois.
   async function envoyer<T>(operation: () => Promise<T>, suite: (resultat: T) => void, echec: string) {

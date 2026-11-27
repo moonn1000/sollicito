@@ -134,7 +134,7 @@ Une entrée par demande partie : le fournisseur et l'issue, deux valeurs de list
   - un modèle retiré prive l'utilisateur d'IA jusqu'à ce qu'il installe une nouvelle version : la V1 n'a pas de mise à jour automatique ;
   - une connexion neuve par demande ajoute une poignée de main TLS à chaque appel ;
   - sans nouvelle tentative, une panne passagère demande un nouveau clic ;
-  - la clé vit en mémoire, dans une chaîne que .NET ne remet pas à zéro, le temps de l'appel ;
+  - la clé vit en mémoire, dans des chaînes que .NET ne remet pas à zéro, au-delà du temps de l'appel : la lecture de l'état de l'IA, qui la déchiffre, en produit aussi (#108, points 5 et 6) ;
   - un script injecté qui aurait le jeton pourrait enchaîner les essais et dépenser le crédit de l'utilisateur : un à la fois, chacun borné, mais pas leur nombre dans le temps (modèle de menaces, « Limites ») ;
   - un programme lancé sous le compte de l'utilisateur peut poser un proxy et un certificat racine dans le magasin de ce compte, et lire la clé au passage : c'est la limite de DPAPI (ADR-0001, D9) ;
   - ce que le fournisseur fait de ce qu'il reçoit relève de ses conditions ; `store: false` retire seulement la garde des réponses d'OpenAI.

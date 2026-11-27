@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { ChampDeLEtape, RefusDeLEtape, SaisieDUneEtape, TypeDEtape } from "../api/clientDeLApi.ts";
-import { Champ, sansLeChamp } from "../formulaires/Champ.tsx";
+import { Champ, LONGUEUR_AU_PLUS_D_UN_CHAMP, sansLeChamp } from "../formulaires/Champ.tsx";
 import { LIBELLES_DES_TYPES_D_ETAPE } from "./affichage.ts";
 
 type Envoi = "pret" | "en-cours" | "echec";
@@ -159,6 +159,7 @@ export function FormulaireDUneEtape({
             {...attributs}
             ref={champs.note}
             rows={4}
+            maxLength={LONGUEUR_AU_PLUS_D_UN_CHAMP}
             value={note}
             onChange={(evenement) => modifier("note", setNote)(evenement.target.value)}
           />

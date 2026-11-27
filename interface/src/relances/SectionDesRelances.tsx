@@ -12,7 +12,14 @@ const DELAI_HORS_BORNES = "Le délai d'une relance compte de 1 à 365 jours.";
  * l'envoi, gardé dans les réglages de l'application, hors de la base. Il ne sert qu'aux relances planifiées ensuite.
  * Un délai enregistré qui ne se relit pas, ou un fichier des réglages illisible, se dit à l'écran.
  */
-export function SectionDesRelances({ client }: { client: ClientDeLApi }) {
+export function SectionDesRelances({
+  client,
+  reecritures = 0,
+}: {
+  client: ClientDeLApi;
+  /** Le nombre de réécritures de reglages.json depuis l'ouverture de l'écran : à chacune, la section relit le délai. */
+  reecritures?: number;
+}) {
   const [chargement, setChargement] = useState<Chargement>({ etape: "chargement" });
   const [delai, setDelai] = useState("");
   const [refus, setRefus] = useState<{ delai?: string[] }>({});
@@ -21,14 +28,23 @@ export function SectionDesRelances({ client }: { client: ClientDeLApi }) {
   const champ = useRef<HTMLInputElement>(null);
   const envoiEnCours = useRef(false);
   const affichee = useRef(true);
+  // Le dernier délai lu ou enregistré : une relecture ne remplace pas un délai saisi depuis.
+  const delaiLu = useRef("");
+
+  function adopter(reglage: ReglageDuDelai) {
+    const avant = delaiLu.current;
+    const lu = String(reglage.delaiParDefaut);
+    delaiLu.current = lu;
+    setChargement({ etape: "pret", reglage });
+    setDelai((saisi) => (saisi === avant ? lu : saisi));
+  }
 
   useEffect(() => {
     affichee.current = true;
     client.lireLeReglageDesRelances().then(
       (reglage) => {
         if (affichee.current) {
-          setChargement({ etape: "pret", reglage });
-          setDelai(String(reglage.delaiParDefaut));
+          adopter(reglage);
         }
       },
       () => {
@@ -41,6 +57,25 @@ export function SectionDesRelances({ client }: { client: ClientDeLApi }) {
       affichee.current = false;
     };
   }, [client]);
+
+  useEffect(() => {
+    if (reecritures === 0) {
+      return;
+    }
+
+    client.lireLeReglageDesRelances().then(
+      (reglage) => {
+        if (affichee.current) {
+          // Un refus d'écriture sur le fichier d'avant ne vaut plus.
+          setMessage(undefined);
+          adopter(reglage);
+        }
+      },
+      () => {
+        // La section garde ce qu'elle montrait.
+      },
+    );
+  }, [reecritures]);
 
   async function enregistrer(evenement: FormEvent) {
     evenement.preventDefault();
@@ -67,8 +102,9 @@ export function SectionDesRelances({ client }: { client: ClientDeLApi }) {
 
       setEnvoi("pret");
       if (resultat.issue === "change") {
+        delaiLu.current = String(resultat.reglage.delaiParDefaut);
         setChargement({ etape: "pret", reglage: resultat.reglage });
-        setDelai(String(resultat.reglage.delaiParDefaut));
+        setDelai(delaiLu.current);
         setMessage({ sorte: "annonce", texte: `Délai par défaut enregistré : ${resultat.reglage.delaiParDefaut} jours.` });
       } else if (resultat.issue === "refuse") {
         setRefus({ delai: resultat.refus });

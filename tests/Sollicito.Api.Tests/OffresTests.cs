@@ -151,9 +151,9 @@ public sealed class OffresTests
 
         using var tropGros = await api.EcrireAsync(HttpMethod.Post, Route, Corps(new string('a', BorneDuCorps), "Chauffeur"));
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, tropGros.StatusCode);
-        // La correction, qui ne porte pas de texte, garde la borne ordinaire : un corps de plus de 1 Mio y est seulement refusé par ses champs.
+        // La correction, qui ne porte pas de texte, a la même borne que la saisie, 1 Mio (#98, point 3 ; BornesDesCorpsTests).
         using var correction = await api.EcrireAsync(HttpMethod.Put, AdresseDeLOffre(1), Corps(texte: null, poste: new string('p', 1_100_000)));
-        Assert.Equal(HttpStatusCode.BadRequest, correction.StatusCode);
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, correction.StatusCode);
     }
 
     [Fact]
@@ -284,6 +284,24 @@ public sealed class OffresTests
         Assert.Equal(Texte, fiche["texte"]!.GetValue<string>());
         // L'entreprise fautive, que plus rien ne désigne, n'est plus proposée ; elle reste en base.
         Assert.Equal(["Lumière Verte SA"], (await api.ListerLesEntreprisesAsync()).Select(e => e!["nom"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task A_la_correction_un_champ_facultatif_absent_vaut_un_champ_vide_et_efface()
+    {
+        // Suites de #36 (#98, point 9) : comme à la saisie ; le comportement gardé, dit dans la description de la route.
+        await using var api = await LancerAsync();
+        var offre = await api.CollerAvecSuccesAsync(Texte, "Comptable", entreprise: "Lumière Verte SA", lieu: "Liège", publieeLe: "2026-11-17", adresse: "https://exemple.invalid/1");
+
+        using var reponse = await api.CorrigerLOffreAsync(Id(offre), "Comptable");
+
+        Assert.Equal(HttpStatusCode.OK, reponse.StatusCode);
+        var fiche = (await AppelsDesCandidatures.LireAsync(reponse)).AsObject();
+        foreach (var champ in new[] { "entreprise", "lieu", "publieeLe", "adresse" })
+        {
+            Assert.True(fiche.ContainsKey(champ), champ);
+            Assert.Null(fiche[champ]);
+        }
     }
 
     [Fact]
