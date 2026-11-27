@@ -12,6 +12,7 @@ L'architecture de la V1 de Sollicito, telle que la fixe l'ADR-0004 : ce qui est 
 | [Cas d'utilisation](cas-d-utilisation.md) | ce que l'utilisateur fait dans Sollicito, palier par palier | diagramme de cas d'utilisation (UML) |
 | [Modèle de domaine](modele-de-domaine.md) | les entités, leurs liens et leurs règles | diagramme de classes, diagrammes d'états des candidatures et des relances (UML) |
 | [Modèle de menaces](modele-de-menaces.md) | les protections de l'API locale et de la fenêtre, et leurs limites | tableaux des menaces et des parades |
+| [Format de l'import CSV](import-csv.md) | le fichier CSV d'offres que lit l'import : ses colonnes, son encodage, ses bornes et ses doublons | tableau des colonnes |
 | [Format de l'export](export.md) | ce que contient l'export de toutes les données, en JSON et en CSV, champ par champ | tableaux des champs |
 | [Décisions d'architecture](adr/README.md) | chaque décision, ses raisons, ses alternatives écartées | index des ADR |
 

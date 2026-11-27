@@ -1,6 +1,6 @@
 # ADR-0020 : l'export de toutes les données : le fichier choisi dans le dialogue de l'hôte, un seul instantané de la base, rien de partiel, un CSV neutralisé
 
-- **Statut** : acceptée ; critères et décisions acceptés par le pilote le 2026-11-27 ; les deux textes de l'écran sur le contenu de l'export et son chiffrement validés mot pour mot par le mainteneur le 2026-11-27
+- **Statut** : acceptée ; critères et décisions acceptés par le pilote le 2026-11-27 ; trois écarts de mise en œuvre acceptés par le pilote le 2026-11-27 (le silence réservé à une demande d'export du même format, les étapes d'un échec, la lecture en SQL sur une connexion en lecture seule) ; les deux textes de l'écran sur le contenu de l'export et son chiffrement validés mot pour mot par le mainteneur le 2026-11-27
 - **Date** : 2026-11-27
 - **Précise** : [ADR-0001](0001-cadrage-architecture-v1.md), D10 (l'export complet en JSON et en CSV, sans les clés d'IA ; la neutralisation du CSV, étendue aux onze débuts d'OWASP) ; [ADR-0003](0003-hote-interface-webview2.md), « Durcissement de la fenêtre » (une sixième demande de la page à l'hôte, l'export, dont seul le dialogue « Enregistrer sous » de l'hôte donne le fichier) ; [ADR-0012](0012-restauration-d-une-sauvegarde.md) (un seul dialogue de l'hôte à la fois : l'export rejoint la règle) ; [ADR-0015](0015-import-csv-des-offres.md), « Le contenu non fiable, et l'export à venir » (la neutralisation faite, dans toutes les cellules) ; [ADR-0016](0016-fournisseur-d-ia-et-cle-chiffree.md), « Hors de la base, des copies et du dossier des copies » (l'export ne lit que les six tables de la base : la clé n'y entre jamais)
 
@@ -54,7 +54,7 @@ Six faits, relevés le 2026-11-27, pèsent sur la façon de faire :
 ### La destination
 
 - **Le oui à remplacer un fichier vient du dialogue de Windows**, qui le demande lui-même (`OverwritePrompt`) ; un test vérifie que le dialogue le demande. Le choix porte ce oui : vrai si le fichier existait au retour du dialogue. Le renommage ne remplace un fichier qu'avec lui ; un fichier apparu entre-temps n'est pas remplacé (issue `existe`).
-- **Refusé avant toute écriture**, dans cet ordre : un nom qui ne finit pas par l'extension du format, `.json` ou `.zip` (issue `extension`) ; un chemin relatif (issue `impossible`) ; un fichier dans le dossier de données de Sollicito, sous-dossiers compris, après normalisation (issue `dossierDeDonnees`). Sinon, un oui à l'écrasement remplacerait la base, les réglages ou la clé. La règle compare les chemins complets, sans tenir compte de la casse, et un chemin de périphérique (`\\?\…`, `\\.\…`) sans son préfixe ; elle ne suit pas les jonctions, puisque le chemin vient de l'utilisateur, dans le dialogue.
+- **Refusé avant toute écriture**, dans cet ordre : un nom qui ne finit pas par l'extension du format, `.json` ou `.zip` (issue `extension`) ; un chemin relatif (issue `impossible`) ; un fichier dans le dossier de données de Sollicito, sous-dossiers compris, après normalisation (issue `dossierDeDonnees`). Sinon, un oui à l'écrasement remplacerait la base, les réglages ou la clé. La règle compare les chemins complets, sans tenir compte de la casse, et un chemin de périphérique à lettre de lecteur ou UNC (`\\?\C:\…`, `\\.\C:\…`, `\\?\UNC\…`) sans son préfixe ; elle ne suit pas les jonctions, puisque le chemin vient de l'utilisateur, dans le dialogue.
 - **Le dossier des sauvegardes** : celui par défaut est refusé, puisqu'il est sous le dossier de données ; un dossier choisi ailleurs, sur un NAS ou dans OneDrive, ne l'est pas. Les copies y sont toutes en `.db` : le contrôle de l'extension les protège.
 
 ### L'écriture : rien de partiel
@@ -86,7 +86,7 @@ La lecture se fait en flux, ligne à ligne, et l'écriture suit la lecture, par 
 
 ### Les journaux
 
-Les événements 130 à 136 disent un export fait (le format, le nombre de lignes par entité, la durée, un fichier remplacé ou non), annulé dans le dialogue, refusé (son motif), impossible (son étape : l'ouverture du provisoire, l'écriture ou le renommage ; et le type de l'erreur), interrompu par la fermeture, un provisoire qui ne s'efface pas, et une fenêtre fermée avant sa fin. Jamais un chemin, un nom de fichier ou de dossier, une donnée, ni le message d'une exception.
+Les événements 130 à 136 disent un export fait (le format, le nombre de lignes par entité, la durée, un fichier remplacé ou non), annulé dans le dialogue, refusé (son motif), impossible (son étape : l'ouverture du provisoire, l'écriture, qui lit la base au fil de l'eau, ou le renommage ; et le type de l'erreur, qui départage une erreur de la base d'une erreur du disque), interrompu par la fermeture, un provisoire qui ne s'efface pas, et une fenêtre fermée avant sa fin. Jamais un chemin, un nom de fichier ou de dossier, une donnée, ni le message d'une exception.
 
 ### L'écran
 
@@ -124,13 +124,14 @@ Suivent ce que donne chaque forme, les boutons « Exporter en JSON… » et « E
 
 ## Conséquences
 
-- **Positives** : toutes les données de l'utilisateur, dans un format documenté et versionné, dont le JSON garde chaque valeur telle qu'en base ; jamais la clé, le jeton ni les réglages ; un fichier que seul l'utilisateur choisit, dans le dialogue de Windows ; rien de partiel sous le nom choisi ; un instantané cohérent, qui ne retient pas l'utilisateur ; une mémoire bornée ; un CSV qu'un tableur ouvre sans exécuter de formule ; aucune route, aucune migration.
+- **Positives** : toutes les données de l'utilisateur, dans un format documenté et versionné, dont le JSON garde chaque valeur telle qu'en base ; jamais la clé, le jeton ni les réglages ; un fichier que seul l'utilisateur choisit, dans le dialogue de Windows ; rien de partiel sous le nom choisi ; un instantané cohérent, qui ne retient pas l'utilisateur ; une mémoire bornée ; un CSV qu'un tableur réglé sur le point-virgule ouvre sans exécuter de formule ; aucune route, aucune migration.
 - **Négatives** :
   - l'export n'est pas chiffré : qui accède au fichier le lit, et, rangé dans un dossier synchronisé, il part là où ce dossier l'envoie ;
   - après un arrêt brutal, ou au-delà des cinq secondes de la fermeture, le provisoire, partiel et non chiffré, peut rester dans le dossier choisi, où Sollicito ne le retrouve pas ; son nom le fait reconnaître, et il s'efface à la main ;
-  - la règle du dossier de données compare les chemins tels qu'ils s'écrivent : un chemin qui y mène par une jonction, un lien ou un partage n'est pas reconnu (un nom court et un chemin de périphérique, eux, le sont), alors que `reglages.json` et `cle-ia.json` ont l'extension admise. Le dialogue demande encore le oui avant de remplacer un fichier ;
+  - la règle du dossier de données compare les chemins tels qu'ils s'écrivent, après normalisation : elle reconnaît une forme à lettre de lecteur ou UNC, telle quelle ou derrière `\\?\` ou `\\.\`, nom court compris, mais pas un chemin qui y mène par une jonction, un lien, un partage ou une autre forme de périphérique (`\\?\Volume{…}\`, `\\?\GLOBALROOT\`, `\??\`), alors que `reglages.json`, `sauvegardes.json` et `cle-ia.json` ont l'extension admise. Là, seul le oui du dialogue protège avant de remplacer un fichier ;
   - un script injecté qui aurait le jeton peut rouvrir le dialogue après chaque annulation ; il ne choisit pas le fichier, et ne reçoit ni son chemin ni son contenu ;
   - le CSV ne se relit pas à l'identique, un tableur qui le réenregistre peut retirer l'apostrophe, et une cellule de plus de 32 767 caractères ne se lit pas entière dans Excel ;
+  - un tableur réglé sur la virgule, ou qui coupe aussi à la tabulation, fait une cellule de ce qui suit une virgule ou une tabulation au milieu d'une cellule sans guillemets : une formule qui la suit peut s'exécuter, puisque la neutralisation ne vise que le début d'une cellule ;
   - recharger un export attend la V2.
 
 ## À vérifier
