@@ -13,20 +13,7 @@
 
 ## Lire les diagrammes
 
-Chaque participant porte le nom d'une classe, d'une fonction ou d'un fichier du code, et chaque message celui d'un appel, d'une route ou d'un message entre la page et la fenêtre. Seuls les refus qui changent le parcours sont dessinés, et les classes d'aide n'y sont pas. Les paliers sont ceux des [vues d'architecture](vues-d-architecture.md) : P1 à P5.
-
-| Légende | Sens |
-| --- | --- |
-| Silhouette | la personne qui se sert de Sollicito |
-| Cadre bleuté | un conteneur de Sollicito, avec le palier du parcours |
-| Cadre gris | un système extérieur |
-| Flèche pleine | un appel, une requête ou un message |
-| Flèche pointillée | une réponse |
-| Bloc `alt` | une branche parmi plusieurs |
-| Bloc `opt` | une étape qui n'a lieu que sous sa condition |
-| Bloc `break` | un refus ou un échec : le parcours s'arrête là |
-
-Chaque diagramme précise sous lui ce qui lui est propre.
+Chaque participant porte le nom d'une classe, d'une fonction ou d'un fichier du code, et chaque message celui d'un appel, d'une route ou d'un message entre la page et la fenêtre. Seuls les refus qui changent le parcours sont dessinés, et les classes d'aide n'y sont pas. Chaque diagramme a sa légende. Les paliers sont ceux des [vues d'architecture](vues-d-architecture.md) : P1 à P5.
 
 ## La remise du jeton
 
@@ -74,6 +61,15 @@ sequenceDiagram
         Cnx-->>App: la connexion échoue
     end
 ```
+
+| Légende | Sens |
+| --- | --- |
+| Cadre bleuté | un conteneur de Sollicito, avec le palier du parcours |
+| Flèche pleine | un appel, une requête ou un message |
+| Flèche pointillée | une réponse |
+| Numéro | l'ordre des messages |
+| Bloc `alt` | une branche parmi plusieurs |
+| Encadré posé sur des lignes verticales | une précision sur ces participants |
 
 Le jeton naît avec l'API, à chaque lancement, et la page ne le garde qu'en mémoire.
 
@@ -150,6 +146,15 @@ sequenceDiagram
     Client-->>Ecran: enregistrée
 ```
 
+| Légende | Sens |
+| --- | --- |
+| Cadre bleuté | un conteneur de Sollicito, ou son dossier de données, avec le palier du parcours |
+| Flèche pleine | un appel, une requête ou un message ; vers son départ, une étape interne |
+| Flèche pointillée | une réponse |
+| Numéro | l'ordre des messages |
+| Bloc `opt` | une étape qui n'a lieu que sous sa condition |
+| Bloc `break` | un refus ou un échec : le parcours s'arrête là |
+
 `EnregistrementDesCandidatures` écrit par le port `IDepotDesCandidatures` et son écriture, `IEcritureDesCandidatures`, que `DepotDesCandidatures` réalise sur `BaseDeSollicito`. La porte de la base est venue avec la restauration, au palier 3.
 
 ## L'import d'offres d'un fichier CSV
@@ -190,15 +195,19 @@ sequenceDiagram
     Route->>Coeur: ExaminerUnLotAsync(offres)
     Coeur->>Depot: CommencerUneEcritureAsync()
     Depot->>Base: lit les empreintes, les entreprises, les doublons
-    Note over Coeur,Base: sans ValiderAsync, rien n'est écrit
+    Note over Coeur,Base: transaction jamais validée, rien n'est écrit
     Route-->>Client: 200, le sort de chaque ligne
     Client-->>Ecran: l'aperçu
     Ecran-->>Personne: affiche l'aperçu
     Personne->>Ecran: garde des doublons possibles, importe
     Ecran->>Client: importerUnFichierCsv(contenu, gardées)
     Client->>Route: POST /api/offres/import, le fichier et les lignes gardées
-    Route->>Lecture: Lire(contenu), puis RecevoirLesLignes(fichier)
-    break fichier refusé, ou lignes gardées mal désignées
+    Route->>Lecture: Lire(contenu)
+    break fichier hors du format
+        Route-->>Client: 400, le motif
+    end
+    Route->>Lecture: RecevoirLesLignes(fichier)
+    break lignes gardées mal désignées
         Route-->>Client: 400
     end
     Route->>Copies: FaireLaCopieDAvantLImportAsync
@@ -217,6 +226,16 @@ sequenceDiagram
     Route-->>Client: 200, le compte rendu
     Client-->>Ecran: le compte rendu
 ```
+
+| Légende | Sens |
+| --- | --- |
+| Silhouette | la personne qui se sert de Sollicito |
+| Cadre bleuté | un conteneur de Sollicito, ou son dossier de données, avec le palier du parcours |
+| Flèche pleine | un appel, une requête ou un message |
+| Flèche pointillée | une réponse |
+| Numéro | l'ordre des messages |
+| Bloc `break` | un refus ou un échec : le parcours s'arrête là |
+| Encadré posé sur des lignes verticales | une précision sur ces participants |
 
 Les deux requêtes passent les contrôles du parcours précédent. `ImportDesOffres` écrit par les ports `IDepotDesOffres` et `IEcritureDesOffres` ; son format : [import CSV](import-csv.md).
 
@@ -290,9 +309,12 @@ sequenceDiagram
         Ecran->>Client: deposerLeBrouillonRelu(…, texte)
         Client->>Route: PUT …/brouillon-relu, le texte
         Route->>Jets: DeposerAsync
+        break texte refusé par sa règle
+            Route-->>Client: 400
+        end
         Jets->>Depot: TrouverAsync(candidature)
-        break texte refusé, candidature inconnue ou relance plus à faire
-            Route-->>Client: 400, 404 ou 409
+        break candidature inconnue, relance plus à faire, ou lien trop long
+            Route-->>Client: 404, 409 ou 400
         end
         Jets->>Brouillons: BrouillonsRelus.Deposer(relance, texte)
         Route-->>Client: 204
@@ -318,6 +340,19 @@ sequenceDiagram
     Client-->>Ecran: ouvert, refusé ou impossible
     Note over Personne,Messagerie: l'utilisateur relit et envoie lui-même
 ```
+
+| Légende | Sens |
+| --- | --- |
+| Silhouette | la personne qui se sert de Sollicito |
+| Cadre bleuté | un conteneur de Sollicito, avec le palier du parcours |
+| Cadre gris | les systèmes extérieurs |
+| Flèche pleine | un appel, une requête ou un message ; vers son départ, une étape interne |
+| Flèche pointillée | une réponse |
+| Numéro | l'ordre des messages |
+| Bloc `alt` | une branche parmi plusieurs |
+| Bloc `opt` | une étape qui n'a lieu que sous sa condition |
+| Bloc `break` | un refus ou un échec : le parcours s'arrête là |
+| Encadré posé sur des lignes verticales | une précision sur ces participants |
 
 Avant d'ouvrir, la fenêtre vérifie la source et la forme de chaque message (`ReglesDeLaFenetre`), comme pour le jeton ; sans réponse en 15 secondes, la page cesse d'attendre. Les deux messages qui demandent un brouillon ne portent que l'identifiant de la relance, jamais le texte ni l'adresse. Avant de montrer le bouton du premier jet, l'écran lit l'état de l'IA (`GET /api/reglages/ia`). La porte de la base encadre aussi la préparation du brouillon par `BrouillonsDesRelances`, et le dépôt du texte relu la traverse par `PorteDesRequetes`. L'adaptateur lit la clé et prend `PorteDesDemandes`, qui ne laisse passer qu'une demande à la fois. `FournisseurEnLigne` est la base de `ClaudeEnLigne` et d'`OpenAIEnLigne`, derrière le port `IFournisseurDIA`.
 

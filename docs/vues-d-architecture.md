@@ -223,7 +223,7 @@ De quoi l'API locale est faite (C4, niveau 3). Chaque boîte porte les noms que 
 
 Les diagrammes dessinent les classes qui portent un parcours : les contrôles, les routes, les cas d'usage, les ports, les adaptateurs, les services du démarrage et la tâche de fond. Les enregistrements, les valeurs et les classes d'aide n'y sont pas, ni les points d'accroche réservés aux tests, et les traits ne montrent pas tous les appels entre classes.
 
-Les candidatures, les offres, l'IA et l'export passent par des ports de `Sollicito.Application`. Les sauvegardes, la restauration, les réglages et la garde de la clé n'ont pas de port, pas plus que la préparation de la base : les classes de l'API appellent directement les types de `Sollicito.Infrastructure`, alors que l'ADR-0001 (D4) prévoit des ports et des adaptateurs. L'interface `ISourceDeLaCle`, par laquelle les fournisseurs en ligne lisent la clé, est déclarée dans l'infrastructure.
+Les candidatures, les offres, l'IA et l'export passent par des ports de `Sollicito.Application`. Les sauvegardes, la restauration, les réglages et la garde de la clé n'ont pas de port, pas plus que la préparation de la base : les classes de l'API appellent directement les types de `Sollicito.Infrastructure`. L'ADR-0001 (D4) retient un monolithe modulaire en Clean Architecture, où le domaine ne dépend d'aucune infrastructure. L'interface `ISourceDeLaCle`, par laquelle les fournisseurs en ligne lisent la clé, est déclarée dans l'infrastructure.
 
 ### ① Entrées de l'API
 
@@ -250,7 +250,7 @@ flowchart TB
     end
 
     subgraph infra["Sollicito.Infrastructure"]
-        preparation["<b>VerrouDeLInstance</b><br><b>RestesDUnArret</b><br><b>MiseAJourDeLaBase</b><br>P2"]
+        preparation["<b>VerrouDeLInstance</b><br><b>VerrouDesMigrations</b><br><b>RestesDUnArret</b><br><b>MiseAJourDeLaBase</b><br><b>CopieDeLaBase</b><br>P2"]
     end
 
     interface -- "HTTP sur 127.0.0.1" --> erreurs
@@ -387,7 +387,7 @@ flowchart TB
     end
 
     subgraph domaine["Sollicito.Domain"]
-        entites["<b>Offre, EmpreinteDUneOffre</b><br>P3"]
+        entites["<b>Offre, EmpreinteDUneOffre</b> (P3)<br><b>Entreprise</b> (P2)"]
     end
 
     subgraph infra["Sollicito.Infrastructure"]
