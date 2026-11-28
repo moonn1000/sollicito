@@ -8,6 +8,7 @@ using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Tests.Outils;
 using Sollicito.Application.Export;
 using Sollicito.Infrastructure.Persistance;
+using static Sollicito.Api.Tests.AppelsDeLExport;
 using static Sollicito.Api.Tests.Outils.AppelsDesSauvegardes;
 
 namespace Sollicito.Api.Tests;
@@ -62,19 +63,19 @@ public sealed class JournauxDeLExportTests : IAsyncLifetime
             var fichier = Path.Combine(documents, NomDuFichier + ".json");
 
             // Réussi, puis remplacé avec le oui, puis refusé sans lui.
-            Assert.Equal(IssueDeLExport.Exporte, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: false, Annulation));
-            Assert.Equal(IssueDeLExport.Exporte, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
-            Assert.Equal(IssueDeLExport.Existe, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: false, Annulation));
+            Assert.Equal(IssueDeLExport.Exporte, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: null, Annulation));
+            Assert.Equal(IssueDeLExport.Exporte, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: Oui(fichier), Annulation));
+            Assert.Equal(IssueDeLExport.Existe, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: null, Annulation));
 
             // Refusé pour chaque motif : l'extension, le dossier de données, un chemin relatif, la porte fermée.
-            Assert.Equal(IssueDeLExport.Extension, await export.ExporterAsync(FormatDExport.Json, Path.Combine(documents, NomDuFichier + ".txt"), remplacer: false, Annulation));
-            Assert.Equal(IssueDeLExport.DossierDeDonnees, await export.ExporterAsync(FormatDExport.Json, Path.Combine(donnees, NomDuFichier + ".json"), remplacer: true, Annulation));
-            Assert.Equal(IssueDeLExport.Impossible, await export.ExporterAsync(FormatDExport.Json, NomDuFichier + ".json", remplacer: false, Annulation));
+            Assert.Equal(IssueDeLExport.Extension, await export.ExporterAsync(FormatDExport.Json, Path.Combine(documents, NomDuFichier + ".txt"), aRemplacer: null, Annulation));
+            Assert.Equal(IssueDeLExport.DossierDeDonnees, await export.ExporterAsync(FormatDExport.Json, Path.Combine(donnees, NomDuFichier + ".json"), aRemplacer: Oui(Path.Combine(donnees, NomDuFichier + ".json")), Annulation));
+            Assert.Equal(IssueDeLExport.Impossible, await export.ExporterAsync(FormatDExport.Json, NomDuFichier + ".json", aRemplacer: null, Annulation));
             var porte = api.Services.GetRequiredService<PorteDeLaBase>();
             Assert.True(await porte.FermerAsync(TimeSpan.FromSeconds(10), TimeProvider.System, Annulation));
             try
             {
-                Assert.Equal(IssueDeLExport.Occupe, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
+                Assert.Equal(IssueDeLExport.Occupe, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: Oui(fichier), Annulation));
             }
             finally
             {
@@ -83,11 +84,11 @@ public sealed class JournauxDeLExportTests : IAsyncLifetime
 
             // Impossible : un dossier disparu, un fichier en lecture seule, la place qui manque, dont les erreurs citent
             // le chemin dans leur message.
-            Assert.Equal(IssueDeLExport.DossierIntrouvable, await export.ExporterAsync(FormatDExport.Json, Path.Combine(Profil, "Cle USB", NomDuFichier + ".json"), remplacer: false, Annulation));
+            Assert.Equal(IssueDeLExport.DossierIntrouvable, await export.ExporterAsync(FormatDExport.Json, Path.Combine(Profil, "Cle USB", NomDuFichier + ".json"), aRemplacer: null, Annulation));
             File.SetAttributes(fichier, FileAttributes.ReadOnly);
             try
             {
-                Assert.Equal(IssueDeLExport.AccesRefuse, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
+                Assert.Equal(IssueDeLExport.AccesRefuse, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: Oui(fichier), Annulation));
             }
             finally
             {
@@ -95,9 +96,9 @@ public sealed class JournauxDeLExportTests : IAsyncLifetime
             }
 
             _etapes.Erreur = (EtapeDeLExport.CandidaturesEcrites, new IOException($"Disque plein (essai) : {fichier} {Donnee}", unchecked((int)0x80070070)));
-            Assert.Equal(IssueDeLExport.PlaceManquante, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
+            Assert.Equal(IssueDeLExport.PlaceManquante, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: Oui(fichier), Annulation));
             _etapes.Erreur = (EtapeDeLExport.ContactsEcrits, new InvalidOperationException($"Erreur imprévue (essai) : {fichier} {Donnee}"));
-            Assert.Equal(IssueDeLExport.Impossible, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
+            Assert.Equal(IssueDeLExport.Impossible, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: Oui(fichier), Annulation));
 
             // Un provisoire tenu par un autre programme au moment de l'effacer : il reste, et le journal le dit, sans chemin.
             FileStream? tenu = null;
@@ -112,7 +113,7 @@ public sealed class JournauxDeLExportTests : IAsyncLifetime
             _etapes.Erreur = (EtapeDeLExport.FichierEcrit, new IOException($"Erreur imprévue (essai) : {fichier} {Donnee}"));
             try
             {
-                Assert.Equal(IssueDeLExport.Impossible, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
+                Assert.Equal(IssueDeLExport.Impossible, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: Oui(fichier), Annulation));
             }
             finally
             {
@@ -136,7 +137,7 @@ public sealed class JournauxDeLExportTests : IAsyncLifetime
                     fermeture.Cancel();
                 }
             };
-            Assert.Equal(IssueDeLExport.Annule, await export.ExporterAsync(FormatDExport.Json, fichier, remplacer: true, fermeture.Token));
+            Assert.Equal(IssueDeLExport.Annule, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: Oui(fichier), fermeture.Token));
             _etapes.Action = null;
             export.NoterLAnnulation(FormatDExport.Json);
             export.NoterLaFermetureAvantLaFin(FormatDExport.Json);

@@ -15,7 +15,8 @@ namespace Sollicito.Api.Export;
 /// <item>l'export entre dans la porte de la base : pendant une restauration, il est refusé ;</item>
 /// <item>un fichier provisoire, dans le dossier choisi, reçoit l'export, lu dans un seul instantané de la base et écrit
 /// au fil de la lecture, puis il est poussé sur le disque ;</item>
-/// <item>il prend le nom choisi. Il ne remplace un fichier que si l'utilisateur l'a accepté dans le dialogue.</item>
+/// <item>il prend le nom choisi. Il ne remplace un fichier que si l'utilisateur l'a accepté dans le dialogue, et s'il est
+/// encore celui que le dialogue a vu.</item>
 /// </list>
 /// Un échec, à toute étape, ou la fermeture de la fenêtre, efface le provisoire : rien ne reste sous le nom choisi, et un
 /// fichier qu'on allait remplacer reste intact. Les journaux disent l'issue, le nombre de lignes par entité, la durée, et
@@ -49,11 +50,12 @@ public sealed partial class ExportDesDonnees(
     ];
 
     /// <summary>
-    /// Exporte toute la base dans ce fichier, choisi dans le dialogue de la fenêtre. <paramref name="remplacer"/> dit que
-    /// l'utilisateur a accepté d'y remplacer un fichier existant : sans lui, aucun fichier n'est remplacé, même apparu
-    /// entre-temps. L'annulation, la fenêtre qui se ferme, interrompt l'export, qui n'écrit alors rien. Ne lève rien.
+    /// Exporte toute la base dans ce fichier, choisi dans le dialogue de la fenêtre. <paramref name="aRemplacer"/> est le
+    /// fichier existant que l'utilisateur a accepté d'y remplacer, tel que le dialogue l'a vu : sans lui, aucun fichier n'est
+    /// remplacé, même apparu entre-temps ; avec lui, seul ce fichier-là l'est, encore inchangé juste avant le renommage
+    /// (#118). L'annulation, la fenêtre qui se ferme, interrompt l'export, qui n'écrit alors rien. Ne lève rien.
     /// </summary>
-    public async Task<IssueDeLExport> ExporterAsync(FormatDExport format, string chemin, bool remplacer, CancellationToken annulation)
+    public async Task<IssueDeLExport> ExporterAsync(FormatDExport format, string chemin, FichierVu? aRemplacer, CancellationToken annulation)
     {
         ArgumentNullException.ThrowIfNull(chemin);
         if (!FormatDeLExport.AExtensionDe(format, chemin))
@@ -107,8 +109,15 @@ public sealed partial class ExportDesDonnees(
 
             etapes.Atteinte(EtapeDeLExport.FichierEcrit);
             etape = "Renommage";
+            if (aRemplacer is not null && FichierVu.Lire(cible) is { } present && present != aRemplacer)
+            {
+                // Le fichier a changé depuis le dialogue : ce n'est plus celui que l'utilisateur a accepté de remplacer.
+                ExportImpossible(journal, format, etape, "FichierChange", IssueDeLExport.Existe, Duree(debut));
+                return IssueDeLExport.Existe;
+            }
+
             // Une fois l'export interrompu, le provisoire ne prend plus son nom ; un renommage lancé, immédiat, va au bout.
-            await CopiesVerifiees.ReessayerAsync(() => File.Move(provisoire, cible, overwrite: remplacer), annulation);
+            await CopiesVerifiees.ReessayerAsync(() => File.Move(provisoire, cible, overwrite: aRemplacer is not null), annulation);
             provisoire = null;
             ExportFait(
                 journal,
@@ -120,7 +129,7 @@ public sealed partial class ExportDesDonnees(
                 comptes.Relances,
                 comptes.Evenements,
                 Duree(debut),
-                remplacer);
+                aRemplacer is not null);
             return IssueDeLExport.Exporte;
         }
         catch (OperationCanceledException) when (annulation.IsCancellationRequested)

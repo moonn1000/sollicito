@@ -297,7 +297,7 @@ internal sealed class FenetreHote : Form
             else
             {
                 PosterLExport(ReglesDeLaFenetre.MessageDeLExportEnCours(format));
-                var ecriture = Task.Run(() => _export.ExporterAsync(format, choisi.Chemin, choisi.Remplacer, _fermeture.Token));
+                var ecriture = Task.Run(() => _export.ExporterAsync(format, choisi.Chemin, choisi.ARemplacer, _fermeture.Token));
                 _ecritureEnCours = ecriture;
                 issue = await ecriture;
             }

@@ -125,7 +125,7 @@ internal static class VersionDeTest
                 return null;
             }
 
-            return new FichierChoisi(chemin, Remplacer: File.Exists(chemin));
+            return new FichierChoisi(chemin, ARemplacer: Api.Export.FichierVu.Lire(chemin));
         }
     }
 
