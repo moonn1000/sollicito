@@ -39,7 +39,7 @@ L'empreinte est une longue suite de chiffres et de lettres, calculée à partir 
    Get-FileHash .\Sollicito-X.Y.Z-win-x64.exe -Algorithm SHA256
    ```
 
-4. Sur la page de la version, à côté du nom de l'exe, se trouve son empreinte, écrite après `sha256:`[^condense]. Comparez-la, en entier, à la suite affichée sous `Hash`. PowerShell l'écrit en majuscules et la page en minuscules : cela ne change rien. La page propose aussi la même empreinte dans le fichier `Sollicito-X.Y.Z-win-x64.exe.sha256`.
+4. Sur la page de la version, à côté de `Sollicito-X.Y.Z-win-x64.exe`, figure son empreinte, après `sha256:`[^condense]. La page peut n'en montrer que le début : le bouton de copie, juste à côté, la copie en entier. Collez-la dans le Bloc-notes, puis comparez-la, en entier, à la suite affichée sous `Hash`. PowerShell l'écrit en majuscules et la page en minuscules : cela ne change rien. La même empreinte se trouve aussi dans le fichier `Sollicito-X.Y.Z-win-x64.exe.sha256` de la page, que le Bloc-notes sait ouvrir.
 
 **Si les deux suites diffèrent, ne lancez pas le fichier.** Supprimez-le et téléchargez-le de nouveau depuis la page des versions. Si elles diffèrent encore, [signalez-le](../SECURITY.md).
 
@@ -157,7 +157,7 @@ Vos données restent en place. Quand une nouvelle version doit modifier la struc
 Deux choses restent ailleurs :
 
 - vos copies hors de ce dossier : les sauvegardes d'un autre dossier que vous auriez choisi, et vos exports ;
-- des fichiers techniques, sans vos données, que l'exe a décompressés dans `%TEMP%\.net`, dans un dossier au nom de chaque exe lancé (`Sollicito-X.Y.Z-win-x64`). Vous pouvez supprimer ces dossiers.
+- des fichiers techniques, sans vos données, que l'exe a décompressés dans `%TEMP%\.net`, dans un dossier au nom de chaque exe lancé (`Sollicito-X.Y.Z-win-x64`)[^extraction]. Vous pouvez supprimer ces dossiers.
 
 ## Sources
 
@@ -166,7 +166,7 @@ Pages consultées le 2026-11-28. Les pages en français de Microsoft ne s'accord
 [^edge]: Microsoft Learn, SmartScreen dans Microsoft Edge (« Conserver », « Afficher plus », « Conserver quand même ») : <https://learn.microsoft.com/fr-fr/deployedge/microsoft-edge-security-smartscreen> ; Microsoft Learn, interruptions de téléchargement dans Edge (menu « … ») : <https://learn.microsoft.com/en-us/deployedge/microsoft-edge-security-downloads-interruptions>
 [^powershell]: Microsoft Learn, démarrer Windows PowerShell : <https://learn.microsoft.com/fr-fr/powershell/scripting/windows-powershell/starting-windows-powershell>
 [^empreinte]: Microsoft Learn, `Get-FileHash` : <https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-filehash>
-[^condense]: GitHub Changelog, les empreintes des fichiers d'une version (03/06/2025) : <https://github.blog/changelog/2025-06-03-releases-now-expose-digests-for-release-assets/> ; forme `sha256:` relevée sur une page de version publique de GitHub.
+[^condense]: GitHub Changelog, les empreintes des fichiers d'une version (03/06/2025) : <https://github.blog/changelog/2025-06-03-releases-now-expose-digests-for-release-assets/> ; forme `sha256:`, coupe à l'écran et bouton de copie relevés le 2026-11-28 sur une page de version publique : <https://github.com/cli/cli/releases/tag/v2.105.0>
 [^gh]: GitHub CLI, installation sous Windows : <https://github.com/cli/cli/blob/trunk/docs/install_windows.md>
 [^winget]: Microsoft Learn, WinGet : <https://learn.microsoft.com/fr-fr/windows/package-manager/winget/>
 [^smartscreen]: Microsoft Learn, la réputation SmartScreen : <https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation>
@@ -177,3 +177,4 @@ Pages consultées le 2026-11-28. Les pages en français de Microsoft ne s'accord
 [^webview2]: Microsoft Learn, distribuer le runtime WebView2 : <https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution>
 [^webview2-page]: Microsoft, télécharger WebView2 : <https://developer.microsoft.com/en-us/microsoft-edge/webview2/consumer/>
 [^executer]: Microsoft Learn, la boîte « Exécuter » (touche Windows et R) avec un chemin à variable, dans un autre contexte : <https://learn.microsoft.com/fr-fr/troubleshoot/microsoftteams/teams-administration/clear-teams-cache>
+[^extraction]: Microsoft Learn, .NET, déploiement en un seul fichier (bibliothèques décompressées sous `%TEMP%\.net`) : <https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview> ; nom du dossier, d'après le code de .NET : <https://github.com/dotnet/runtime/blob/v10.0.0/src/native/corehost/bundle/extractor.cpp>
