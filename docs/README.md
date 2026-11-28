@@ -1,6 +1,6 @@
 # Documentation d'architecture
 
-- **Mis à jour le** : 2026-11-28, avec #7, puis avec #49, puis avec #59
+- **Mis à jour le** : 2026-11-27, avec #7, puis avec #49 ; 2026-11-28, avec #58, puis avec #59
 - **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D12 (la documentation vit avec le code) ; [ADR-0004](adr/0004-v1-resserree-paliers.md) (la V1 documentée en entier en UML)
 - **Périmètre** : les pages de `docs/`, et ce qui viendra au palier 5
 
@@ -12,7 +12,7 @@ L'architecture de la V1 de Sollicito, telle que la fixe l'ADR-0004 : ce qui est 
 | [Diagrammes de séquence](diagrammes-de-sequence.md) | comment les parties s'enchaînent sur quatre parcours : la remise du jeton, une candidature enregistrée, un import CSV, un brouillon de relance | diagrammes de séquence (UML) |
 | [Cas d'utilisation](cas-d-utilisation.md) | ce que l'utilisateur fait dans Sollicito, palier par palier | diagramme de cas d'utilisation (UML) |
 | [Modèle de domaine](modele-de-domaine.md) | les entités, leurs liens et leurs règles | diagramme de classes, diagrammes d'états des candidatures et des relances (UML) |
-| [Modèle de menaces](modele-de-menaces.md) | les protections de l'API locale et de la fenêtre, et leurs limites | tableaux des menaces et des parades |
+| [Modèle de menaces](modele-de-menaces.md) | les menaces de toute la V1, domaine par domaine : chaque parade, sa limite et le test qui la prouve | synthèse par domaine, tableaux des menaces et des parades |
 | [Format de l'import CSV](import-csv.md) | le fichier CSV d'offres que lit l'import : ses colonnes, son encodage, ses bornes et ses doublons | tableau des colonnes |
 | [Format de l'export](export.md) | ce que contient l'export de toutes les données, en JSON et en CSV, champ par champ | tableaux des champs |
 | [Décisions d'architecture](adr/README.md) | chaque décision, ses raisons, ses alternatives écartées | index des ADR |
@@ -23,5 +23,4 @@ Pour une première lecture : les vues d'architecture, puis les cas d'utilisation
 
 Au palier 5, d'après l'ADR-0004 :
 
-- le modèle de menaces complet : [#58](https://github.com/moonn1000/sollicito/issues/58) ;
 - le guide « Démarrer » : télécharger, vérifier et lancer l'exe : [#60](https://github.com/moonn1000/sollicito/issues/60).
