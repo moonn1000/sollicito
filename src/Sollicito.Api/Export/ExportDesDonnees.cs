@@ -109,15 +109,28 @@ public sealed partial class ExportDesDonnees(
 
             etapes.Atteinte(EtapeDeLExport.FichierEcrit);
             etape = "Renommage";
-            if (aRemplacer is not null && FichierVu.Lire(cible) is { } present && present != aRemplacer)
+            // Une fois l'export interrompu, le provisoire ne prend plus son nom ; un renommage lancé, immédiat, va au bout. Le
+            // fichier à remplacer se compare juste avant chaque essai : un fichier changé depuis le dialogue, même pendant
+            // l'attente d'un autre programme qui le tenait, n'est plus celui que l'utilisateur a accepté de remplacer.
+            var change = false;
+            await CopiesVerifiees.ReessayerAsync(
+                () =>
+                {
+                    if (aRemplacer is not null && FichierVu.Lire(cible) is { } present && present != aRemplacer)
+                    {
+                        change = true;
+                        return;
+                    }
+
+                    File.Move(provisoire, cible, overwrite: aRemplacer is not null);
+                },
+                annulation);
+            if (change)
             {
-                // Le fichier a changé depuis le dialogue : ce n'est plus celui que l'utilisateur a accepté de remplacer.
                 ExportImpossible(journal, format, etape, "FichierChange", IssueDeLExport.Existe, Duree(debut));
                 return IssueDeLExport.Existe;
             }
 
-            // Une fois l'export interrompu, le provisoire ne prend plus son nom ; un renommage lancé, immédiat, va au bout.
-            await CopiesVerifiees.ReessayerAsync(() => File.Move(provisoire, cible, overwrite: aRemplacer is not null), annulation);
             provisoire = null;
             ExportFait(
                 journal,

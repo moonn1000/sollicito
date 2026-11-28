@@ -250,7 +250,7 @@ if ($cheminsDeSymboles -eq 0) {
 # que dans la version de test : leurs marques ne se lisent nulle part dans l'exe publié, ni dans ses fichiers
 # décompressés. Les marques des autres écarts de la version de test attendent #91. Témoin : le type du message de la
 # restauration, que la version publiée porte, se lit dans Sollicito.dll décompressé.
-$marquesDeTest = @('restauration-a-confirmer.txt', 'SOLLICITO_TEST_ARRET_RESTAURATION', 'export-a-choisir.txt', 'SOLLICITO_TEST_ARRET_EXPORT', 'dossier-en-attente.txt')
+$marquesDeTest = @('restauration-a-confirmer.txt', 'SOLLICITO_TEST_ARRET_RESTAURATION', 'export-a-choisir.txt', 'SOLLICITO_TEST_ARRET_EXPORT', 'export-arrete.txt', 'export-a-reprendre.txt', 'dossier-en-attente.txt')
 $temoinPublie = 'restaurerUneSauvegarde'
 $temoinLu = $false
 $lectures = @([pscustomobject]@{ Nom = 'Sollicito.exe'; Contenu = $octets })

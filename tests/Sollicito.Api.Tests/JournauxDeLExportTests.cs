@@ -67,6 +67,18 @@ public sealed class JournauxDeLExportTests : IAsyncLifetime
             Assert.Equal(IssueDeLExport.Exporte, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: Oui(fichier), Annulation));
             Assert.Equal(IssueDeLExport.Existe, await export.ExporterAsync(FormatDExport.Json, fichier, aRemplacer: null, Annulation));
 
+            // Changé depuis le dialogue (#118) : un autre fichier posé sous le même nom n'est pas remplacé.
+            var vu = Oui(fichier);
+            _etapes.Action = etape =>
+            {
+                if (etape == EtapeDeLExport.FichierEcrit)
+                {
+                    File.WriteAllText(fichier, $"{Donnee} : un autre fichier, posé entre-temps");
+                }
+            };
+            Assert.Equal(IssueDeLExport.Existe, await export.ExporterAsync(FormatDExport.Json, fichier, vu, Annulation));
+            _etapes.Action = null;
+
             // Refusé pour chaque motif : l'extension, le dossier de données, un chemin relatif, la porte fermée.
             Assert.Equal(IssueDeLExport.Extension, await export.ExporterAsync(FormatDExport.Json, Path.Combine(documents, NomDuFichier + ".txt"), aRemplacer: null, Annulation));
             Assert.Equal(IssueDeLExport.DossierDeDonnees, await export.ExporterAsync(FormatDExport.Json, Path.Combine(donnees, NomDuFichier + ".json"), aRemplacer: Oui(Path.Combine(donnees, NomDuFichier + ".json")), Annulation));
@@ -153,6 +165,7 @@ public sealed class JournauxDeLExportTests : IAsyncLifetime
         }
 
         Assert.Contains(entrees, entree => entree.Contains("(Renommage, IOException, Existe)", StringComparison.Ordinal));
+        Assert.Contains(entrees, entree => entree.Contains("(Renommage, FichierChange, Existe)", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("(Ouverture, DirectoryNotFoundException, DossierIntrouvable)", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("(Renommage, UnauthorizedAccessException, AccesRefuse)", StringComparison.Ordinal));
         Assert.Contains(entrees, entree => entree.Contains("(Ecriture, IOException, PlaceManquante)", StringComparison.Ordinal));

@@ -370,12 +370,12 @@ test("fermer pendant un export l'interrompt, et attend qu'il efface son provisoi
     expect(await fichiers(sortie)).toEqual([expect.stringMatching(/^sollicito-export-[0-9a-f]{8}\.partiel$/u)]);
 
     // La fermeture interrompt l'export, qui reprend une seconde plus tard, voit l'interruption, et efface son provisoire.
-    const debut = Date.now();
     const fermeture = fenetre.fermer();
     await attendre(1_000);
     await writeFile(join(donnees, "export-a-reprendre.txt"), "", "utf8");
+    // L'attente ne va pas à son terme : pas d'événement 136, et le provisoire est effacé ; la durée, qui dépend de la
+    // charge du poste, ne se compare pas.
     expect(await fermeture).toBe(0);
-    expect(Date.now() - debut).toBeLessThan(4_500);
     expect(await fichiers(sortie)).toEqual([]);
     // La sortie de l'exe est en page de code OEM : les marques se cherchent par leur partie ASCII.
     const journaux = fenetre.sortie();

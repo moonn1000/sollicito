@@ -399,6 +399,33 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         Assert.Equal("un autre fichier, posé entre-temps", await File.ReadAllTextAsync(fichier, Annulation));
         Assert.Equal(["export.json"], Fichiers(Sortie));
 
+        // Le provisoire tenu par un autre programme, comme un antivirus, au premier essai du renommage, et le fichier vu
+        // réécrit pendant l'attente des essais suivants : il n'est pas remplacé non plus. Le fichier se compare à chaque
+        // essai, pas une seule fois avant eux.
+        vu = FichierVu.Lire(fichier);
+        Task? tenuPendantLaReecriture = null;
+        etapes.Action = etape =>
+        {
+            if (etape == EtapeDeLExport.FichierEcrit)
+            {
+                var provisoire = Directory.GetFiles(Sortie, ExportDesDonnees.PrefixeDuProvisoire + "*" + ExportDesDonnees.SuffixeDuProvisoire).Single();
+                var tenu = new FileStream(provisoire, FileMode.Open, FileAccess.Read, FileShare.None);
+                tenuPendantLaReecriture = Task.Run(async () =>
+                {
+                    await using (tenu)
+                    {
+                        await Task.Delay(100);
+                        await File.WriteAllTextAsync(fichier, "un troisième fichier, écrit pendant l'attente");
+                        await Task.Delay(100);
+                    }
+                });
+            }
+        };
+        Assert.Equal(IssueDeLExport.Existe, await api.Export().ExporterAsync(FormatDExport.Json, fichier, vu, Annulation));
+        await tenuPendantLaReecriture!;
+        Assert.Equal("un troisième fichier, écrit pendant l'attente", await File.ReadAllTextAsync(fichier, Annulation));
+        Assert.Equal(["export.json"], Fichiers(Sortie));
+
         // Le fichier vu, inchangé jusqu'au renommage, est remplacé.
         etapes.Action = null;
         Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, fichier, FichierVu.Lire(fichier), Annulation));
