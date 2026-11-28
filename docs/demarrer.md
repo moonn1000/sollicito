@@ -108,7 +108,7 @@ Double-cliquez sur le fichier. Windows peut afficher un avertissement de SmartSc
 
 Les mots peuvent différer un peu selon votre Windows. Pour passer cet avertissement, vous n'avez rien à désactiver.
 
-L'avertissement cesse quand le fichier a été assez téléchargé ; Microsoft ne donne pas de seuil. Chaque nouvelle version repart de zéro. Sur un PC géré par un employeur ou une école, il peut être interdit de passer outre[^smartscreen].
+Il peut cesser quand cette version a acquis assez de réputation ; Microsoft ne donne pas de seuil. Chaque nouvelle version repart de zéro. Sur un PC géré par un employeur ou une école, il peut être interdit de passer outre[^smartscreen].
 
 ### Si Smart App Control bloque Sollicito
 
@@ -138,6 +138,8 @@ Ouvrez alors la [page de téléchargement de WebView2](https://developer.microso
 **Vos données.** Sollicito crée sa base tout seul, dans le dossier `%LOCALAPPDATA%\Sollicito` de votre compte Windows. Vous n'avez rien à configurer.
 
 **L'IA, facultative.** Le tableau de bord vous demande « Connecter une IA ? ». « Continuer sans IA » suffit pour commencer, et la question ne revient plus. « Choisir une IA » vous mène aux réglages, où vous pourrez aussi changer d'avis plus tard.
+
+Avec Claude, créez une clé limitée à un seul workspace : Sollicito n'envoie pas l'identifiant de workspace que la documentation d'Anthropic demande pour les autres clés[^workspace]. Ce qu'Anthropic ou OpenAI gardent de vos demandes relève de leurs conditions : lisez-les avant de choisir.
 
 ## Installer une nouvelle version
 
@@ -176,5 +178,6 @@ Pages consultées le 2026-11-28. Les pages en français de Microsoft ne s'accord
 [^sac-technique]: Microsoft Learn, Smart App Control : <https://learn.microsoft.com/fr-fr/windows/apps/develop/smart-app-control/overview> ; essayer une application avec Smart App Control : <https://learn.microsoft.com/en-us/windows/apps/develop/smart-app-control/test-your-app-with-smart-app-control>
 [^webview2]: Microsoft Learn, distribuer le runtime WebView2 : <https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution>
 [^webview2-page]: Microsoft, télécharger WebView2 : <https://developer.microsoft.com/en-us/microsoft-edge/webview2/consumer/>
+[^workspace]: Anthropic, aperçu de l'API, en-tête `anthropic-workspace-id` : <https://platform.claude.com/docs/en/api/overview>
 [^executer]: Microsoft Learn, la boîte « Exécuter » (touche Windows et R) avec un chemin à variable, dans un autre contexte : <https://learn.microsoft.com/fr-fr/troubleshoot/microsoftteams/teams-administration/clear-teams-cache>
 [^extraction]: Microsoft Learn, .NET, déploiement en un seul fichier (bibliothèques décompressées sous `%TEMP%\.net`) : <https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview> ; nom du dossier, d'après le code de .NET : <https://github.com/dotnet/runtime/blob/v10.0.0/src/native/corehost/bundle/extractor.cpp>
