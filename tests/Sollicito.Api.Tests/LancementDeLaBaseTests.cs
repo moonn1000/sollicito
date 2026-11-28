@@ -196,8 +196,9 @@ public sealed class LancementDeLaBaseTests
         }
     }
 
-    // Libère un lancement abandonné, s'il finit dans le délai de la libération. Un lancement qui échoue s'est libéré lui-même
-    // (ApiLancee.LancerAsync) ; un lancement qui ne finit toujours pas reste, et le dépassement demeure l'erreur levée.
+    // Libère un lancement abandonné, s'il finit dans le délai de la libération. Un lancement qui échoue, quelle que soit son
+    // erreur, s'est libéré lui-même (ApiLancee.LancerAsync) : LancerAsync lève alors le dépassement. Un lancement qui ne
+    // finit toujours pas garde le verrou : le nettoyage du test échouera encore sur lui, mais après deux délais.
     private static async Task LibererAsync(Task<ApiLancee> lancement)
     {
         ApiLancee lancee;
@@ -205,7 +206,9 @@ public sealed class LancementDeLaBaseTests
         {
             lancee = await lancement.WaitAsync(DelaiDeLaLiberation, CancellationToken.None);
         }
-        catch (Exception erreur) when (erreur is TimeoutException or InvalidOperationException or IOException)
+#pragma warning disable CA1031 // Toute erreur du lancement abandonné : le dépassement reste l'erreur du test.
+        catch (Exception)
+#pragma warning restore CA1031
         {
             return;
         }
