@@ -18,8 +18,12 @@ namespace Sollicito.Api.Tests;
 /// </summary>
 public sealed class LancementDeLaBaseTests
 {
-    // Sans le correctif, le lancement attendrait sans fin : ce délai fait échouer le test au lieu de le bloquer.
-    private static readonly TimeSpan DelaiDuLancement = TimeSpan.FromSeconds(30);
+    // Sans le correctif, le lancement attendrait sans fin : ce délai fait échouer le test au lieu de le bloquer. 60 s, comme
+    // dans MiseAJourDeLaBaseTests : sous la charge de la suite complète, un lancement a dépassé 30 s à la CI (#129).
+    private static readonly TimeSpan DelaiDuLancement = TimeSpan.FromSeconds(60);
+
+    // Le temps laissé à un lancement abandonné pour finir, avant qu'il soit libéré (#129).
+    private static readonly TimeSpan DelaiDeLaLiberation = TimeSpan.FromSeconds(60);
 
     [Fact]
     public async Task Un_verrou_des_migrations_abandonne_ne_bloque_pas_le_lancement_suivant()
@@ -173,11 +177,44 @@ public sealed class LancementDeLaBaseTests
         }
     }
 
-    // Le lancement se fait sur un autre fil : sans quoi un lancement qui ne finit pas bloquerait le test lui-même.
-    private static Task<ApiLancee> LancerAsync(string dossier) =>
-        Task.Run(() => ApiLancee.LancerAsync(builder =>
-            builder.ConfigureTestServices(services => services.AddSingleton(new DossierDeLaBase(dossier)))))
-            .WaitAsync(DelaiDuLancement, TestContext.Current.CancellationToken);
+    // Le lancement se fait sur un autre fil : sans quoi un lancement qui ne finit pas bloquerait le test lui-même. Au-delà
+    // du délai, il continue sur ce fil, et il a déjà pris sollicito.verrou : on lui laisse encore un délai pour finir, on le
+    // libère, puis le test échoue en disant le dépassement. Sans cela, le nettoyage du dossier échouerait sur le verrou, et
+    // son IOException, levée dans un finally, masquerait la TimeoutException (#129).
+    private static async Task<ApiLancee> LancerAsync(string dossier)
+    {
+        var lancement = Task.Run(() => ApiLancee.LancerAsync(builder =>
+            builder.ConfigureTestServices(services => services.AddSingleton(new DossierDeLaBase(dossier)))));
+        try
+        {
+            return await lancement.WaitAsync(DelaiDuLancement, TestContext.Current.CancellationToken);
+        }
+        catch (TimeoutException depassement)
+        {
+            await LibererAsync(lancement);
+            throw new TimeoutException($"Le lancement de l'API a dépassé {DelaiDuLancement.TotalSeconds} s.", depassement);
+        }
+    }
+
+    // Libère un lancement abandonné, s'il finit dans le délai de la libération. Un lancement qui échoue, quelle que soit son
+    // erreur, s'est libéré lui-même (ApiLancee.LancerAsync) : LancerAsync lève alors le dépassement. Un lancement qui ne
+    // finit toujours pas garde le verrou : le nettoyage du test échouera encore sur lui, mais après deux délais.
+    private static async Task LibererAsync(Task<ApiLancee> lancement)
+    {
+        ApiLancee lancee;
+        try
+        {
+            lancee = await lancement.WaitAsync(DelaiDeLaLiberation, CancellationToken.None);
+        }
+#pragma warning disable CA1031 // Toute erreur du lancement abandonné : le dépassement reste l'erreur du test.
+        catch (Exception)
+#pragma warning restore CA1031
+        {
+            return;
+        }
+
+        await lancee.DisposeAsync();
+    }
 
     private static IEnumerable<Exception> Chaine(Exception erreur)
     {
