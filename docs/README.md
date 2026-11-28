@@ -1,6 +1,6 @@
 # Documentation d'architecture
 
-- **Mis à jour le** : 2026-11-27, avec #7, puis avec #49
+- **Mis à jour le** : 2026-11-28, avec #7, puis avec #49, puis avec #59
 - **Décisions** : [ADR-0001](adr/0001-cadrage-architecture-v1.md), D12 (la documentation vit avec le code) ; [ADR-0004](adr/0004-v1-resserree-paliers.md) (la V1 documentée en entier en UML)
 - **Périmètre** : les pages de `docs/`, et ce qui viendra au palier 5
 
@@ -8,7 +8,8 @@ L'architecture de la V1 de Sollicito, telle que la fixe l'ADR-0004 : ce qui est 
 
 | Page | Ce qu'elle montre | Diagrammes |
 | --- | --- | --- |
-| [Vues d'architecture](vues-d-architecture.md) | où se place Sollicito, ce qui quitte le poste, de quoi il est fait | vue de contexte et vue de conteneurs (C4, niveaux 1 et 2) |
+| [Vues d'architecture](vues-d-architecture.md) | où se place Sollicito, ce qui quitte le poste, de quoi il est fait | vue de contexte, vue de conteneurs et vue des composants (C4, niveaux 1 à 3) |
+| [Diagrammes de séquence](diagrammes-de-sequence.md) | comment les parties s'enchaînent sur quatre parcours : la remise du jeton, une candidature enregistrée, un import CSV, un brouillon de relance | diagrammes de séquence (UML) |
 | [Cas d'utilisation](cas-d-utilisation.md) | ce que l'utilisateur fait dans Sollicito, palier par palier | diagramme de cas d'utilisation (UML) |
 | [Modèle de domaine](modele-de-domaine.md) | les entités, leurs liens et leurs règles | diagramme de classes, diagrammes d'états des candidatures et des relances (UML) |
 | [Modèle de menaces](modele-de-menaces.md) | les protections de l'API locale et de la fenêtre, et leurs limites | tableaux des menaces et des parades |
@@ -22,6 +23,5 @@ Pour une première lecture : les vues d'architecture, puis les cas d'utilisation
 
 Au palier 5, d'après l'ADR-0004 :
 
-- les diagrammes de séquence et la vue des composants (C4, niveau 3) : [#59](https://github.com/moonn1000/sollicito/issues/59) ;
 - le modèle de menaces complet : [#58](https://github.com/moonn1000/sollicito/issues/58) ;
 - le guide « Démarrer » : télécharger, vérifier et lancer l'exe : [#60](https://github.com/moonn1000/sollicito/issues/60).
