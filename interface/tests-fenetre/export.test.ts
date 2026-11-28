@@ -37,6 +37,11 @@ async function messagesDeLExport(page: Page): Promise<unknown[]> {
   return recus.filter((message) => (message as { type?: unknown }).type === "export");
 }
 
+async function messagesDuChoix(page: Page): Promise<unknown[]> {
+  const recus = await page.evaluate(() => (window as unknown as CanalDeLaPage).messagesRecus ?? []);
+  return recus.filter((message) => (message as { type?: unknown }).type === "dossierDesSauvegardes");
+}
+
 // Envoie un message à l'hôte comme le ferait un script de la page, sans passer par un bouton.
 async function envoyerALHote(page: Page, message: unknown) {
   await page.evaluate((aEnvoyer) => (window as unknown as CanalDeLaPage).chrome.webview.postMessage(aEnvoyer), message);
@@ -222,6 +227,16 @@ test("pendant une restauration arrêtée en route, une demande d'export reçoit 
     expect(await fichiers(sortie)).toEqual([]);
     // Le dialogue de l'export ne s'est pas ouvert.
     expect(existsSync(join(donnees, "exports-demandes.txt"))).toBe(false);
+
+    // Un choix de dossier reçoit « occupé », sans dialogue (#118). Les boutons des sauvegardes attendent la fin de la
+    // restauration : un script de la page le demande.
+    await ecouterLHote(page);
+    await envoyerALHote(page, { type: "choisirLeDossierDesSauvegardes" });
+    for (let essai = 1; (await messagesDuChoix(page)).length === 0; essai++) {
+      expect(essai, "la demande de choix n'a pas reçu de réponse").toBeLessThan(80);
+      await attendre(250);
+    }
+    expect(await messagesDuChoix(page)).toEqual([{ type: "dossierDesSauvegardes", issue: "occupe" }]);
   } finally {
     await fenetre.tuer();
     await fenetre.nettoyer();
@@ -319,9 +334,22 @@ test("pendant un choix de dossier, un export et une restauration reçoivent « o
     }
     expect(existsSync(join(donnees, "restaurations-demandees.txt"))).toBe(false);
 
-    // Le choix se ferme sur le dossier écrit par le test, qui reçoit une copie.
+    // Un second choix, demandé par un script, ne reçoit rien : la page qui attend le premier en recevra la vraie issue.
+    await envoyerALHote(page, { type: "choisirLeDossierDesSauvegardes" });
+    // L'hôte traite les messages dans l'ordre : la réponse à cet export dit que le second choix a été traité, pendant le
+    // premier.
+    await envoyerALHote(page, { type: "exporterLesDonnees", format: "csv" });
+    for (let essai = 1; !(await messagesDeLExport(page)).some((message) => (message as { format?: unknown }).format === "csv"); essai++) {
+      expect(essai, "la demande d'export n'a pas reçu de réponse").toBeLessThan(80);
+      await attendre(250);
+    }
+    expect(await messagesDeLExport(page)).toContainEqual({ type: "export", format: "csv", issue: "occupe" });
+
+    // Le choix se ferme sur le dossier écrit par le test, qui reçoit une copie ; une seule réponse au choix arrive.
     await rm(join(donnees, "dossier-en-attente.txt"));
     await page.getByText("Dossier des sauvegardes changé : une copie vient d'y être faite. Les copies de l'ancien dossier y restent.").waitFor();
+    await attendre(1_000);
+    expect(await messagesDuChoix(page)).toEqual([{ type: "dossierDesSauvegardes", issue: "choisi" }]);
     expect(await fichiers(sortie)).toEqual([]);
     expect(await fenetre.fermer()).toBe(0);
   } finally {
