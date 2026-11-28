@@ -147,6 +147,7 @@ public sealed class ReglesDeLaFenetreTests
     [InlineData(nameof(IssueDuChoixDuDossier.Choisi), "choisi")]
     [InlineData(nameof(IssueDuChoixDuDossier.Annule), "annule")]
     [InlineData(nameof(IssueDuChoixDuDossier.Refuse), "refuse")]
+    [InlineData(nameof(IssueDuChoixDuDossier.Occupe), "occupe")]
     public void La_reponse_au_choix_du_dossier_porte_son_issue_sans_chemin(string issue, string attendue)
     {
         using var message = JsonDocument.Parse(ReglesDeLaFenetre.MessageDuChoixDuDossier(Enum.Parse<IssueDuChoixDuDossier>(issue)));

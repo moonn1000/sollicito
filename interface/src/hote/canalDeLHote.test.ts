@@ -71,6 +71,16 @@ test("une réponse au choix du dossier qui n'a pas la forme attendue est ignoré
   await expect(issue).resolves.toBe("refuse");
 });
 
+test("pendant un export ou une restauration, le choix du dossier reçoit « occupé » (#118)", async () => {
+  const canal = new CanalSimule();
+
+  const issue = demanderLeChoixDuDossier(canal);
+  canal.envoyer({ type: "dossierDesSauvegardes", issue: "occupe" });
+
+  await expect(issue).resolves.toBe("occupe");
+  expect(canal.abonnes).toBe(0);
+});
+
 test("la page demande le brouillon d'une relance par son seul identifiant, et reçoit son issue (#14)", async () => {
   const canal = new CanalSimule();
 

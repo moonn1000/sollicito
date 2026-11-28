@@ -56,6 +56,7 @@ export const ANNONCES_DU_CHOIX: Record<IssueDuChoixDuDossier, string> = {
   choisi: "Dossier des sauvegardes changé : une copie vient d'y être faite. Les copies de l'ancien dossier y restent.",
   annule: "Le dossier des sauvegardes n'a pas changé.",
   refuse: "Sollicito n'a pas pu faire de copie dans ce dossier : le dossier des sauvegardes n'a pas changé.",
+  occupe: "Sollicito est occupé : réessayez dans un instant. Le dossier des sauvegardes n'a pas changé.",
 };
 
 /** L'annonce d'un retour au dossier par défaut réussi. */
