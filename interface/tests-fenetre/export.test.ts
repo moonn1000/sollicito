@@ -13,7 +13,41 @@ import { attendre, lancerLaFenetre } from "./outils/fenetre.ts";
 const CONNECTEE = "Connectée à l'API locale.";
 const EXPORTE = "Export enregistré dans le fichier choisi.";
 const ANNULE = "Export annulé : rien n'a été enregistré.";
+const EXPORT_OCCUPE = "Sollicito est occupé : réessayez dans un instant. Rien n'a été enregistré.";
+const RESTAURATION_OCCUPEE = "Sollicito est occupé : réessayez dans un instant. Votre base n'a pas changé.";
+const CHOIX_OCCUPE = "Sollicito est occupé : réessayez dans un instant. Le dossier des sauvegardes n'a pas changé.";
 const dossiers: string[] = [];
+
+type CanalDeLaPage = {
+  chrome: { webview: { postMessage(message: unknown): void; addEventListener(type: "message", ecouteur: (evenement: { data: unknown }) => void): void } };
+  messagesRecus?: unknown[];
+};
+
+// Note dans la page chaque message que l'hôte lui envoie, pour que le test lise aussi ceux que l'écran ne montre pas.
+async function ecouterLHote(page: Page) {
+  await page.evaluate(() => {
+    const fenetre = window as unknown as CanalDeLaPage;
+    fenetre.messagesRecus = [];
+    fenetre.chrome.webview.addEventListener("message", (evenement) => fenetre.messagesRecus!.push(evenement.data));
+  });
+}
+
+async function messagesDeLExport(page: Page): Promise<unknown[]> {
+  const recus = await page.evaluate(() => (window as unknown as CanalDeLaPage).messagesRecus ?? []);
+  return recus.filter((message) => (message as { type?: unknown }).type === "export");
+}
+
+// Envoie un message à l'hôte comme le ferait un script de la page, sans passer par un bouton.
+async function envoyerALHote(page: Page, message: unknown) {
+  await page.evaluate((aEnvoyer) => (window as unknown as CanalDeLaPage).chrome.webview.postMessage(aEnvoyer), message);
+}
+
+async function attendreLeFichier(fichier: string) {
+  for (let essai = 1; !existsSync(fichier); essai++) {
+    expect(essai, `${fichier} n'est pas apparu`).toBeLessThan(120);
+    await attendre(250);
+  }
+}
 
 async function nouveauDossier(prefixe: string): Promise<string> {
   const dossier = await mkdtemp(join(tmpdir(), prefixe));
@@ -190,6 +224,159 @@ test("pendant une restauration arrêtée en route, une demande d'export reçoit 
     expect(existsSync(join(donnees, "exports-demandes.txt"))).toBe(false);
   } finally {
     await fenetre.tuer();
+    await fenetre.nettoyer();
+  }
+});
+
+test("pendant un export arrêté en route, un seul dialogue de l'hôte à la fois (#118)", async () => {
+  const donnees = await nouveauDossier("sollicito-fenetre-");
+  const sortie = await nouveauDossier("sollicito-export-");
+  const autreDossier = await nouveauDossier("sollicito-dossier-");
+  await writeFile(join(donnees, "export-a-choisir.txt"), join(sortie, "export.json"), "utf8");
+  await writeFile(join(donnees, "restauration-a-confirmer.txt"), "restaurer", "utf8");
+  await writeFile(join(donnees, "dossier-a-choisir.txt"), autreDossier, "utf8");
+  const fenetre = await lancerLaFenetre({ dossierDeDonnees: donnees, environnement: { SOLLICITO_TEST_ARRET_EXPORT: "EntreprisesEcrites" } });
+  try {
+    const { page } = fenetre;
+    await page.getByText(CONNECTEE).waitFor();
+    await saisir(page, "Atelier Azur fictif", "Comptable A");
+    await page.getByRole("button", { name: "Réglages" }).click();
+    await page.getByRole("button", { name: "Sauvegarder maintenant" }).click();
+    await page.getByText("Copie du jour faite.").waitFor();
+    await ecouterLHote(page);
+
+    await page.getByRole("region", { name: "Exporter vos données" }).getByRole("button", { name: "Exporter en JSON…" }).click();
+    // Le point d'arrêt écrit son étape, puis attend : l'export reste en cours.
+    await attendreLeFichier(join(donnees, "export-arrete.txt"));
+
+    // Une demande du même format ne reçoit rien, et une de l'autre format reçoit « occupé » ; l'hôte répond dans l'ordre,
+    // donc une réponse à la première arriverait avant celle de la seconde.
+    await envoyerALHote(page, { type: "exporterLesDonnees", format: "json" });
+    await envoyerALHote(page, { type: "exporterLesDonnees", format: "csv" });
+    for (let essai = 1; (await messagesDeLExport(page)).length < 2; essai++) {
+      expect(essai, "la demande du CSV n'a pas reçu de réponse").toBeLessThan(80);
+      await attendre(250);
+    }
+    expect(await messagesDeLExport(page)).toEqual([
+      { type: "export", format: "json", issue: "enCours" },
+      { type: "export", format: "csv", issue: "occupe" },
+    ]);
+
+    // Une restauration reçoit « occupée », sans dialogue ; un choix de dossier reçoit « occupé », sans dialogue (#118).
+    const ligne = page.getByRole("region", { name: "Sauvegardes" }).getByRole("row").filter({ hasText: "Copie du jour" });
+    await ligne.first().getByRole("button", { name: /^Restaurer la copie du / }).click();
+    await page.getByText(RESTAURATION_OCCUPEE).waitFor();
+    expect(existsSync(join(donnees, "restaurations-demandees.txt"))).toBe(false);
+    await page.getByRole("button", { name: "Choisir un autre dossier…" }).click();
+    await page.getByText(CHOIX_OCCUPE).waitFor();
+    expect(await fichiers(autreDossier)).toEqual([]);
+
+    // L'export reprend, et va au bout : la page qui attendait le sien en reçoit la vraie issue, une seule fois.
+    await writeFile(join(donnees, "export-a-reprendre.txt"), "", "utf8");
+    await page.getByText(EXPORTE).waitFor();
+    expect(await fichiers(sortie)).toEqual(["export.json"]);
+    expect((await messagesDeLExport(page)).slice(2)).toEqual([{ type: "export", format: "json", issue: "exporte" }]);
+    expect(await fenetre.fermer()).toBe(0);
+  } finally {
+    await fenetre.nettoyer();
+  }
+});
+
+test("pendant un choix de dossier, un export et une restauration reçoivent « occupé » (#118)", async () => {
+  const donnees = await nouveauDossier("sollicito-fenetre-");
+  const sortie = await nouveauDossier("sollicito-export-");
+  const autreDossier = await nouveauDossier("sollicito-dossier-");
+  await writeFile(join(donnees, "export-a-choisir.txt"), join(sortie, "export.json"), "utf8");
+  await writeFile(join(donnees, "restauration-a-confirmer.txt"), "restaurer", "utf8");
+  await writeFile(join(donnees, "dossier-a-choisir.txt"), autreDossier, "utf8");
+  // Tant que ce fichier existe, le choix reste ouvert, comme un dialogue que l'utilisateur n'a pas encore fermé.
+  await writeFile(join(donnees, "dossier-en-attente.txt"), "", "utf8");
+  const fenetre = await lancerLaFenetre({ dossierDeDonnees: donnees });
+  try {
+    const { page } = fenetre;
+    await page.getByText(CONNECTEE).waitFor();
+    await page.getByRole("button", { name: "Réglages" }).click();
+    await ecouterLHote(page);
+    await page.getByRole("button", { name: "Choisir un autre dossier…" }).click();
+
+    // L'hôte traite les messages dans l'ordre : celui-ci arrive pendant le choix.
+    await page.getByRole("region", { name: "Exporter vos données" }).getByRole("button", { name: "Exporter en JSON…" }).click();
+    await page.getByText(EXPORT_OCCUPE).waitFor();
+    expect(existsSync(join(donnees, "exports-demandes.txt"))).toBe(false);
+
+    // Les boutons de restauration attendent la fin du choix : un script de la page demande la restauration d'une copie.
+    await envoyerALHote(page, { type: "restaurerUneSauvegarde", copie: "0123456789abcdef" });
+    for (let essai = 1; ; essai++) {
+      const recus = await page.evaluate(() => (window as unknown as CanalDeLaPage).messagesRecus ?? []);
+      if (recus.some((message) => (message as { type?: unknown }).type === "restauration")) {
+        expect(recus.filter((message) => (message as { type?: unknown }).type === "restauration")).toEqual([
+          { type: "restauration", copie: "0123456789abcdef", issue: "occupee" },
+        ]);
+        break;
+      }
+      expect(essai, "la demande de restauration n'a pas reçu de réponse").toBeLessThan(80);
+      await attendre(250);
+    }
+    expect(existsSync(join(donnees, "restaurations-demandees.txt"))).toBe(false);
+
+    // Le choix se ferme sur le dossier écrit par le test, qui reçoit une copie.
+    await rm(join(donnees, "dossier-en-attente.txt"));
+    await page.getByText("Dossier des sauvegardes changé : une copie vient d'y être faite. Les copies de l'ancien dossier y restent.").waitFor();
+    expect(await fichiers(sortie)).toEqual([]);
+    expect(await fenetre.fermer()).toBe(0);
+  } finally {
+    await fenetre.nettoyer();
+  }
+});
+
+test("fermer pendant un export l'interrompt, et attend qu'il efface son provisoire (#118)", async () => {
+  const donnees = await nouveauDossier("sollicito-fenetre-");
+  const sortie = await nouveauDossier("sollicito-export-");
+  await writeFile(join(donnees, "export-a-choisir.txt"), join(sortie, "export.json"), "utf8");
+  const fenetre = await lancerLaFenetre({ dossierDeDonnees: donnees, environnement: { SOLLICITO_TEST_ARRET_EXPORT: "EntreprisesEcrites" } });
+  try {
+    const { page } = fenetre;
+    await page.getByText(CONNECTEE).waitFor();
+    await exporterEnJson(page);
+    await attendreLeFichier(join(donnees, "export-arrete.txt"));
+    expect(await fichiers(sortie)).toEqual([expect.stringMatching(/^sollicito-export-[0-9a-f]{8}\.partiel$/u)]);
+
+    // La fermeture interrompt l'export, qui reprend une seconde plus tard, voit l'interruption, et efface son provisoire.
+    const debut = Date.now();
+    const fermeture = fenetre.fermer();
+    await attendre(1_000);
+    await writeFile(join(donnees, "export-a-reprendre.txt"), "", "utf8");
+    expect(await fermeture).toBe(0);
+    expect(Date.now() - debut).toBeLessThan(4_500);
+    expect(await fichiers(sortie)).toEqual([]);
+    // La sortie de l'exe est en page de code OEM : les marques se cherchent par leur partie ASCII.
+    const journaux = fenetre.sortie();
+    expect(journaux).toContain("ExportDesDonnees[134]");
+    expect(journaux).not.toContain("ExportDesDonnees[136]");
+  } finally {
+    await fenetre.nettoyer();
+  }
+});
+
+test("au-delà de cinq secondes, la fenêtre se ferme quand même, et le journal dit que le provisoire a pu rester (#118)", async () => {
+  const donnees = await nouveauDossier("sollicito-fenetre-");
+  const sortie = await nouveauDossier("sollicito-export-");
+  await writeFile(join(donnees, "export-a-choisir.txt"), join(sortie, "export.json"), "utf8");
+  const fenetre = await lancerLaFenetre({ dossierDeDonnees: donnees, environnement: { SOLLICITO_TEST_ARRET_EXPORT: "EntreprisesEcrites" } });
+  try {
+    const { page } = fenetre;
+    await page.getByText(CONNECTEE).waitFor();
+    await exporterEnJson(page);
+    await attendreLeFichier(join(donnees, "export-arrete.txt"));
+
+    // L'export ne reprend jamais : la fenêtre l'attend cinq secondes, puis se ferme sans lui.
+    const debut = Date.now();
+    expect(await fenetre.fermer()).toBe(0);
+    expect(Date.now() - debut).toBeGreaterThanOrEqual(5_000);
+    expect(fenetre.sortie()).toContain("ExportDesDonnees[136]");
+    // Le provisoire est resté dans le dossier choisi, un dossier temporaire du test, qui le supprime à la fin.
+    expect(await fichiers(sortie)).toEqual([expect.stringMatching(/^sollicito-export-[0-9a-f]{8}\.partiel$/u)]);
+  } finally {
     await fenetre.nettoyer();
   }
 });

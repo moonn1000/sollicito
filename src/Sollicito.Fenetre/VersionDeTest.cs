@@ -19,13 +19,17 @@ namespace Sollicito.Fenetre;
 /// <item>une caméra et un micro simulés, pour que leur demande de permission ne dépende pas du poste ;</item>
 /// <item>ses messages d'erreur écrits sur la sortie d'erreur, sans boîte de dialogue (<see cref="Signalement"/>) ;</item>
 /// <item>le dialogue de dossier des sauvegardes remplacé par le dossier que le test écrit dans un fichier de ce
-/// dossier, sans dialogue (#26) ; sans ce fichier, le choix est annulé ;</item>
+/// dossier, sans dialogue (#26) ; sans ce fichier, le choix est annulé. Tant qu'un autre fichier de ce dossier existe, le
+/// choix attend, en servant les messages de la fenêtre comme le ferait le dialogue modal (#118) ;</item>
 /// <item>le lien <c>mailto</c> du brouillon d'une relance noté dans un fichier de ce dossier au lieu d'être ouvert dans
 /// la messagerie (#14) ;</item>
 /// <item>le dialogue de la restauration remplacé par un fichier de ce dossier (#28) : il vaut le oui s'il contient
 /// « restaurer » ; sans lui, la restauration est annulée. La question du dialogue est notée dans un autre fichier ;</item>
 /// <item>un point d'arrêt de la restauration (#28) : à l'étape que donne une variable d'environnement, la restauration
 /// écrit un fichier de ce dossier, puis attend que le test tue le processus, pour essayer un arrêt brutal ;</item>
+/// <item>un point d'arrêt de l'export (#118) : à l'étape que donne une autre variable d'environnement, l'export écrit un
+/// fichier de ce dossier, puis attend qu'un autre fichier y paraisse, sans fin s'il ne vient pas : le test essaie ainsi
+/// les demandes faites pendant un export, et la fermeture de la fenêtre ;</item>
 /// <item>les fournisseurs d'IA en ligne remplacés par un faux (#48), qui ne touche jamais le réseau : il répond selon le
 /// scénario qu'un fichier de ce dossier donne (« réseau absent » sans lui), et note chaque demande dans un autre, avec
 /// l'empreinte SHA-256 de l'en-tête qui porte la clé, jamais sa valeur. Le scénario « texte » rend, comme texte de l'IA,
@@ -41,10 +45,12 @@ internal static class VersionDeTest
     public const string VariableDuDossierDeDonnees = "SOLLICITO_TEST_DOSSIER_DONNEES";
     public const string VariableDuPortCdp = "SOLLICITO_TEST_PORT_CDP";
     public const string VariableDeLArretDeLaRestauration = "SOLLICITO_TEST_ARRET_RESTAURATION";
+    public const string VariableDeLArretDeLExport = "SOLLICITO_TEST_ARRET_EXPORT";
     public const string FichierDesLiensOuverts = "liens-ouverts.txt";
     public const string FichierDesNavigationsAnnulees = "navigations-annulees.txt";
     public const string DossierDesTelechargements = "telechargements";
     public const string FichierDuDossierAChoisir = "dossier-a-choisir.txt";
+    public const string FichierDuChoixEnAttente = "dossier-en-attente.txt";
     public const string FichierDesBrouillonsOuverts = "brouillons-ouverts.txt";
     public const string FichierDeLaConfirmation = "restauration-a-confirmer.txt";
     public const string FichierDesRestaurationsDemandees = "restaurations-demandees.txt";
@@ -54,6 +60,8 @@ internal static class VersionDeTest
     public const string FichierDesDemandesALIA = "ia-demandes.txt";
     public const string FichierDeLExportAChoisir = "export-a-choisir.txt";
     public const string FichierDesExportsDemandes = "exports-demandes.txt";
+    public const string FichierDeLArretDeLExport = "export-arrete.txt";
+    public const string FichierDeLaRepriseDeLExport = "export-a-reprendre.txt";
 
     public static Lancement Lancement()
     {
@@ -78,7 +86,7 @@ internal static class VersionDeTest
             new JournalDesLiens(Path.Combine(dossier, FichierDesLiensOuverts)),
             Path.Combine(dossier, DossierDesTelechargements),
             adresse => File.AppendAllText(navigationsAnnulees, adresse + Environment.NewLine),
-            new ChoixLuDansUnFichier(Path.Combine(dossier, FichierDuDossierAChoisir)),
+            new ChoixLuDansUnFichier(Path.Combine(dossier, FichierDuDossierAChoisir), Path.Combine(dossier, FichierDuChoixEnAttente)),
             new JournalDesBrouillons(Path.Combine(dossier, FichierDesBrouillonsOuverts)),
             new ConfirmationLueDansUnFichier(Path.Combine(dossier, FichierDeLaConfirmation), Path.Combine(dossier, FichierDesRestaurationsDemandees)),
             EtapesArreteesParLeTest.Lire(Environment.GetEnvironmentVariable(VariableDeLArretDeLaRestauration), Path.Combine(dossier, FichierDeLArret)),
@@ -86,7 +94,11 @@ internal static class VersionDeTest
                 Path.Combine(dossier, FichierDuScenarioDeLIA),
                 Path.Combine(dossier, FichierDuTexteDeLIA),
                 Path.Combine(dossier, FichierDesDemandesALIA)),
-            new ExportLuDansUnFichier(Path.Combine(dossier, FichierDeLExportAChoisir), Path.Combine(dossier, FichierDesExportsDemandes)));
+            new ExportLuDansUnFichier(Path.Combine(dossier, FichierDeLExportAChoisir), Path.Combine(dossier, FichierDesExportsDemandes)),
+            ExportArreteParLeTest.Lire(
+                Environment.GetEnvironmentVariable(VariableDeLArretDeLExport),
+                Path.Combine(dossier, FichierDeLArretDeLExport),
+                Path.Combine(dossier, FichierDeLaRepriseDeLExport)));
     }
 
     /// <summary>
@@ -153,6 +165,32 @@ internal static class VersionDeTest
         }
     }
 
+    /// <summary>
+    /// Le point d'arrêt de l'export : à l'étape donnée, écrit son nom dans un fichier, puis attend, sur le fil de l'export,
+    /// que le fichier de reprise paraisse ; sans lui, il attend sans fin. Sans étape valide, rien ne s'arrête.
+    /// </summary>
+    private sealed class ExportArreteParLeTest(EtapeDeLExport arret, string fichier, string reprise) : Api.Export.IEtapesDeLExport
+    {
+        public static Api.Export.IEtapesDeLExport? Lire(string? etape, string fichier, string reprise) =>
+            Enum.TryParse<EtapeDeLExport>(etape, ignoreCase: false, out var arret) && Enum.IsDefined(arret)
+                ? new ExportArreteParLeTest(arret, fichier, reprise)
+                : null;
+
+        public void Atteinte(EtapeDeLExport etape)
+        {
+            if (etape != arret)
+            {
+                return;
+            }
+
+            File.WriteAllText(fichier, etape.ToString());
+            while (!File.Exists(reprise))
+            {
+                Thread.Sleep(50);
+            }
+        }
+    }
+
     /// <summary>Note chaque lien que la version publiée ouvrirait dans le navigateur par défaut.</summary>
     private sealed class JournalDesLiens(string fichier) : IOuvreurDeLiens
     {
@@ -169,11 +207,23 @@ internal static class VersionDeTest
         }
     }
 
-    /// <summary>Le dossier que le test a écrit dans le fichier, au lieu du dialogue ; sans fichier, le choix est annulé.</summary>
-    private sealed class ChoixLuDansUnFichier(string fichier) : IChoixDUnDossier
+    /// <summary>
+    /// Le dossier que le test a écrit dans le fichier, au lieu du dialogue ; sans fichier, le choix est annulé. Tant que le
+    /// fichier d'attente existe, le choix reste ouvert, et sert les messages de la fenêtre comme la boucle d'un dialogue
+    /// modal : les demandes de la page arrivent pendant le choix (#118).
+    /// </summary>
+    private sealed class ChoixLuDansUnFichier(string fichier, string attente) : IChoixDUnDossier
     {
-        public string? Choisir(IWin32Window proprietaire, string dossierActuel) =>
-            File.Exists(fichier) ? File.ReadAllText(fichier).Trim() : null;
+        public string? Choisir(IWin32Window proprietaire, string dossierActuel)
+        {
+            while (File.Exists(attente))
+            {
+                System.Windows.Forms.Application.DoEvents();
+                Thread.Sleep(20);
+            }
+
+            return File.Exists(fichier) ? File.ReadAllText(fichier).Trim() : null;
+        }
     }
 }
 #endif
