@@ -39,7 +39,7 @@ L'empreinte est une longue suite de chiffres et de lettres, calculée à partir 
    Get-FileHash .\Sollicito-X.Y.Z-win-x64.exe -Algorithm SHA256
    ```
 
-4. Sur la page de la version, à côté de `Sollicito-X.Y.Z-win-x64.exe`, figure son empreinte, après `sha256:`[^condense]. La page peut n'en montrer que le début : le bouton de copie, juste à côté, la copie en entier. Collez-la dans le Bloc-notes, puis comparez-la, en entier, à la suite affichée sous `Hash`. PowerShell l'écrit en majuscules et la page en minuscules : cela ne change rien. La même empreinte se trouve aussi dans le fichier `Sollicito-X.Y.Z-win-x64.exe.sha256` de la page, que le Bloc-notes sait ouvrir.
+4. Sur la page de la version, à côté de `Sollicito-X.Y.Z-win-x64.exe`, figure son empreinte, après `sha256:`[^condense]. La page peut n'en montrer que le début : le bouton de copie, juste à côté, la copie en entier, précédée de `sha256:`. Collez-la dans le Bloc-notes, puis comparez ce qui suit `sha256:`, en entier, à la suite affichée sous `Hash`. PowerShell l'écrit en majuscules et la page en minuscules : cela ne change rien. La même empreinte se trouve aussi dans le fichier `Sollicito-X.Y.Z-win-x64.exe.sha256` de la page, que le Bloc-notes sait ouvrir.
 
 **Si les deux suites diffèrent, ne lancez pas le fichier.** Supprimez-le et téléchargez-le de nouveau depuis la page des versions. Si elles diffèrent encore, [signalez-le](../SECURITY.md).
 
@@ -114,7 +114,7 @@ Il peut cesser quand cette version a acquis assez de réputation ; Microsoft ne 
 
 Smart App Control est une protection de Windows 11 qui bloque les applications malveillantes ou non fiables. Elle n'existe pas sous Windows 10[^sac-securite]. Un fichier non signé, comme Sollicito, peut être bloqué[^sac-faq][^sac-technique].
 
-Pour voir son état : ouvrez l'application « Sécurité Windows », puis « Application et contrôle du navigateur », puis les paramètres de Smart App Control (Microsoft l'appelle aussi « Contrôle de l'application intelligente »)[^sac-technique]. Les mots peuvent différer un peu selon votre Windows. Trois états sont possibles[^sac-securite] :
+Pour voir son état : ouvrez l'application « Sécurité Windows », puis « Application et contrôle du navigateur », puis les paramètres de Smart App Control (Microsoft l'appelle aussi « Contrôle de l'application intelligente »)[^sac-securite][^sac-technique]. Les mots peuvent différer un peu selon votre Windows. Trois états sont possibles[^sac-securite] :
 
 - **Désactivé** : il ne bloque rien.
 - **Évaluation** : il ne bloque rien pour l'instant, mais Windows peut ensuite l'activer de lui-même.
@@ -172,7 +172,7 @@ Pages consultées le 2026-11-28. Les pages en français de Microsoft ne s'accord
 [^gh]: GitHub CLI, installation sous Windows : <https://github.com/cli/cli/blob/trunk/docs/install_windows.md>
 [^winget]: Microsoft Learn, WinGet : <https://learn.microsoft.com/fr-fr/windows/package-manager/winget/>
 [^smartscreen]: Microsoft Learn, la réputation SmartScreen : <https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation>
-[^passer]: Microsoft Learn, publier sa première application Windows (« Plus d'informations », « Exécuter de toute façon », « Windows a protégé votre PC ») : <https://learn.microsoft.com/fr-fr/windows/apps/package-and-deploy/publish-first-app>
+[^passer]: Microsoft Learn, publier sa première application Windows (« Plus d'informations », « Exécuter de toute façon », « Windows a protégé votre PC ») : <https://learn.microsoft.com/fr-fr/windows/apps/package-and-deploy/publish-first-app> ; en anglais (« More info », « Run anyway ») : <https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/publish-first-app>
 [^sac-securite]: Support Microsoft, contrôle des applications et du navigateur dans Sécurité Windows : <https://support.microsoft.com/fr-fr/windows/app-browser-control-in-the-windows-security-app-8f68fb65-ebb4-3cfb-4bd7-ef0f376f3dc3>
 [^sac-faq]: Support Microsoft, questions fréquentes sur Smart App Control : <https://support.microsoft.com/fr-fr/topic/what-is-smart-app-control-285ea03d-fa88-4d56-882e-6698afdb7003>
 [^sac-technique]: Microsoft Learn, Smart App Control : <https://learn.microsoft.com/fr-fr/windows/apps/develop/smart-app-control/overview> ; essayer une application avec Smart App Control : <https://learn.microsoft.com/en-us/windows/apps/develop/smart-app-control/test-your-app-with-smart-app-control>
