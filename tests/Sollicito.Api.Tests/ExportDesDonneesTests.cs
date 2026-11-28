@@ -290,26 +290,31 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         await using var api = await LancerSurLaBaseDeMainAsync();
         var dossier = new DossierDeLaBase(Donnees);
         var base_ = await File.ReadAllBytesAsync(dossier.Fichier, Annulation);
-        string[] cibles =
+        // Chaque forme, avec l'issue exacte qu'elle reçoit (suites de #49, #118).
+        (string Cible, IssueDeLExport Attendue)[] cibles =
         [
-            Path.Combine(Donnees, "export.json"),
-            Path.Combine(dossier.DossierDesSauvegardes, "export.json"),
-            Path.Combine(Donnees, "WebView2", "export.json"),
-            Path.Combine(Sortie, "..", "donnees", "export.json"),
-            Path.Combine(Donnees.ToUpperInvariant(), "export.json"),
+            (Path.Combine(Donnees, "export.json"), IssueDeLExport.DossierDeDonnees),
+            (Path.Combine(dossier.DossierDesSauvegardes, "export.json"), IssueDeLExport.DossierDeDonnees),
+            (Path.Combine(Donnees, "WebView2", "export.json"), IssueDeLExport.DossierDeDonnees),
+            (Path.Combine(Sortie, "..", "donnees", "export.json"), IssueDeLExport.DossierDeDonnees),
+            (Path.Combine(Donnees.ToUpperInvariant(), "export.json"), IssueDeLExport.DossierDeDonnees),
+            // Le dossier de données lui-même, nommé comme un fichier de l'export.
+            (Donnees + ".json", IssueDeLExport.Exporte),
             // Un chemin de périphérique, que GetFullPath garde tel quel : comparé sans son préfixe.
-            @"\\?\" + Path.Combine(Donnees, "export.json"),
-            @"\\.\" + Path.Combine(Donnees, "export.json"),
+            (@"\\?\" + Path.Combine(Donnees, "export.json"), IssueDeLExport.DossierDeDonnees),
+            (@"\\.\" + Path.Combine(Donnees, "export.json"), IssueDeLExport.DossierDeDonnees),
             // Le nom même de la base, d'une extension que l'export n'écrit pas : refusé avant le dossier.
-            dossier.Fichier,
+            (dossier.Fichier, IssueDeLExport.Extension),
         ];
 
-        foreach (var cible in cibles)
+        var recues = new List<(string Cible, IssueDeLExport Attendue)>();
+        foreach (var (cible, _) in cibles)
         {
-            Assert.NotEqual(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, cible, remplacer: true, Annulation));
+            recues.Add((cible, await api.Export().ExporterAsync(FormatDExport.Json, cible, remplacer: true, Annulation)));
         }
 
-        Assert.Equal(IssueDeLExport.DossierDeDonnees, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(Donnees, "export.json"), remplacer: true, Annulation));
+        Assert.Equal(cibles, recues);
+
         Assert.False(File.Exists(Path.Combine(Donnees, "export.json")));
         Assert.DoesNotContain(Directory.EnumerateFiles(Donnees, "*", SearchOption.AllDirectories), nom => nom.EndsWith(ExportDesDonnees.SuffixeDuProvisoire, StringComparison.Ordinal));
         Assert.Equal(base_, await File.ReadAllBytesAsync(dossier.Fichier, Annulation));
@@ -318,6 +323,23 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         var choisi = Path.Combine(_racine, "Sauvegardes choisies");
         Directory.CreateDirectory(choisi);
         Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(choisi, "export.json"), remplacer: false, Annulation));
+    }
+
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public async Task Le_dossier_de_donnees_sous_son_nom_court_est_refuse()
+    {
+        // Le nom court 8.3 du dossier de données (suites de #49, #118) : GetFullPath le développe, et la règle le reconnaît.
+        // Le dossier temporaire du test porte un nom long, dont le volume donne un nom court s'il en crée.
+        await using var api = await LancerSurLaBaseDeMainAsync();
+        var court = NomCourt(Donnees);
+        Assert.SkipUnless(court.Contains('~', StringComparison.Ordinal), "Ce volume ne crée pas de noms courts 8.3 : aucun à essayer.");
+
+        Assert.Equal(IssueDeLExport.DossierDeDonnees, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(court, "export.json"), remplacer: true, Annulation));
+        Assert.Equal(IssueDeLExport.DossierDeDonnees, await api.Export().ExporterAsync(FormatDExport.Json, @"\\?\" + Path.Combine(court, "export.json"), remplacer: true, Annulation));
+        Assert.Equal(IssueDeLExport.DossierDeDonnees, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(court, "Sauvegardes", "export.json"), remplacer: true, Annulation));
+        Assert.False(File.Exists(Path.Combine(Donnees, "export.json")));
+        Assert.DoesNotContain(Directory.EnumerateFiles(Donnees, "*", SearchOption.AllDirectories), nom => nom.EndsWith(ExportDesDonnees.SuffixeDuProvisoire, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -740,6 +762,18 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         Assert.All(lignes, ligne => Assert.Equal(lignes[0].Length, ligne.Length));
         return lignes;
     }
+
+    // Le nom court 8.3 d'un chemin qui existe, tel que Windows le donne ; le chemin tel quel si le volume n'en crée pas.
+    private static string NomCourt(string chemin)
+    {
+        var tampon = new char[1024];
+        var longueur = GetShortPathNameW(chemin, tampon, (uint)tampon.Length);
+        Assert.InRange(longueur, 1u, (uint)tampon.Length - 1);
+        return new string(tampon, 0, (int)longueur);
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetShortPathNameW(string cheminLong, [System.Runtime.InteropServices.Out] char[] cheminCourt, uint taille);
 
     private static string[] Colonnes(SqliteConnection connexion, string table) =>
         [.. Lignes(connexion, $"PRAGMA table_info(\"{table}\")").Select(ligne => (string)ligne["name"]!)];
