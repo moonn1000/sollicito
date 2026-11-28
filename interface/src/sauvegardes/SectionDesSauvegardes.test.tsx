@@ -72,8 +72,8 @@ test("un dossier choisi par l'hôte s'annonce, et la section relit l'état : les
   expect(screen.getByText(/Les copies d'avant une mise à jour de Sollicito restent dans le dossier par défaut/)).toBeDefined();
 });
 
-test("un choix annulé ou refusé ne change pas de dossier, et l'écran le dit", async () => {
-  const issues: IssueDuChoixDuDossier[] = ["annule", "refuse"];
+test("un choix annulé, refusé ou fait pendant un autre dialogue de l'hôte ne change pas de dossier, et l'écran le dit", async () => {
+  const issues: IssueDuChoixDuDossier[] = ["annule", "refuse", "occupe"];
   const choisirLeDossier = vi.fn(async () => issues.shift()!);
   render(<SectionDesSauvegardes client={clientSimule()} choisirLeDossier={choisirLeDossier} />);
 
@@ -83,6 +83,9 @@ test("un choix annulé ou refusé ne change pas de dossier, et l'écran le dit",
   expect(
     await screen.findByText("Sollicito n'a pas pu faire de copie dans ce dossier : le dossier des sauvegardes n'a pas changé."),
   ).toBeDefined();
+  // Un export ou une restauration tient le dialogue de l'hôte (#118) : texte validé mot pour mot par le mainteneur.
+  fireEvent.click(screen.getByRole("button", { name: "Choisir un autre dossier…" }));
+  expect(await screen.findByText("Sollicito est occupé : réessayez dans un instant. Le dossier des sauvegardes n'a pas changé.")).toBeDefined();
   expect(screen.getByText(DOSSIER_PAR_DEFAUT_FICTIF)).toBeDefined();
 });
 

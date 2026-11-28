@@ -63,11 +63,13 @@ public static class ApiLocale
     /// Ce qui répond à la place des fournisseurs d'IA en ligne, sans jamais toucher le réseau : la version de test seule en
     /// donne (#48). Sans lui, le transport de production sert, vers les adresses fixées dans le code.
     /// </param>
+    /// <param name="etapesDeLExport">Ce qui voit passer les étapes d'un export : la version de test seule en donne (#118).</param>
     public static WebApplication ConstruirePourLaFenetre(
         IFileProvider fichiersDeLInterface,
         string dossierDeDonnees,
         IEtapesDeLaRestauration? etapesDeLaRestauration = null,
-        Func<HttpMessageHandler>? faussesReponsesDeLIA = null)
+        Func<HttpMessageHandler>? faussesReponsesDeLIA = null,
+        IEtapesDeLExport? etapesDeLExport = null)
     {
         ArgumentNullException.ThrowIfNull(fichiersDeLInterface);
         ArgumentException.ThrowIfNullOrEmpty(dossierDeDonnees);
@@ -100,6 +102,11 @@ public static class ApiLocale
                 if (faussesReponsesDeLIA is not null)
                 {
                     builder.Services.AddSingleton(_ => new TransportDeLIA(faussesReponsesDeLIA));
+                }
+
+                if (etapesDeLExport is not null)
+                {
+                    builder.Services.AddSingleton(etapesDeLExport);
                 }
             });
     }

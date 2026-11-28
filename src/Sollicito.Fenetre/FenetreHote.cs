@@ -190,8 +190,22 @@ internal sealed class FenetreHote : Form
         {
             _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDuJeton(_jeton.Valeur()));
         }
-        else if (ReglesDeLaFenetre.DemandeLeChoixDuDossier(args.Source, args.WebMessageAsJson, _origine) && !_choixEnCours && !_restaurationEnCours && !_exportEnCours)
+        else if (ReglesDeLaFenetre.DemandeLeChoixDuDossier(args.Source, args.WebMessageAsJson, _origine))
         {
+            if (_choixEnCours)
+            {
+                // Un seul choix à la fois. Pas de réponse : la page qui attend le sien recevra sa vraie issue, et une
+                // réponse ici la clorait trop tôt.
+                return;
+            }
+
+            if (_restaurationEnCours || _exportEnCours)
+            {
+                // Un seul dialogue de l'hôte à la fois : la page apprend que Sollicito est occupé (#118).
+                _vue.CoreWebView2.PostWebMessageAsJson(ReglesDeLaFenetre.MessageDuChoixDuDossier(IssueDuChoixDuDossier.Occupe));
+                return;
+            }
+
             // Un seul dialogue à la fois, ouvert après ce gestionnaire : un dialogue modal ouvert pendant un événement de
             // WebView2 relancerait la boucle des messages au milieu de cet événement (modèle de threads de WebView2).
             _choixEnCours = true;
@@ -283,7 +297,7 @@ internal sealed class FenetreHote : Form
             else
             {
                 PosterLExport(ReglesDeLaFenetre.MessageDeLExportEnCours(format));
-                var ecriture = Task.Run(() => _export.ExporterAsync(format, choisi.Chemin, choisi.Remplacer, _fermeture.Token));
+                var ecriture = Task.Run(() => _export.ExporterAsync(format, choisi.Chemin, choisi.ARemplacer, _fermeture.Token));
                 _ecritureEnCours = ecriture;
                 issue = await ecriture;
             }

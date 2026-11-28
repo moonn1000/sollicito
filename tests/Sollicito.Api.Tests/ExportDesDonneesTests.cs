@@ -14,6 +14,7 @@ using Sollicito.Api.Sauvegardes;
 using Sollicito.Api.Tests.Outils;
 using Sollicito.Application.Export;
 using Sollicito.Infrastructure.Persistance;
+using static Sollicito.Api.Tests.AppelsDeLExport;
 using static Sollicito.Api.Tests.Outils.AppelsDesSauvegardes;
 
 namespace Sollicito.Api.Tests;
@@ -50,7 +51,7 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         await using var api = await LancerSurLaBaseDeMainAsync();
         var fichier = Path.Combine(Sortie, "sollicito-export-2026-11-27.json");
 
-        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, fichier, remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, fichier, aRemplacer: null, Annulation));
 
         var octets = await File.ReadAllBytesAsync(fichier, Annulation);
         // UTF-8 sans BOM.
@@ -163,7 +164,7 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         await using var api = await LancerSurLaBaseDeMainAsync();
         var fichier = Path.Combine(Sortie, "sollicito-export-2026-11-27.zip");
 
-        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Csv, fichier, remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Csv, fichier, aRemplacer: null, Annulation));
 
         var fichiers = LireLArchive(fichier);
         Assert.Equal(
@@ -208,8 +209,8 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         var json = Path.Combine(Sortie, "export.json");
         var csv = Path.Combine(Sortie, "export.zip");
 
-        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, json, remplacer: false, Annulation));
-        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Csv, csv, remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, json, aRemplacer: null, Annulation));
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Csv, csv, aRemplacer: null, Annulation));
 
         // Le JSON, et chaque fichier de l'archive, décompressé : ses octets comprimés ne diraient rien.
         string[] textes = [await File.ReadAllTextAsync(json, Annulation), .. TextesDeLArchive(csv)];
@@ -238,13 +239,13 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         var etapes = new EtapesDeTest { Erreur = (EtapeDeLExport.OffresEcrites, new IOException("Disque plein (essai).", unchecked((int)0x80070070))) };
         await using var api = await LancerSurLaBaseDeMainAsync(etapes.Utiliser);
 
-        Assert.Equal(IssueDeLExport.Extension, await api.Export().ExporterAsync(FormatDExport.Csv, Path.Combine(Sortie, "export.json"), remplacer: false, Annulation));
-        Assert.Equal(IssueDeLExport.Extension, await api.Export().ExporterAsync(FormatDExport.Csv, Path.Combine(Sortie, "export.csv"), remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Extension, await api.Export().ExporterAsync(FormatDExport.Csv, Path.Combine(Sortie, "export.json"), aRemplacer: null, Annulation));
+        Assert.Equal(IssueDeLExport.Extension, await api.Export().ExporterAsync(FormatDExport.Csv, Path.Combine(Sortie, "export.csv"), aRemplacer: null, Annulation));
         Assert.Empty(Directory.GetFileSystemEntries(Sortie));
 
         var fichier = Path.Combine(Sortie, "export.zip");
         await File.WriteAllTextAsync(fichier, "contenu d'avant", Annulation);
-        Assert.Equal(IssueDeLExport.PlaceManquante, await api.Export().ExporterAsync(FormatDExport.Csv, fichier, remplacer: true, Annulation));
+        Assert.Equal(IssueDeLExport.PlaceManquante, await api.Export().ExporterAsync(FormatDExport.Csv, fichier, aRemplacer: Oui(fichier), Annulation));
         Assert.Equal("contenu d'avant", await File.ReadAllTextAsync(fichier, Annulation));
         Assert.Equal(["export.zip"], Fichiers(Sortie));
     }
@@ -257,7 +258,7 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         Assert.True(await porte.FermerAsync(TimeSpan.FromSeconds(10), TimeProvider.System, Annulation));
         try
         {
-            Assert.Equal(IssueDeLExport.Occupe, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(Sortie, "export.json"), remplacer: false, Annulation));
+            Assert.Equal(IssueDeLExport.Occupe, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(Sortie, "export.json"), aRemplacer: null, Annulation));
         }
         finally
         {
@@ -274,14 +275,14 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
 
         foreach (var nom in new[] { "export.txt", "export", "export.json.txt", "export.zip" })
         {
-            Assert.Equal(IssueDeLExport.Extension, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(Sortie, nom), remplacer: false, Annulation));
+            Assert.Equal(IssueDeLExport.Extension, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(Sortie, nom), aRemplacer: null, Annulation));
         }
 
-        Assert.Equal(IssueDeLExport.Impossible, await api.Export().ExporterAsync(FormatDExport.Json, "export.json", remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Impossible, await api.Export().ExporterAsync(FormatDExport.Json, "export.json", aRemplacer: null, Annulation));
         Assert.Empty(Directory.GetFileSystemEntries(Sortie));
 
         // L'extension se compare sans la casse.
-        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(Sortie, "EXPORT.JSON"), remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(Sortie, "EXPORT.JSON"), aRemplacer: null, Annulation));
     }
 
     [Fact]
@@ -290,26 +291,31 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         await using var api = await LancerSurLaBaseDeMainAsync();
         var dossier = new DossierDeLaBase(Donnees);
         var base_ = await File.ReadAllBytesAsync(dossier.Fichier, Annulation);
-        string[] cibles =
+        // Chaque forme, avec l'issue exacte qu'elle reçoit (suites de #49, #118).
+        (string Cible, IssueDeLExport Attendue)[] cibles =
         [
-            Path.Combine(Donnees, "export.json"),
-            Path.Combine(dossier.DossierDesSauvegardes, "export.json"),
-            Path.Combine(Donnees, "WebView2", "export.json"),
-            Path.Combine(Sortie, "..", "donnees", "export.json"),
-            Path.Combine(Donnees.ToUpperInvariant(), "export.json"),
+            (Path.Combine(Donnees, "export.json"), IssueDeLExport.DossierDeDonnees),
+            (Path.Combine(dossier.DossierDesSauvegardes, "export.json"), IssueDeLExport.DossierDeDonnees),
+            (Path.Combine(Donnees, "WebView2", "export.json"), IssueDeLExport.DossierDeDonnees),
+            (Path.Combine(Sortie, "..", "donnees", "export.json"), IssueDeLExport.DossierDeDonnees),
+            (Path.Combine(Donnees.ToUpperInvariant(), "export.json"), IssueDeLExport.DossierDeDonnees),
+            // Le dossier de données lui-même, nommé comme un fichier de l'export.
+            (Donnees + ".json", IssueDeLExport.Exporte),
             // Un chemin de périphérique, que GetFullPath garde tel quel : comparé sans son préfixe.
-            @"\\?\" + Path.Combine(Donnees, "export.json"),
-            @"\\.\" + Path.Combine(Donnees, "export.json"),
+            (@"\\?\" + Path.Combine(Donnees, "export.json"), IssueDeLExport.DossierDeDonnees),
+            (@"\\.\" + Path.Combine(Donnees, "export.json"), IssueDeLExport.DossierDeDonnees),
             // Le nom même de la base, d'une extension que l'export n'écrit pas : refusé avant le dossier.
-            dossier.Fichier,
+            (dossier.Fichier, IssueDeLExport.Extension),
         ];
 
-        foreach (var cible in cibles)
+        var recues = new List<(string Cible, IssueDeLExport Attendue)>();
+        foreach (var (cible, _) in cibles)
         {
-            Assert.NotEqual(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, cible, remplacer: true, Annulation));
+            recues.Add((cible, await api.Export().ExporterAsync(FormatDExport.Json, cible, aRemplacer: Oui(cible), Annulation)));
         }
 
-        Assert.Equal(IssueDeLExport.DossierDeDonnees, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(Donnees, "export.json"), remplacer: true, Annulation));
+        Assert.Equal(cibles, recues);
+
         Assert.False(File.Exists(Path.Combine(Donnees, "export.json")));
         Assert.DoesNotContain(Directory.EnumerateFiles(Donnees, "*", SearchOption.AllDirectories), nom => nom.EndsWith(ExportDesDonnees.SuffixeDuProvisoire, StringComparison.Ordinal));
         Assert.Equal(base_, await File.ReadAllBytesAsync(dossier.Fichier, Annulation));
@@ -317,7 +323,24 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         // Un dossier des sauvegardes choisi hors du dossier de données, comme un NAS ou OneDrive, reçoit un export.
         var choisi = Path.Combine(_racine, "Sauvegardes choisies");
         Directory.CreateDirectory(choisi);
-        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(choisi, "export.json"), remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(choisi, "export.json"), aRemplacer: null, Annulation));
+    }
+
+    [Fact]
+    [SupportedOSPlatform("windows")]
+    public async Task Le_dossier_de_donnees_sous_son_nom_court_est_refuse()
+    {
+        // Le nom court 8.3 du dossier de données (suites de #49, #118) : GetFullPath le développe, et la règle le reconnaît.
+        // Le dossier temporaire du test porte un nom long, dont le volume donne un nom court s'il en crée.
+        await using var api = await LancerSurLaBaseDeMainAsync();
+        var court = NomCourt(Donnees);
+        Assert.SkipUnless(court.Contains('~', StringComparison.Ordinal), "Ce volume ne crée pas de noms courts 8.3 : aucun à essayer.");
+
+        Assert.Equal(IssueDeLExport.DossierDeDonnees, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(court, "export.json"), aRemplacer: Oui(Path.Combine(court, "export.json")), Annulation));
+        Assert.Equal(IssueDeLExport.DossierDeDonnees, await api.Export().ExporterAsync(FormatDExport.Json, @"\\?\" + Path.Combine(court, "export.json"), aRemplacer: Oui(@"\\?\" + Path.Combine(court, "export.json")), Annulation));
+        Assert.Equal(IssueDeLExport.DossierDeDonnees, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(court, "Sauvegardes", "export.json"), aRemplacer: Oui(Path.Combine(court, "Sauvegardes", "export.json")), Annulation));
+        Assert.False(File.Exists(Path.Combine(Donnees, "export.json")));
+        Assert.DoesNotContain(Directory.EnumerateFiles(Donnees, "*", SearchOption.AllDirectories), nom => nom.EndsWith(ExportDesDonnees.SuffixeDuProvisoire, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -328,12 +351,84 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         await File.WriteAllTextAsync(fichier, "contenu d'avant", Annulation);
 
         // Sans le oui : un fichier apparu entre le dialogue et le renommage n'est pas remplacé.
-        Assert.Equal(IssueDeLExport.Existe, await api.Export().ExporterAsync(FormatDExport.Json, fichier, remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Existe, await api.Export().ExporterAsync(FormatDExport.Json, fichier, aRemplacer: null, Annulation));
         Assert.Equal("contenu d'avant", await File.ReadAllTextAsync(fichier, Annulation));
         Assert.Equal(["export.json"], Fichiers(Sortie));
 
         // Avec le oui, il est remplacé, d'un seul renommage.
-        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, fichier, aRemplacer: Oui(fichier), Annulation));
+        using var export = JsonDocument.Parse(await File.ReadAllBytesAsync(fichier, Annulation));
+        Assert.Equal("sollicito-export", export.RootElement.GetProperty("format").GetString());
+        Assert.Equal(["export.json"], Fichiers(Sortie));
+    }
+
+    [Fact]
+    public async Task Un_fichier_change_depuis_le_dialogue_n_est_pas_remplace()
+    {
+        // Le oui vaut pour le fichier vu au retour du dialogue (suites de #49, #118) : un autre programme qui le remplace, ou
+        // le réécrit, entre le dialogue et le renommage ne le fait pas remplacer à son tour.
+        var etapes = new EtapesDeTest();
+        await using var api = await LancerSurLaBaseDeMainAsync(etapes.Utiliser);
+        var fichier = Path.Combine(Sortie, "export.json");
+        await File.WriteAllTextAsync(fichier, "le fichier vu dans le dialogue", Annulation);
+
+        // Remplacé par un autre fichier, d'une autre taille.
+        var vu = FichierVu.Lire(fichier);
+        etapes.Action = etape =>
+        {
+            if (etape == EtapeDeLExport.FichierEcrit)
+            {
+                File.Delete(fichier);
+                File.WriteAllText(fichier, "un autre fichier, posé entre-temps");
+            }
+        };
+        Assert.Equal(IssueDeLExport.Existe, await api.Export().ExporterAsync(FormatDExport.Json, fichier, vu, Annulation));
+        Assert.Equal("un autre fichier, posé entre-temps", await File.ReadAllTextAsync(fichier, Annulation));
+        Assert.Equal(["export.json"], Fichiers(Sortie));
+
+        // Réécrit sur place, à la même taille : sa date de dernière écriture a changé.
+        vu = FichierVu.Lire(fichier);
+        etapes.Action = etape =>
+        {
+            if (etape == EtapeDeLExport.FichierEcrit)
+            {
+                File.SetLastWriteTimeUtc(fichier, vu!.EcritLe.AddSeconds(1));
+            }
+        };
+        Assert.Equal(IssueDeLExport.Existe, await api.Export().ExporterAsync(FormatDExport.Json, fichier, vu, Annulation));
+        Assert.Equal("un autre fichier, posé entre-temps", await File.ReadAllTextAsync(fichier, Annulation));
+        Assert.Equal(["export.json"], Fichiers(Sortie));
+
+        // Le provisoire tenu par un autre programme, comme un antivirus, au premier essai du renommage, et le fichier vu
+        // réécrit pendant l'attente des essais suivants : il n'est pas remplacé non plus. Le fichier se compare à chaque
+        // essai, pas une seule fois avant eux.
+        vu = FichierVu.Lire(fichier);
+        Task? tenuPendantLaReecriture = null;
+        etapes.Action = etape =>
+        {
+            if (etape == EtapeDeLExport.FichierEcrit)
+            {
+                var provisoire = Directory.GetFiles(Sortie, ExportDesDonnees.PrefixeDuProvisoire + "*" + ExportDesDonnees.SuffixeDuProvisoire).Single();
+                var tenu = new FileStream(provisoire, FileMode.Open, FileAccess.Read, FileShare.None);
+                tenuPendantLaReecriture = Task.Run(async () =>
+                {
+                    await using (tenu)
+                    {
+                        await Task.Delay(100);
+                        await File.WriteAllTextAsync(fichier, "un troisième fichier, écrit pendant l'attente");
+                        await Task.Delay(100);
+                    }
+                });
+            }
+        };
+        Assert.Equal(IssueDeLExport.Existe, await api.Export().ExporterAsync(FormatDExport.Json, fichier, vu, Annulation));
+        await tenuPendantLaReecriture!;
+        Assert.Equal("un troisième fichier, écrit pendant l'attente", await File.ReadAllTextAsync(fichier, Annulation));
+        Assert.Equal(["export.json"], Fichiers(Sortie));
+
+        // Le fichier vu, inchangé jusqu'au renommage, est remplacé.
+        etapes.Action = null;
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, fichier, FichierVu.Lire(fichier), Annulation));
         using var export = JsonDocument.Parse(await File.ReadAllBytesAsync(fichier, Annulation));
         Assert.Equal("sollicito-export", export.RootElement.GetProperty("format").GetString());
         Assert.Equal(["export.json"], Fichiers(Sortie));
@@ -351,7 +446,7 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         File.SetAttributes(lectureSeule, FileAttributes.ReadOnly);
         try
         {
-            Assert.Equal(IssueDeLExport.AccesRefuse, await api.Export().ExporterAsync(FormatDExport.Json, lectureSeule, remplacer: true, Annulation));
+            Assert.Equal(IssueDeLExport.AccesRefuse, await api.Export().ExporterAsync(FormatDExport.Json, lectureSeule, aRemplacer: Oui(lectureSeule), Annulation));
         }
         finally
         {
@@ -367,7 +462,7 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         InterdireLaCreation(interdit, interdire: true);
         try
         {
-            Assert.Equal(IssueDeLExport.AccesRefuse, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(interdit, "export.json"), remplacer: false, Annulation));
+            Assert.Equal(IssueDeLExport.AccesRefuse, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(interdit, "export.json"), aRemplacer: null, Annulation));
         }
         finally
         {
@@ -379,7 +474,7 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         // Un dossier disparu, comme une clé débranchée.
         Assert.Equal(
             IssueDeLExport.DossierIntrouvable,
-            await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(_racine, "debranche", "export.json"), remplacer: false, Annulation));
+            await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(_racine, "debranche", "export.json"), aRemplacer: null, Annulation));
         Assert.False(Directory.Exists(Path.Combine(_racine, "debranche")));
     }
 
@@ -391,7 +486,7 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         var fichier = Path.Combine(Sortie, "export.json");
         await File.WriteAllTextAsync(fichier, "contenu d'avant", Annulation);
 
-        Assert.Equal(IssueDeLExport.PlaceManquante, await api.Export().ExporterAsync(FormatDExport.Json, fichier, remplacer: true, Annulation));
+        Assert.Equal(IssueDeLExport.PlaceManquante, await api.Export().ExporterAsync(FormatDExport.Json, fichier, aRemplacer: Oui(fichier), Annulation));
 
         Assert.Contains(EtapeDeLExport.CandidaturesEcrites, etapes.Vues);
         Assert.Equal("contenu d'avant", await File.ReadAllTextAsync(fichier, Annulation));
@@ -405,7 +500,7 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         var etapes = new EtapesDeTest { Action = etape => { if (etape == EtapeDeLExport.OffresEcrites) { fermeture.Cancel(); } } };
         await using var api = await LancerSurLaBaseDeMainAsync(etapes.Utiliser);
 
-        Assert.Equal(IssueDeLExport.Annule, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(Sortie, "export.json"), remplacer: false, fermeture.Token));
+        Assert.Equal(IssueDeLExport.Annule, await api.Export().ExporterAsync(FormatDExport.Json, Path.Combine(Sortie, "export.json"), aRemplacer: null, fermeture.Token));
 
         Assert.Empty(Directory.GetFileSystemEntries(Sortie));
         Assert.DoesNotContain(EtapeDeLExport.FichierEcrit, etapes.Vues);
@@ -426,7 +521,7 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         };
         var fichier = Path.Combine(Sortie, "export.json");
 
-        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, fichier, remplacer: false, Annulation));
+        Assert.Equal(IssueDeLExport.Exporte, await api.Export().ExporterAsync(FormatDExport.Json, fichier, aRemplacer: null, Annulation));
 
         var texte = await File.ReadAllTextAsync(fichier, Annulation);
         Assert.DoesNotContain("écrit en plein export", texte, StringComparison.Ordinal);
@@ -741,6 +836,18 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
         return lignes;
     }
 
+    // Le nom court 8.3 d'un chemin qui existe, tel que Windows le donne ; le chemin tel quel si le volume n'en crée pas.
+    private static string NomCourt(string chemin)
+    {
+        var tampon = new char[1024];
+        var longueur = GetShortPathNameW(chemin, tampon, (uint)tampon.Length);
+        Assert.InRange(longueur, 1u, (uint)tampon.Length - 1);
+        return new string(tampon, 0, (int)longueur);
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    private static extern uint GetShortPathNameW(string cheminLong, [System.Runtime.InteropServices.Out] char[] cheminCourt, uint taille);
+
     private static string[] Colonnes(SqliteConnection connexion, string table) =>
         [.. Lignes(connexion, $"PRAGMA table_info(\"{table}\")").Select(ligne => (string)ligne["name"]!)];
 
@@ -794,4 +901,10 @@ public sealed class ExportDesDonneesTests : IAsyncLifetime
 internal static class AppelsDeLExport
 {
     public static ExportDesDonnees Export(this ApiLancee api) => api.Services.GetRequiredService<ExportDesDonnees>();
+
+    /// <summary>
+    /// Le oui à remplacer ce fichier, tel qu'il est maintenant, comme le dialogue le rendrait (#118) ; pour un fichier qui
+    /// n'existe pas, un oui quelconque : l'export le refuse avant, ou n'a rien à remplacer.
+    /// </summary>
+    public static FichierVu Oui(string chemin) => FichierVu.Lire(chemin) ?? new FichierVu(0, DateTime.UnixEpoch, DateTime.UnixEpoch);
 }

@@ -1,6 +1,6 @@
 # Le format de l'export
 
-- **Mis à jour le** : 2026-11-27, avec #49
+- **Mis à jour le** : 2026-11-27, avec #49 ; 2026-11-28, avec #118 (le oui à remplacer un fichier)
 - **Décision** : [ADR-0020](adr/0020-export-des-donnees.md)
 
 La section « Exporter vos données » des réglages enregistre toutes les données de la base dans un fichier, en JSON ou en CSV. Sollicito ouvre le dialogue « Enregistrer sous » de Windows, où l'utilisateur choisit le fichier, puis l'écrit. Ce document est la référence du format ; l'écran en reprend l'essentiel.
@@ -261,7 +261,7 @@ Le format est à sa version 1, la même pour ses deux formes. Toute modification
 - **Le dialogue de Windows** propose `sollicito-export-AAAA-MM-JJ.json`, ou `.zip`, au jour local, et un seul type de fichier. La page de Sollicito ne choisit jamais le fichier, et n'en reçoit jamais le nom.
 - **L'extension** : le nom doit finir par `.json`, ou par `.zip` pour le CSV ; sinon, rien n'est enregistré.
 - **Le dossier de données de Sollicito** (`%LOCALAPPDATA%\Sollicito`) est refusé, avec ses sous-dossiers, dont le dossier des sauvegardes par défaut. La règle le reconnaît sous une forme à lettre de lecteur ou UNC, écrite telle quelle ou derrière `\\?\` ou `\\.\`, nom court compris : par ces chemins, un export n'y remplace pas la base, les réglages, `sauvegardes.json` ou la clé d'IA. Un chemin qui y mène autrement, par une jonction, un lien, un partage réseau ou une autre forme de périphérique (`\\?\Volume{…}\`, `\\?\GLOBALROOT\`, `\??\`), n'est pas reconnu : seul le oui du dialogue, avant de remplacer un fichier, protège alors. Un dossier des sauvegardes choisi ailleurs n'est pas refusé.
-- **Un fichier existant** n'est remplacé qu'après le oui de l'utilisateur dans le dialogue. Un fichier apparu entre-temps sous le même nom n'est pas remplacé.
+- **Un fichier existant** n'est remplacé qu'après le oui de l'utilisateur dans le dialogue, et s'il est encore celui que le dialogue a vu : Sollicito note sa taille et ses dates au retour du dialogue, et les compare juste avant de le remplacer. Un fichier apparu ou changé entre-temps sous le même nom n'est pas remplacé.
 - **Rien de partiel** : Sollicito écrit d'abord un fichier provisoire dans le dossier choisi, `sollicito-export-<huit caractères hexadécimaux>.partiel`, le pousse sur le disque, puis lui donne le nom choisi. Un échec, une annulation, ou la fermeture de Sollicito pendant l'export l'effacent : rien ne reste sous le nom choisi, et un fichier qu'on allait remplacer reste intact.
 - **Après un arrêt brutal** (une coupure de courant, Sollicito arrêté de force), ou si la fermeture n'a pas pu l'effacer à temps, ce provisoire peut rester dans le dossier choisi : Sollicito ne garde ce dossier nulle part, et ne peut pas l'y retrouver. Il porte une partie des données, non chiffrée, et s'efface à la main.
 - **Un état cohérent** : l'export lit la base en un seul instantané. Ce qui s'enregistre pendant l'export n'y paraît pas, et l'export ne retient pas l'utilisateur. Pendant une restauration, il est refusé, et rien n'est enregistré.

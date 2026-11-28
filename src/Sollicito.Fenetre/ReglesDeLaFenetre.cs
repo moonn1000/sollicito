@@ -256,6 +256,7 @@ internal static class ReglesDeLaFenetre
         {
             IssueDuChoixDuDossier.Choisi => "choisi",
             IssueDuChoixDuDossier.Annule => "annule",
+            IssueDuChoixDuDossier.Occupe => "occupe",
             _ => "refuse",
         },
     });
@@ -296,6 +297,12 @@ internal enum IssueDuChoixDuDossier
 
     /// <summary>La copie n'a pas pu se faire dans le dossier choisi : l'ancien reste.</summary>
     Refuse,
+
+    /// <summary>
+    /// Un autre dialogue de l'hôte est ouvert, celui d'un export ou d'une restauration : aucun dialogue de dossier ne
+    /// s'ouvre, et rien ne change (#118).
+    /// </summary>
+    Occupe,
 }
 
 /// <summary>Où en est une restauration, telle que la fenêtre le rend à l'interface (#28).</summary>

@@ -15,7 +15,8 @@
     - que les chemins de symboles des assemblies de Sollicito commencent par /_/ (ContinuousIntegrationBuild). Lire
       ces chemins dans les fichiers décompressés sert aussi de témoin : le contrôle voit bien l'intérieur du paquet ;
     - qu'aucun fichier, ni l'exe, ne contient une marque de la version de test de la restauration (#28) : le fichier
-      qui remplace son dialogue, et la variable de son point d'arrêt. Un témoin de la version publiée doit s'y lire.
+      qui remplace son dialogue, et la variable de son point d'arrêt ; de même pour l'export (#49, #118) et le choix
+      d'un dossier (#118). Un témoin de la version publiée doit s'y lire.
   Le script ne lance pas l'exe. Il sort avec le code 1 au premier écart, après les avoir tous signalés.
 
 .PARAMETER Dossier
@@ -243,12 +244,13 @@ if ($cheminsDeSymboles -eq 0) {
     Signaler "aucun chemin de symboles lu dans les assemblies de Sollicito : le contrôle ne voit pas l'intérieur du paquet"
 }
 
-# --- Aucune marque de la version de test de la restauration (#28) ni de l'export (#49) ---
-# Le remplaçant du dialogue de la restauration et son point d'arrêt, comme celui du dialogue de l'export, ne se compilent
+# --- Aucune marque de la version de test de la restauration (#28) ni de l'export (#49, #118) ---
+# Le remplaçant du dialogue de la restauration et son point d'arrêt, comme celui du dialogue de l'export, les points
+# d'arrêt de l'export et du choix d'un dossier (#118), ne se compilent
 # que dans la version de test : leurs marques ne se lisent nulle part dans l'exe publié, ni dans ses fichiers
 # décompressés. Les marques des autres écarts de la version de test attendent #91. Témoin : le type du message de la
 # restauration, que la version publiée porte, se lit dans Sollicito.dll décompressé.
-$marquesDeTest = @('restauration-a-confirmer.txt', 'SOLLICITO_TEST_ARRET_RESTAURATION', 'export-a-choisir.txt')
+$marquesDeTest = @('restauration-a-confirmer.txt', 'SOLLICITO_TEST_ARRET_RESTAURATION', 'export-a-choisir.txt', 'SOLLICITO_TEST_ARRET_EXPORT', 'export-arrete.txt', 'export-a-reprendre.txt', 'dossier-en-attente.txt')
 $temoinPublie = 'restaurerUneSauvegarde'
 $temoinLu = $false
 $lectures = @([pscustomobject]@{ Nom = 'Sollicito.exe'; Contenu = $octets })

@@ -52,10 +52,13 @@ export function demanderLeJeton(canal: CanalDeLHote, delaiEnMs = DELAI_DU_JETON_
   });
 }
 
-/** L'issue du choix du dossier des sauvegardes, telle que l'hôte la rend (#26). */
-export type IssueDuChoixDuDossier = "choisi" | "annule" | "refuse";
+/**
+ * L'issue du choix du dossier des sauvegardes, telle que l'hôte la rend (#26). « occupe » : un export ou une restauration
+ * tient le dialogue de l'hôte, et aucun dialogue de dossier ne s'ouvre (#118).
+ */
+export type IssueDuChoixDuDossier = "choisi" | "annule" | "refuse" | "occupe";
 
-const ISSUES_DU_CHOIX: readonly IssueDuChoixDuDossier[] = ["choisi", "annule", "refuse"];
+const ISSUES_DU_CHOIX: readonly IssueDuChoixDuDossier[] = ["choisi", "annule", "refuse", "occupe"];
 
 /**
  * Demande à l'hôte d'ouvrir le dialogue de dossier de Windows, puis rend l'issue du choix (#26, ADR-0008). Le message

@@ -1,14 +1,15 @@
+using Sollicito.Api.Export;
 using Sollicito.Application.Export;
 
 namespace Sollicito.Fenetre;
 
 /// <summary>Le fichier où enregistrer un export, tel que l'utilisateur l'a choisi.</summary>
 /// <param name="Chemin">Le chemin absolu du fichier.</param>
-/// <param name="Remplacer">
-/// Vrai si un fichier de ce nom existait, et que l'utilisateur a accepté de le remplacer : sans ce oui, aucun fichier ne se
-/// remplace, même apparu entre-temps.
+/// <param name="ARemplacer">
+/// Le fichier de ce nom qui existait au retour du dialogue, et que l'utilisateur a accepté de remplacer, tel qu'il l'a vu :
+/// sans ce oui, aucun fichier ne se remplace, même apparu entre-temps ; avec lui, seul ce fichier-là, inchangé (#118).
 /// </param>
-internal sealed record FichierChoisi(string Chemin, bool Remplacer);
+internal sealed record FichierChoisi(string Chemin, FichierVu? ARemplacer);
 
 /// <summary>
 /// Ce qui fait choisir le fichier d'un export (#49, ADR-0020) : le dialogue « Enregistrer sous » de Windows dans la version
@@ -37,8 +38,8 @@ internal static class TextesDeLExport
 
 /// <summary>
 /// Le dialogue « Enregistrer sous » de Windows. Il demande lui-même avant de remplacer un fichier existant
-/// (<see cref="FileDialog"/>, <c>OverwritePrompt</c>) : un chemin qu'il rend, et qui existe, a donc reçu ce oui. Un dossier
-/// en réseau ou synchronisé reste le choix de l'utilisateur.
+/// (<see cref="FileDialog"/>, <c>OverwritePrompt</c>) : un chemin qu'il rend, et qui existe, a donc reçu ce oui, pour le
+/// fichier lu à son retour (#118). Un dossier en réseau ou synchronisé reste le choix de l'utilisateur.
 /// </summary>
 internal sealed class ChoixDUnFichierParLeDialogue : IChoixDUnFichierDExport
 {
@@ -50,7 +51,7 @@ internal sealed class ChoixDUnFichierParLeDialogue : IChoixDUnFichierDExport
             return null;
         }
 
-        return new FichierChoisi(dialogue.FileName, Remplacer: File.Exists(dialogue.FileName));
+        return new FichierChoisi(dialogue.FileName, ARemplacer: FichierVu.Lire(dialogue.FileName));
     }
 
     /// <summary>Le dialogue de cette forme, réglé, sans l'ouvrir.</summary>
