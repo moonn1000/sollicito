@@ -13,7 +13,6 @@ import { ImportDOffres } from "./ImportDOffres.tsx";
 
 const PIEGE = "<img src=x onerror=alert(1)><script>alert('fictif')</script><b>gras</b>";
 
-// Un aperçu qui passe par chaque sort : à importer, piégée, doublon possible, déjà enregistrée, en double, invalide.
 // La cellule « Entreprise » de cette ligne du tableau (suites de #115, #116).
 function celluleDeLEntreprise(tableau: HTMLElement, ligne: number): HTMLElement {
   const rangee = within(tableau)
@@ -26,6 +25,7 @@ function celluleDeLEntreprise(tableau: HTMLElement, ligne: number): HTMLElement 
   return within(rangee).getAllByRole("cell")[2]!;
 }
 
+// Un aperçu qui passe par chaque sort : à importer, piégée, doublon possible, déjà enregistrée, en double, invalide.
 const APERCU = compteRenduFictif({
   lignes: [
     ligneDuCompteRenduFictive({ ligne: 2, poste: PIEGE, entreprise: `=HYPERLINK("http://exemple.invalid")`, lieu: "Liège" }),

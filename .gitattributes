@@ -5,7 +5,8 @@
 # « ALTER TABLE … ADD » dans le schéma, que la restauration (#28) compare à celui des copies, faites en CRLF (#98,
 # point 24). Les migrations déjà publiées ne se réécrivent pas : leurs copies deviendraient étrangères.
 # Une copie de travail extraite avant cette règle, avec core.autocrlf à false ou input, garde ses migrations en LF tant
-# qu'elles ne sont pas réextraites : effacer les fichiers .cs du dossier, puis
+# qu'elles ne sont pas réextraites : effacer les migrations suivies (celles que liste
+# git ls-files src/Sollicito.Infrastructure/Persistance/Migrations), puis
 # git checkout -- src/Sollicito.Infrastructure/Persistance/Migrations
-# (un checkout seul ne les réécrit pas : git les voit à jour).
+# (un checkout seul ne les réécrit pas : git les voit à jour). Une migration non suivie, en cours d'écriture, reste.
 src/Sollicito.Infrastructure/Persistance/Migrations/*.cs text eol=crlf
