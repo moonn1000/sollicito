@@ -232,8 +232,7 @@ sequenceDiagram
     actor Personne
     box rgba(17,104,189,0.18) Interface, P3 et P4
         participant Ecran as PremierJetParLIA<br/>PreparerLeBrouillon
-        participant Client as clientDeLApi.ts
-        participant Canal as canalDeLHote.ts
+        participant Client as clientDeLApi.ts<br/>canalDeLHote.ts
     end
     box rgba(17,104,189,0.18) Fenêtre hôte, P3 et P4
         participant Fenetre as FenetreHote
@@ -242,8 +241,7 @@ sequenceDiagram
     box rgba(17,104,189,0.18) API locale, P3 et P4
         participant Route as ApiLocale<br/>RoutesDesRelances
         participant Jets as PremiersJets<br/>DesRelances
-        participant Relus as BrouillonsRelus
-        participant Brouillons as BrouillonsDes<br/>Relances
+        participant Brouillons as BrouillonsDes<br/>Relances<br/>BrouillonsRelus
         participant Depot as DepotDes<br/>Candidatures
         participant Adaptateur as FournisseurEnLigne
     end
@@ -292,18 +290,18 @@ sequenceDiagram
         break texte refusé, candidature inconnue ou relance plus à faire
             Route-->>Client: 400, 404 ou 409
         end
-        Jets->>Relus: Deposer(relance, texte)
+        Jets->>Brouillons: BrouillonsRelus.Deposer(relance, texte)
         Route-->>Client: 204
-        Ecran->>Canal: demanderLeBrouillonRelu(relance)
-        Canal->>Fenetre: message {type: "ouvrirLeBrouillonRelu", relance}
+        Ecran->>Client: demanderLeBrouillonRelu(relance)
+        Client->>Fenetre: message {type: "ouvrirLeBrouillonRelu", relance}
         Fenetre->>Brouillons: PreparerLeBrouillonReluAsync(relance)
-        Brouillons->>Relus: Prendre(relance)
+        Brouillons->>Brouillons: BrouillonsRelus.Prendre(relance)
         Brouillons->>Depot: LireLaRelancePourLeBrouillonAsync
         Brouillons-->>Fenetre: PremierJetDeRelance.BrouillonRelu, ou rien
     else brouillon simple (P3)
         Personne->>Ecran: prépare le brouillon
-        Ecran->>Canal: demanderLeBrouillon(relance)
-        Canal->>Fenetre: message {type: "ouvrirLeBrouillon", relance}
+        Ecran->>Client: demanderLeBrouillon(relance)
+        Client->>Fenetre: message {type: "ouvrirLeBrouillon", relance}
         Fenetre->>Brouillons: PreparerAsync(relance)
         Brouillons->>Depot: LireLaRelancePourLeBrouillonAsync
         Brouillons-->>Fenetre: BrouillonDeRelance.De, ou rien
@@ -312,8 +310,8 @@ sequenceDiagram
         Fenetre->>Lien: Construire(brouillon), puis Ouvrir(lien)
         Lien->>Messagerie: lien mailto, par le shell de Windows
     end
-    Fenetre-->>Canal: message {type: "brouillonDeRelance" ou "brouillonRelu", relance, issue}
-    Canal-->>Ecran: ouvert, refusé ou impossible
+    Fenetre-->>Client: message {type: "brouillonDeRelance" ou "brouillonRelu", relance, issue}
+    Client-->>Ecran: ouvert, refusé ou impossible
     Note over Personne,Messagerie: l'utilisateur relit et envoie lui-même
 ```
 
