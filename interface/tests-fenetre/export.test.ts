@@ -237,6 +237,23 @@ test("pendant une restauration arrêtée en route, une demande d'export reçoit 
       await attendre(250);
     }
     expect(await messagesDuChoix(page)).toEqual([{ type: "dossierDesSauvegardes", issue: "occupe" }]);
+
+    // Une seconde restauration, demandée par un script, ne reçoit rien (#28, éprouvé par #118) : la page qui attend la
+    // première en recevra la vraie issue. L'hôte répond dans l'ordre : la réponse au choix qui la suit dit qu'elle a été
+    // traitée.
+    await envoyerALHote(page, { type: "restaurerUneSauvegarde", copie: "0123456789abcdef" });
+    await envoyerALHote(page, { type: "choisirLeDossierDesSauvegardes" });
+    for (let essai = 1; (await messagesDuChoix(page)).length < 2; essai++) {
+      expect(essai, "la seconde demande de choix n'a pas reçu de réponse").toBeLessThan(80);
+      await attendre(250);
+    }
+    // Une restauration ouverte à tort répondrait après la préparation de sa copie, sur un autre fil : on lui en laisse le
+    // temps.
+    await attendre(2_000);
+    const restaurations = (await page.evaluate(() => (window as unknown as CanalDeLaPage).messagesRecus ?? [])).filter(
+      (message) => (message as { type?: unknown }).type === "restauration",
+    );
+    expect(restaurations).toEqual([]);
   } finally {
     await fenetre.tuer();
     await fenetre.nettoyer();
