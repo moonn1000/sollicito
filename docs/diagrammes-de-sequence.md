@@ -276,10 +276,14 @@ sequenceDiagram
         Adaptateur->>IA: HTTPS, les trois données, les consignes et la clé
         IA-->>Adaptateur: la réponse, ou un échec
         Adaptateur-->>Jets: texte ou échec
-        break échec du fournisseur, ou réponse vide
+        break échec du fournisseur
             Route-->>Client: 200, l'échec et son message
         end
-        Jets->>Jets: PremierJetDeRelance nettoie et assemble
+        Jets->>Jets: PremierJetDeRelance.Nettoyer(réponse)
+        break plus rien après le nettoyage
+            Route-->>Client: 200, l'échec et son message
+        end
+        Jets->>Jets: PremierJetDeRelance.Assembler
         Route-->>Client: 200, le texte
         Client-->>Ecran: le texte à relire
         Personne->>Ecran: relit, corrige, ouvre dans la messagerie
