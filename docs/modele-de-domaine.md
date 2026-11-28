@@ -322,7 +322,7 @@ L'écran « Coller une offre » (#36) prend le texte d'une offre trouvée ailleu
 | `publieeLe` | facultative : `AAAA-MM-JJ` exactement, un jour du calendrier ; pas avant le 1er janvier 2000 ; pas après aujourd'hui, en date locale du poste |
 | `adresse` | facultative : l'adresse de l'annonce, voir ci-dessous |
 
-Un champ facultatif vide (absent, rien, ou que des blancs) ne fait rien.
+Un champ facultatif vide (absent, rien, ou que des blancs) ne fait rien à la saisie ; à la correction, il efface sa valeur (voir « Corriger une offre »).
 
 - **Le texte**, gardé tel que collé, à deux retouches près : ses fins de ligne s'écrivent U+000A, et ses blancs du début et de la fin sont retirés. Comptent comme fins de ligne : CRLF, CR, U+000B, U+000C (le saut de page d'un texte copié d'un PDF), U+0085, U+2028 et U+2029. Ni HTML ni Markdown n'y sont lus, aucune ligne n'est recoupée, rien n'est tronqué. Il est requis, de 50 000 caractères au plus (unités UTF-16). Les tabulations y sont admises ; les autres règles sont celles d'un texte d'une ligne : ni autre caractère de contrôle, ni contrôle de la direction du texte, ni non-caractère, ni moitié isolée d'une paire de substitution. Le refus donne la ligne du premier caractère refusé, comptée dans le texte tel que l'écran le montre, jamais le texte.
 - **L'adresse de l'annonce** perd ses blancs du début et de la fin ; il reste au plus 2 000 caractères, sans blanc ni caractère de contrôle, de direction ou invalide. Elle commence par `http://` ou `https://`, et c'est une adresse absolue, avec un hôte, sans identifiants (`nom@…`, `nom:motdepasse@…`). Sollicito ne la lit jamais : seul le navigateur par défaut l'ouvre, sur le clic de l'utilisateur (ADR-0006).

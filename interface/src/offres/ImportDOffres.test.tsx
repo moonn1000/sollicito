@@ -13,6 +13,18 @@ import { ImportDOffres } from "./ImportDOffres.tsx";
 
 const PIEGE = "<img src=x onerror=alert(1)><script>alert('fictif')</script><b>gras</b>";
 
+// La cellule « Entreprise » de cette ligne du tableau (suites de #115, #116).
+function celluleDeLEntreprise(tableau: HTMLElement, ligne: number): HTMLElement {
+  const rangee = within(tableau)
+    .getAllByRole("row")
+    .find((candidate) => candidate.querySelector("td")?.textContent === String(ligne));
+  if (rangee === undefined) {
+    throw new Error(`Aucune rangée pour la ligne ${ligne}.`);
+  }
+
+  return within(rangee).getAllByRole("cell")[2]!;
+}
+
 // Un aperçu qui passe par chaque sort : à importer, piégée, doublon possible, déjà enregistrée, en double, invalide.
 const APERCU = compteRenduFictif({
   lignes: [
@@ -21,6 +33,7 @@ const APERCU = compteRenduFictif({
       ligne: 3,
       sort: "doublonPossible",
       poste: "Comptable",
+      entreprise: PIEGE,
       doublons: [offreSignaleeFictive({ id: 7, poste: "Comptable", lieu: "Huy" })],
       lignesDuFichier: [],
     }),
@@ -96,9 +109,12 @@ test("l'aperçu montre les comptes et le sort de chaque ligne, cellules piégée
   }
 
   const tableau = screen.getByRole("table", { name: "Ce que Sollicito ferait de chaque ligne." });
-  expect(within(tableau).getByText(PIEGE)).toBeDefined();
+  expect(within(tableau).getAllByText(PIEGE)).toHaveLength(2);
   expect(within(tableau).getByText(`=HYPERLINK("http://exemple.invalid")`)).toBeDefined();
-  expect(document.querySelector("table img, table script, table b")).toBeNull();
+  // La colonne « Entreprise » aussi : le texte piégé tel quel, sans aucun élément.
+  expect(celluleDeLEntreprise(tableau, 3).textContent).toBe(PIEGE);
+  expect(celluleDeLEntreprise(tableau, 3).children).toHaveLength(0);
+  expect(document.querySelector("table img, table script, table b, table a")).toBeNull();
   expect(within(tableau).getByText("la ligne 2 du fichier")).toBeDefined();
   expect(within(tableau).getByText(/En double : la même offre qu'à la ligne 2, écartée/)).toBeDefined();
   expect(within(tableau).getByText("colonne publieeLe : La date de publication s'écrit JJ/MM/AAAA ou AAAA-MM-JJ, par exemple 18/11/2026.")).toBeDefined();
@@ -149,7 +165,7 @@ test("le compte rendu affiche lui aussi les cellules piégées en texte", async 
         compteRendu: compteRenduFictif({
           lignes: [
             ligneDuCompteRenduFictive({ ligne: 2, sort: "importee", offre: 21, poste: PIEGE, entreprise: formule, lieu: PIEGE }),
-            ligneDuCompteRenduFictive({ ligne: 3, sort: "doublonPossible", poste: PIEGE, doublons: [offreSignaleeFictive({ id: 7, poste: PIEGE, lieu: formule })], lignesDuFichier: [] }),
+            ligneDuCompteRenduFictive({ ligne: 3, sort: "doublonPossible", poste: PIEGE, entreprise: PIEGE, doublons: [offreSignaleeFictive({ id: 7, poste: PIEGE, lieu: formule })], lignesDuFichier: [] }),
           ],
           comptes: comptesFictifs({ lignes: 2, aImporter: 0, importees: 1, doublonsPossibles: 1 }),
         }),
@@ -161,8 +177,10 @@ test("le compte rendu affiche lui aussi les cellules piégées en texte", async 
 
   expect(await screen.findByRole("heading", { level: 3, name: "Compte rendu" })).toBeDefined();
   const tableau = screen.getByRole("table");
-  expect(within(tableau).getAllByText(PIEGE, { exact: false }).length).toBeGreaterThanOrEqual(3);
+  expect(within(tableau).getAllByText(PIEGE, { exact: false }).length).toBeGreaterThanOrEqual(4);
   expect(within(tableau).getByText(formule)).toBeDefined();
+  expect(celluleDeLEntreprise(tableau, 3).textContent).toBe(PIEGE);
+  expect(celluleDeLEntreprise(tableau, 3).children).toHaveLength(0);
   expect(tableau.textContent).toContain(`${PIEGE}, chez`);
   expect(document.querySelector("table img, table script, table b, table a")).toBeNull();
 });
