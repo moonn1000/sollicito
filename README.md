@@ -14,6 +14,8 @@ Une recherche d'emploi, ce sont des dizaines de candidatures, autant de dates à
 
 Un exe Windows d'un seul fichier, publié sur la page des versions : vous le téléchargez et le lancez, sans rien installer. Il lui faut le runtime WebView2 de Microsoft, livré avec Windows 11 et déjà présent sur la plupart des Windows 10. L'exe n'est pas signé : SmartScreen affiche un avertissement pour chaque nouvelle version, tant qu'elle n'a pas acquis de réputation, et Smart App Control peut le bloquer là où il est actif. La base se crée seule, et un premier écran propose de connecter une IA, facultative.
 
+Pour le télécharger, le vérifier et le lancer, pas à pas : le [guide « Démarrer »](docs/demarrer.md).
+
 - **Candidatures** : entreprise, poste, date et heure d'envoi, statut, dans un tableau de bord. Vous faites avancer le statut, notez un entretien ou un échange, relisez l'historique daté ; vous corrigez ou supprimez une candidature.
 - **Relances** : une relance vous est proposée à son échéance et ouvre un brouillon dans votre messagerie, adressé au contact de l'entreprise s'il y en a un. C'est vous qui l'envoyez.
 - **Offres** : vous collez le texte d'une offre ou importez un fichier CSV, puis faites d'une offre une candidature.
