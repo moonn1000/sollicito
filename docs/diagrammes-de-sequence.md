@@ -13,7 +13,7 @@
 
 ## Lire les diagrammes
 
-Chaque participant porte le nom d'une classe, d'une fonction ou d'un fichier du code, et chaque message celui d'un appel, d'une route ou d'un message entre la page et la fenêtre. Seuls les refus qui changent le parcours sont dessinés, et les classes d'aide n'y sont pas. Chaque diagramme a sa légende. Les paliers sont ceux des [vues d'architecture](vues-d-architecture.md) : P1 à P5.
+Un participant porte le nom d'une classe, d'une fonction ou d'un fichier du code, ou désigne une personne, un système extérieur ou des données. Un message nomme un appel, une route ou un message entre la page et la fenêtre, ou décrit un geste, une réponse ou un effet. Seuls les refus qui changent le parcours sont dessinés, et les classes d'aide n'y sont pas. Chaque diagramme a sa légende. Les paliers sont ceux des [vues d'architecture](vues-d-architecture.md) : P1 à P5.
 
 ## La remise du jeton
 
@@ -22,6 +22,9 @@ La page ne reçoit le jeton que de la fenêtre, et seulement après avoir dit qu
 ```mermaid
 sequenceDiagram
     autonumber
+    box rgba(107,107,107,0.2) Système extérieur, P1
+        participant Vue as WebView2
+    end
     box rgba(17,104,189,0.18) Interface, P1
         participant App as App<br/>App.tsx
         participant Cnx as seConnecter<br/>connexion.ts
@@ -37,9 +40,10 @@ sequenceDiagram
         participant Jeton as JetonDeLancement
     end
 
-    Fenetre->>App: navigue vers l'origine de l'API
-    App->>Api: charge les fichiers de l'interface, sans jeton
-    Api-->>App: FichiersDeLInterface sert la page et ses scripts
+    Fenetre->>Vue: Navigate(origine de l'API)
+    Vue->>Api: demande index.html et les scripts, sans jeton
+    Api-->>Vue: FichiersDeLInterface sert la page et ses scripts
+    Vue->>App: exécute la page : main.tsx rend App
     App->>Cnx: connecter()
     Cnx->>Canal: demanderLeJeton(canal)
     Canal->>Fenetre: message {type: "prete"}
@@ -65,13 +69,14 @@ sequenceDiagram
 | Légende | Sens |
 | --- | --- |
 | Cadre bleuté | un conteneur de Sollicito, avec le palier du parcours |
+| Cadre gris | un système extérieur |
 | Flèche pleine | un appel, une requête ou un message |
 | Flèche pointillée | une réponse |
 | Numéro | l'ordre des messages |
 | Bloc `alt` | une branche parmi plusieurs |
 | Encadré posé sur des lignes verticales | une précision sur ces participants |
 
-Le jeton naît avec l'API, à chaque lancement, et la page ne le garde qu'en mémoire.
+La fenêtre fait naviguer le contrôle WebView2, dont le runtime demande la page puis l'exécute. Le jeton naît avec l'API, à chaque lancement, et la page ne le garde qu'en mémoire.
 
 ## L'enregistrement d'une candidature
 
@@ -87,9 +92,9 @@ sequenceDiagram
     box rgba(17,104,189,0.18) API locale, P2
         participant Api as ApiLocale<br/>chaîne des contrôles
         participant Route as RoutesDesCandidatures
-        participant Cas as EnregistrementDes<br/>Candidatures
+        participant Cas as EnregistrementDesCandidatures
         participant Domaine as Entreprise, Candidature<br/>DateDEnvoi
-        participant Depot as DepotDes<br/>Candidatures
+        participant Depot as DepotDesCandidatures
     end
     box rgba(17,104,189,0.18) Dossier de données, P2
         participant Base as Base SQLite
@@ -171,7 +176,6 @@ sequenceDiagram
     end
     box rgba(17,104,189,0.18) API locale, P3
         participant Route as ApiLocale<br/>RoutesDeLImport
-        participant Lecture as LectureDUnFichierCsv<br/>ConnecteurDuFichierCsv
         participant Coeur as ImportDesOffres
         participant Depot as DepotDesOffres
         participant Copies as SauvegardesDeLaBase
@@ -187,11 +191,11 @@ sequenceDiagram
     end
     Ecran->>Client: examinerUnFichierCsv(contenu)
     Client->>Route: POST /api/offres/import/apercu, le fichier en base64
-    Route->>Lecture: Lire(contenu)
+    Route->>Route: LectureDUnFichierCsv.Lire(contenu)
     break fichier hors du format
         Route-->>Client: 400, le motif
     end
-    Route->>Lecture: RecevoirLesLignes(fichier)
+    Route->>Route: ConnecteurDuFichierCsv.RecevoirLesLignes(fichier)
     Route->>Coeur: ExaminerUnLotAsync(offres)
     Coeur->>Depot: CommencerUneEcritureAsync()
     Depot->>Base: lit les empreintes, les entreprises, les doublons
@@ -202,11 +206,11 @@ sequenceDiagram
     Personne->>Ecran: garde des doublons possibles, importe
     Ecran->>Client: importerUnFichierCsv(contenu, gardées)
     Client->>Route: POST /api/offres/import, le fichier et les lignes gardées
-    Route->>Lecture: Lire(contenu)
+    Route->>Route: LectureDUnFichierCsv.Lire(contenu)
     break fichier hors du format
         Route-->>Client: 400, le motif
     end
-    Route->>Lecture: RecevoirLesLignes(fichier)
+    Route->>Route: ConnecteurDuFichierCsv.RecevoirLesLignes(fichier)
     break lignes gardées mal désignées
         Route-->>Client: 400
     end
@@ -231,7 +235,7 @@ sequenceDiagram
 | --- | --- |
 | Silhouette | la personne qui se sert de Sollicito |
 | Cadre bleuté | un conteneur de Sollicito, ou son dossier de données, avec le palier du parcours |
-| Flèche pleine | un appel, une requête ou un message |
+| Flèche pleine | un appel, une requête ou un message ; vers son départ, une étape interne |
 | Flèche pointillée | une réponse |
 | Numéro | l'ordre des messages |
 | Bloc `break` | un refus ou un échec : le parcours s'arrête là |
@@ -239,85 +243,119 @@ sequenceDiagram
 
 Les deux requêtes passent les contrôles du parcours précédent. `ImportDesOffres` écrit par les ports `IDepotDesOffres` et `IEcritureDesOffres` ; son format : [import CSV](import-csv.md).
 
-L'import des offres du Forem, en tâche de fond, attend la V2 (ADR-0004, D4). La seule tâche de fond de la V1 est la sauvegarde automatique (`SauvegardesAutomatiques`, #26, [ADR-0008](adr/0008-sauvegardes-de-la-base.md)) : une copie au lancement et à la fermeture, puis, toutes les heures, celle d'un nouveau jour.
+L'import des offres du Forem, en tâche de fond, attend la V2 (ADR-0004, D4). La seule tâche de fond de la V1 est la sauvegarde automatique (`SauvegardesAutomatiques`, #26, [ADR-0008](adr/0008-sauvegardes-de-la-base.md)) : au lancement, la copie du jour si elle manque ; toutes les heures, celle d'un nouveau jour, ou un nouvel essai après un échec ; à la fermeture, la copie du jour refaite.
 
 ## Le brouillon d'une relance
 
-La V1 a deux brouillons : le brouillon simple (P3) et celui dont le texte part du premier jet de l'IA (P4), relu avant l'ouverture. Les deux finissent de la même façon : la fenêtre ouvre le brouillon dans la messagerie, et l'utilisateur l'envoie lui-même.
+La V1 a deux brouillons : le brouillon simple (P3) et celui dont le texte part du premier jet de l'IA (P4), relu avant l'ouverture. Les deux finissent de la même façon : la fenêtre ouvre le brouillon dans la messagerie, et l'utilisateur l'envoie lui-même. Il se lit en deux diagrammes, coupés à la réponse au dépôt du texte relu.
+
+### Le premier jet de l'IA et son dépôt
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Personne
+    box rgba(17,104,189,0.18) Interface, P4
+        participant Ecran as PremierJetParLIA
+        participant Client as clientDeLApi.ts
+    end
+    box rgba(17,104,189,0.18) API locale, P4
+        participant Route as ApiLocale<br/>RoutesDesRelances
+        participant Jets as PremiersJetsDesRelances
+        participant Brouillons as BrouillonsRelus
+        participant Depot as DepotDesCandidatures
+        participant Adaptateur as FournisseurEnLigne
+    end
+    box rgba(107,107,107,0.2) Système extérieur, P4
+        participant IA as IA en ligne
+    end
+
+    Personne->>Ecran: demande un premier jet
+    Ecran->>Client: demanderUnPremierJet(candidature, relance)
+    Client->>Route: POST …/premier-jet, sans corps
+    Note over Route: route « sans la base »
+    Route->>Jets: RedigerAsync
+    Jets->>Jets: ReglageDeLIA.Fournisseur()
+    break aucune IA prête
+        Route-->>Client: 409
+    end
+    Jets->>Jets: PorteDeLaBase.EssayerDEntrer()
+    break restauration en cours
+        Route-->>Client: 503
+    end
+    Jets->>Depot: TrouverAsync(candidature)
+    Jets->>Jets: PorteDeLaBase.Sortir()
+    break candidature inconnue, relance plus à faire, ou donnée absente
+        Route-->>Client: 404 ou 409
+    end
+    Jets->>Adaptateur: DemanderAsync, poste, entreprise, date d'envoi
+    break une autre demande à l'IA en cours
+        Route-->>Client: 409
+    end
+    Adaptateur->>IA: HTTPS, les trois données, les consignes et la clé
+    IA-->>Adaptateur: la réponse, ou un échec
+    Adaptateur-->>Jets: texte ou échec
+    break échec du fournisseur
+        Route-->>Client: 200, l'échec et son message
+    end
+    Jets->>Jets: PremierJetDeRelance.Nettoyer(réponse)
+    break plus rien après le nettoyage
+        Route-->>Client: 200, l'échec et son message
+    end
+    Jets->>Jets: PremierJetDeRelance.Assembler
+    Route-->>Client: 200, le texte
+    Client-->>Ecran: le texte à relire
+    Personne->>Ecran: relit, corrige, ouvre dans la messagerie
+    Ecran->>Client: deposerLeBrouillonRelu(…, texte)
+    Client->>Route: PUT …/brouillon-relu, le texte
+    Route->>Jets: DeposerAsync
+    break texte refusé par sa règle
+        Route-->>Client: 400
+    end
+    Jets->>Depot: TrouverAsync(candidature)
+    break candidature inconnue, relance plus à faire, ou lien trop long
+        Route-->>Client: 404, 409 ou 400
+    end
+    Jets->>Brouillons: Deposer(relance, texte)
+    Route-->>Client: 204
+```
+
+| Légende | Sens |
+| --- | --- |
+| Silhouette | la personne qui se sert de Sollicito |
+| Cadre bleuté | un conteneur de Sollicito, avec le palier du parcours |
+| Cadre gris | un système extérieur |
+| Flèche pleine | un appel, une requête ou un message ; vers son départ, une étape interne |
+| Flèche pointillée | une réponse |
+| Numéro | l'ordre des messages |
+| Bloc `break` | un refus ou un échec : le parcours s'arrête là |
+| Encadré posé sur des lignes verticales | une précision sur ces participants |
+
+Avant de montrer le bouton du premier jet, l'écran lit l'état de l'IA (`GET /api/reglages/ia`). La porte de la base encadre la lecture de la relance ; le dépôt du texte relu, lui, la traverse par `PorteDesRequetes`. L'adaptateur lit la clé et prend `PorteDesDemandes`, qui ne laisse passer qu'une demande à la fois. `FournisseurEnLigne` est la base de `ClaudeEnLigne` et d'`OpenAIEnLigne`, derrière le port `IFournisseurDIA`.
+
+### L'ouverture du brouillon dans la messagerie
+
+```mermaid
+sequenceDiagram
+    autonumber 32
+    actor Personne
     box rgba(17,104,189,0.18) Interface, P3 et P4
         participant Ecran as PremierJetParLIA<br/>PreparerLeBrouillon
-        participant Client as clientDeLApi.ts<br/>canalDeLHote.ts
+        participant Client as canalDeLHote.ts
     end
     box rgba(17,104,189,0.18) Fenêtre hôte, P3 et P4
         participant Fenetre as FenetreHote
-        participant Lien as LienDuBrouillon<br/>OuvreurDeBrouillons<br/>ParLeShell
+        participant Lien as LienDuBrouillon<br/>OuvreurDeBrouillonsParLeShell
     end
     box rgba(17,104,189,0.18) API locale, P3 et P4
-        participant Route as ApiLocale<br/>RoutesDesRelances
-        participant Jets as PremiersJets<br/>DesRelances
-        participant Brouillons as BrouillonsDes<br/>Relances<br/>BrouillonsRelus
-        participant Depot as DepotDes<br/>Candidatures
-        participant Adaptateur as FournisseurEnLigne
+        participant Brouillons as BrouillonsDesRelances
+        participant Depot as DepotDesCandidatures
     end
-    box rgba(107,107,107,0.2) Systèmes extérieurs
-        participant IA as IA en ligne
+    box rgba(107,107,107,0.2) Système extérieur, P3
         participant Messagerie
     end
 
-    alt premier jet de l'IA (P4)
-        Personne->>Ecran: demande un premier jet
-        Ecran->>Client: demanderUnPremierJet(candidature, relance)
-        Client->>Route: POST …/premier-jet, sans corps
-        Note over Route: route « sans la base »
-        Route->>Jets: RedigerAsync
-        Jets->>Jets: ReglageDeLIA.Fournisseur()
-        break aucune IA prête
-            Route-->>Client: 409
-        end
-        Jets->>Jets: PorteDeLaBase.EssayerDEntrer()
-        break restauration en cours
-            Route-->>Client: 503
-        end
-        Jets->>Depot: TrouverAsync(candidature)
-        Jets->>Jets: PorteDeLaBase.Sortir()
-        break candidature inconnue, relance plus à faire, ou donnée absente
-            Route-->>Client: 404 ou 409
-        end
-        Jets->>Adaptateur: DemanderAsync, poste, entreprise, date d'envoi
-        break une autre demande à l'IA en cours
-            Route-->>Client: 409
-        end
-        Adaptateur->>IA: HTTPS, les trois données, les consignes et la clé
-        IA-->>Adaptateur: la réponse, ou un échec
-        Adaptateur-->>Jets: texte ou échec
-        break échec du fournisseur
-            Route-->>Client: 200, l'échec et son message
-        end
-        Jets->>Jets: PremierJetDeRelance.Nettoyer(réponse)
-        break plus rien après le nettoyage
-            Route-->>Client: 200, l'échec et son message
-        end
-        Jets->>Jets: PremierJetDeRelance.Assembler
-        Route-->>Client: 200, le texte
-        Client-->>Ecran: le texte à relire
-        Personne->>Ecran: relit, corrige, ouvre dans la messagerie
-        Ecran->>Client: deposerLeBrouillonRelu(…, texte)
-        Client->>Route: PUT …/brouillon-relu, le texte
-        Route->>Jets: DeposerAsync
-        break texte refusé par sa règle
-            Route-->>Client: 400
-        end
-        Jets->>Depot: TrouverAsync(candidature)
-        break candidature inconnue, relance plus à faire, ou lien trop long
-            Route-->>Client: 404, 409 ou 400
-        end
-        Jets->>Brouillons: BrouillonsRelus.Deposer(relance, texte)
-        Route-->>Client: 204
+    alt texte relu d'un premier jet (P4)
         Ecran->>Client: demanderLeBrouillonRelu(relance)
         Client->>Fenetre: message {type: "ouvrirLeBrouillonRelu", relance}
         Fenetre->>Brouillons: PreparerLeBrouillonReluAsync(relance)
@@ -345,15 +383,14 @@ sequenceDiagram
 | --- | --- |
 | Silhouette | la personne qui se sert de Sollicito |
 | Cadre bleuté | un conteneur de Sollicito, avec le palier du parcours |
-| Cadre gris | les systèmes extérieurs |
+| Cadre gris | un système extérieur |
 | Flèche pleine | un appel, une requête ou un message ; vers son départ, une étape interne |
 | Flèche pointillée | une réponse |
-| Numéro | l'ordre des messages |
+| Numéro | l'ordre des messages, à la suite du diagramme précédent |
 | Bloc `alt` | une branche parmi plusieurs |
 | Bloc `opt` | une étape qui n'a lieu que sous sa condition |
-| Bloc `break` | un refus ou un échec : le parcours s'arrête là |
 | Encadré posé sur des lignes verticales | une précision sur ces participants |
 
-Avant d'ouvrir, la fenêtre vérifie la source et la forme de chaque message (`ReglesDeLaFenetre`), comme pour le jeton ; sans réponse en 15 secondes, la page cesse d'attendre. Les deux messages qui demandent un brouillon ne portent que l'identifiant de la relance, jamais le texte ni l'adresse. Avant de montrer le bouton du premier jet, l'écran lit l'état de l'IA (`GET /api/reglages/ia`). La porte de la base encadre aussi la préparation du brouillon par `BrouillonsDesRelances`, et le dépôt du texte relu la traverse par `PorteDesRequetes`. L'adaptateur lit la clé et prend `PorteDesDemandes`, qui ne laisse passer qu'une demande à la fois. `FournisseurEnLigne` est la base de `ClaudeEnLigne` et d'`OpenAIEnLigne`, derrière le port `IFournisseurDIA`.
+Avant d'ouvrir, la fenêtre vérifie la source et la forme de chaque message (`ReglesDeLaFenetre`), comme pour le jeton ; sans réponse en 15 secondes, la page cesse d'attendre. Les deux messages qui demandent un brouillon ne portent que l'identifiant de la relance, jamais le texte ni l'adresse. `BrouillonsDesRelances` prend le texte relu dans `BrouillonsRelus`, et la porte de la base encadre sa préparation. `OuvreurDeBrouillonsParLeShell` implémente `IOuvreurDeBrouillons`.
 
 Ce que reçoit la messagerie, et quand cela quitte le poste : [vues d'architecture](vues-d-architecture.md#ce-qui-quitte-le-poste), échange ③ ; ce que reçoit l'IA en ligne : échange ①.

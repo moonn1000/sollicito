@@ -207,11 +207,11 @@ Supprimer l'exe laisse toutes ces données en place (ADR-0004, « Conséquences 
 Comme l'ADR-0001 (D4) le veut pour l'ingestion des offres, une tâche de fond tourne dans le processus de l'API, sans conteneur à elle.
 
 - **Aucun conteneur d'ingestion des offres.** L'ingestion en tâche de fond attend la V2, avec le Forem (ADR-0004, D4) : seul le trait pointillé « API locale → Le Forem » la représente.
-- **La sauvegarde automatique** (palier 2) est une responsabilité de l'API. Son déclenchement relève de #26, qui l'a fixé ainsi : une minuterie, dans le processus de l'API, fait la copie au lancement et à la fermeture ; une fois par heure, elle fait la copie du nouveau jour et réessaie un dossier de sauvegarde manquant. L'[ADR-0008](adr/0008-sauvegardes-de-la-base.md) consigne ce choix.
+- **La sauvegarde automatique** (palier 2) est une responsabilité de l'API. Son déclenchement relève de #26, qui l'a fixé ainsi : dans le processus de l'API, la copie du jour se fait au lancement si elle manque ; une fois par heure, une minuterie fait celle d'un nouveau jour et réessaie après un échec, par exemple quand un dossier débranché revient ; à la fermeture, la copie du jour se refait. L'[ADR-0008](adr/0008-sauvegardes-de-la-base.md) consigne ce choix.
 
 ## Vue des composants
 
-De quoi l'API locale est faite (C4, niveau 3). Chaque boîte porte les noms que le code donne à ses classes ; les cadres sont les couches, c'est-à-dire les quatre projets .NET de l'API. L'interface et la fenêtre hôte y figurent comme conteneurs voisins : leur intérieur n'est pas décrit ici.
+De quoi l'API locale est faite (C4, niveau 3). Un composant porte les noms que le code donne à ses classes, seul ou à plusieurs sous un titre ; les conteneurs voisins, les données et le système extérieur ne sont pas des classes. Les cadres sont les couches, c'est-à-dire les quatre projets .NET de l'API. L'interface et la fenêtre hôte y figurent comme conteneurs voisins : leur intérieur n'est pas décrit ici.
 
 | Diagramme | Ce qu'il montre |
 | --- | --- |
@@ -223,7 +223,7 @@ De quoi l'API locale est faite (C4, niveau 3). Chaque boîte porte les noms que 
 
 Les diagrammes dessinent les classes qui portent un parcours : les contrôles, les routes, les cas d'usage, les ports, les adaptateurs, les services du démarrage et la tâche de fond. Les enregistrements, les valeurs et les classes d'aide n'y sont pas, ni les points d'accroche réservés aux tests, et les traits ne montrent pas tous les appels entre classes.
 
-Les candidatures, les offres, l'IA et l'export passent par des ports de `Sollicito.Application`. Les sauvegardes, la restauration, les réglages et la garde de la clé n'ont pas de port, pas plus que la préparation de la base : les classes de l'API appellent directement les types de `Sollicito.Infrastructure`. L'ADR-0001 (D4) retient un monolithe modulaire en Clean Architecture, où le domaine ne dépend d'aucune infrastructure. L'interface `ISourceDeLaCle`, par laquelle les fournisseurs en ligne lisent la clé, est déclarée dans l'infrastructure.
+Les candidatures, les offres, l'IA et l'export passent par des ports de `Sollicito.Application`. L'export lit la base par son port `ISourceDeLExport`, mais appelle aussi directement l'infrastructure pour son fichier (`DossierDeLaBase`, `CopiesVerifiees.ReessayerAsync`). Les sauvegardes, la restauration, les réglages et la garde de la clé n'ont pas de port, pas plus que la préparation de la base : les classes de l'API appellent directement les types de `Sollicito.Infrastructure`, et `ReglageDeLIA` reçoit ainsi les adaptateurs concrets `ClaudeEnLigne` et `OpenAIEnLigne`. L'ADR-0001 (D4) retient un monolithe modulaire en Clean Architecture, où le domaine ne dépend d'aucune infrastructure. L'interface `ISourceDeLaCle`, par laquelle les fournisseurs en ligne lisent la clé, est déclarée dans l'infrastructure.
 
 ### ① Entrées de l'API
 
@@ -245,7 +245,7 @@ flowchart TB
         routes["<b>Routes</b><br>Les classes RoutesDe… des modules,<br>et GET /api/etat dans ApiLocale<br>P1 à P4"]
         porte["<b>PorteDeLaBase</b><br>Fermée pendant une restauration<br>P3"]
         secrets["<b>JetonDeLancement</b><br><b>AdresseDEcoute</b><br>P1"]
-        services["<b>Services appelés sans route</b><br>SauvegardesDeLaBase (P2)<br>BrouillonsDesRelances (P3)<br>RestaurationDeLaBase (P3)<br>ExportDesDonnees (P5)"]
+        services["<b>Services que la fenêtre appelle</b><br>SauvegardesDeLaBase (P2)<br>BrouillonsDesRelances (P3)<br>RestaurationDeLaBase (P3)<br>ExportDesDonnees (P5)"]
         demarrage["<b>Services hébergés</b><br>ControleDeLEcoute (P1)<br>PreparationDeLaBase (P2)<br>SauvegardesAutomatiques (P2)"]
     end
 
