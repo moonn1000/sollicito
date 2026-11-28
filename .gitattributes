@@ -1,7 +1,11 @@
 # Les scripts bash gardent leurs fins de ligne LF, même dans une copie Windows (core.autocrlf) : bash refuse le CR.
 *.sh text eol=lf
 
-# Les migrations gardent leurs fins de ligne CRLF dans toute copie du dépôt : SQLite recopie le texte de leurs
+# Les migrations s'extraient avec des fins de ligne CRLF, quel que soit core.autocrlf : SQLite recopie le texte de leurs
 # « ALTER TABLE … ADD » dans le schéma, que la restauration (#28) compare à celui des copies, faites en CRLF (#98,
 # point 24). Les migrations déjà publiées ne se réécrivent pas : leurs copies deviendraient étrangères.
+# Une copie de travail extraite avant cette règle, avec core.autocrlf à false ou input, garde ses migrations en LF tant
+# qu'elles ne sont pas réextraites : effacer les fichiers .cs du dossier, puis
+# git checkout -- src/Sollicito.Infrastructure/Persistance/Migrations
+# (un checkout seul ne les réécrit pas : git les voit à jour).
 src/Sollicito.Infrastructure/Persistance/Migrations/*.cs text eol=crlf
